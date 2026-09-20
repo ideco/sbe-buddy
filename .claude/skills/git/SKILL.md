@@ -5,8 +5,9 @@ description: How work reaches main in this repository. Use when committing, push
 
 # Git
 
-`main` is linear: pull requests are rebased onto it, and their commits land
-as they are. There are no merge commits, ever.
+`main` is linear: every pull request lands as one squashed commit, whose
+subject is the pull request's title and whose body is its description.
+There are no merge commits, ever.
 
 ## Branches
 
@@ -20,13 +21,13 @@ as they are. There are no merge commits, ever.
 
 ## Commits
 
+- Commits on a branch are working history: they are squashed away on merge.
+  Split the work into commits as it helps review; nothing else about them
+  reaches `main`.
 - Subject in the imperative, under 72 characters, saying what changed:
   `Generate the message header tokens`. The body says why, when the diff
-  does not.
-- Every commit is one coherent step that builds. Commits land on `main` as
-  they are, so before pushing fold fix-ups into the commit they fix
-  (`git rebase -i origin/main`, or `git reset --soft origin/main` and
-  commit again in steps).
+  does not. The same rules bind the pull request's title and description,
+  because those become the commit on `main`.
 - `./mvnw spotless:apply` before every commit; `./mvnw verify` before every
   push.
 - No attribution trailers: no `Co-Authored-By`, no session link, no mention
@@ -35,13 +36,17 @@ as they are. There are no merge commits, ever.
 
 ## Pull requests
 
-- One pull request per branch. The description states what the change does
-  and how it was verified, with no attribution footer, generation notice or
+- One pull request per branch, one coherent change per pull request: it
+  becomes one commit on `main`, so it must read as one.
+- The title is the commit subject: imperative, under 72 characters, what
+  changed. The description is the commit body: what the change does, why,
+  and how it was verified; no attribution footer, generation notice or
   session link.
-- Merge only when CI is green. Rebase and merge, so the branch's commits are
-  replayed onto `main` and it stays linear. Delete the branch on merge.
-- Repository settings that back this: merge commits and squash merging
-  disabled, rebase merging only, head branches deleted automatically.
+- Merge only when CI is green. Squash and merge. Delete the branch on merge.
+- Repository settings that back this: merge commits and rebase merging
+  disabled, squash merging only, the default squash message taken from the
+  pull request's title and description, head branches deleted
+  automatically.
 
 ## Releases
 
