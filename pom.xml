@@ -22,6 +22,9 @@
     <error-prone.version>2.50.0</error-prone.version>
     <nullaway.version>0.14.1</nullaway.version>
     <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
+    <maven-install-plugin.version>3.2.0</maven-install-plugin.version>
+    <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
+    <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
     <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
     <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
   </properties>
@@ -37,6 +40,25 @@
   </dependencies>
 
   <build>
+    <!-- The default lifecycle binds these; Maven warns about every version it
+         has to choose itself. -->
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${maven-resources-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${maven-surefire-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>${maven-install-plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
