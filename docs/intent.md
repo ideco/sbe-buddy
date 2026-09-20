@@ -36,15 +36,18 @@ representation of all of it is `type-mappings.md`.
 ## Out of scope
 
 RPC (`rpc.md`), Aeron transport, typed flyweights, tooling over sbe-tool's
-schema corpus. None of these appears in code until
+schema corpus. sbe-tool's own `JavaDtoGenerator` is the nearest prior art
+to the codec: it generates its own DTO classes from the IR, where sbe-buddy
+maps to the user's records, with bindings, `null` for absence and
+families. None of these appears in code until
 the scope above is complete, and nothing built may preclude them.
 
 ## Non-negotiables
 
 1. **Byte-identical to sbe-tool.** sbe-buddy writes the XML schema; sbe-tool
    parses it, builds the IR and generates the flyweights, so the bytes are
-   sbe-tool's by construction. The hand-written XML next to the example
-   records is the oracle: the written schema must equal it; it grows with the
+   sbe-tool's by construction. The hand-written XML next to each example
+   schema is its oracle: the written schema must equal it; it grows with the
    records in the same change and is never edited to make a test pass.
 2. **Nothing is inferred.** Schema id, version, template ids, field ids,
    unsigned types, named types, `sinceVersion`: all written by hand in
@@ -78,17 +81,18 @@ the scope above is complete, and nothing built may preclude them.
 ## Increments
 
 - [x] 1. Build
-- [ ] 2. The schema model and its XML, complete, with the corpus
-- [ ] 3. Annotations and the processor; the example and its oracle
-- [ ] 4. sbe-tool in the pipeline: flyweights, the schema in the jar, the backstop
-- [ ] 5. Codec: primitives
-- [ ] 6. Codec: schema evolution
-- [ ] 7. Codec: enums
-- [ ] 8. Codec: named types and bindings
-- [ ] 9. Codec: composites
-- [ ] 10. Codec: fixed-length arrays
-- [ ] 11. Codec: groups
-- [ ] 12. Codec: var-data
-- [ ] 13. Codec: sets, constants, optional presence
-- [ ] 14. Codec: byte order and header types
-- [ ] 15. Message families
+- [x] 2. The schema model and its XML, complete, with the corpus
+- [ ] 3. The annotations, and the mapping from them to the model; no javac
+- [ ] 4. Discovery and the processor; the schema in the jar; the example schemas and their oracles
+- [ ] 5. sbe-tool in the pipeline: the backstop and the flyweights. The first release, `v0.1.0`: records in, sbe-tool's flyweights out
+- [ ] 6. Codec: primitives
+- [ ] 7. Codec: schema evolution
+- [ ] 8. Codec: enums
+- [ ] 9. Codec: named types and bindings
+- [ ] 10. Codec: composites
+- [ ] 11. Codec: fixed-length arrays
+- [ ] 12. Codec: groups
+- [ ] 13. Codec: var-data
+- [ ] 14. Codec: sets, constants, optional presence
+- [ ] 15. Codec: byte order and header types
+- [ ] 16. Message families

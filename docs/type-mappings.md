@@ -141,8 +141,10 @@ Built-ins in the api: the standard `MessageHeader` and `GroupSizeEncoding`
 composites; `VarStringEncoding` (UTF-8), `VarAsciiEncoding`,
 `VarDataEncoding` for `@SbeData`; `Cents` (`BigDecimal` scale 2 over
 `int64`); `UuidWire` `{int64 msb, int64 lsb}` with `Uuid` binding `UUID`.
-Their wire names default to those class names; a migrated schema names them
-with `name`.
+They carry SBE's conventional wire names through `name`, `messageHeader`,
+`groupSizeEncoding`, `varStringEncoding`, `varAsciiEncoding` and
+`varDataEncoding`, so a schema that uses them writes neither `headerType`
+nor `dimensionType`.
 
 ## Layout and evolution
 
@@ -166,6 +168,9 @@ flatten; a record may belong to several families; every leaf must be an
 `@SbeMessage` of the same schema.
 
 ## Running example, complete
+
+The whole surface in one picture; documentation, not a fixture. The
+example module holds one schema per concern instead.
 
 ```java
 @SbeSchema(id = 1, version = 2)

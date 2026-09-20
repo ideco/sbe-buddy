@@ -107,6 +107,11 @@ alternatives considered.
   created in the same compilation. (Spike, 2026-09.)
 - `Messager` cannot position an annotation *value* on a record component;
   the diagnostic lands on the annotation. (Spike, 2026-09.)
+- A `Class`-typed member read through an annotation instance from
+  `Element.getAnnotation` throws `MirroredTypeException` carrying the
+  `TypeMirror`; the same member read from the `AnnotationMirror`'s element
+  values is a `ClassType`. Discovery reads every `Class` member from the
+  mirror. (Spike experiment, javac 21, 2026-09-20.)
 - From JDK 23 javac performs no annotation processing unless `-processor`,
   `--processor-path` or `--processor-module-path` is set, or `-proc` is
   `only` or `full`; discovery from the compile classpath is gone. Reaching
