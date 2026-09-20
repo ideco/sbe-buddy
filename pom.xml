@@ -103,6 +103,10 @@
         <version>${spotless-maven-plugin.version}</version>
         <configuration>
           <java>
+            <removeUnusedImports/>
+            <importOrder>
+              <order>\#,java,javax,org,uk,net</order>
+            </importOrder>
             <eclipse>
               <file>${session.rootDirectory}/config/eclipse-formatter.properties</file>
             </eclipse>
