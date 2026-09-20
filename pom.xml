@@ -34,6 +34,21 @@
     <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
   </properties>
 
+  <!-- The BOM keeps the engine and the launcher on one version. Surefire aligns
+       the launcher it runs to the platform it finds, so declaring the launcher
+       makes that agreement ours to state rather than surefire's to infer. -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <!-- Every package is @NullMarked. Optional, so users do not inherit JSpecify. -->
   <dependencies>
     <dependency>
@@ -45,7 +60,11 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
