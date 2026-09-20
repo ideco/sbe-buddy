@@ -29,11 +29,15 @@ as they are. There are no merge commits, ever.
   commit again in steps).
 - `./mvnw spotless:apply` before every commit; `./mvnw verify` before every
   push.
+- No attribution trailers: no `Co-Authored-By`, no session link, no mention
+  of the tool that wrote the change. The message says what changed and why,
+  and nothing about who typed it.
 
 ## Pull requests
 
 - One pull request per branch. The description states what the change does
-  and how it was verified.
+  and how it was verified, with no attribution footer, generation notice or
+  session link.
 - Merge only when CI is green. Rebase and merge, so the branch's commits are
   replayed onto `main` and it stays linear. Delete the branch on merge.
 - Repository settings that back this: merge commits and squash merging
