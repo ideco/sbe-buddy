@@ -114,3 +114,11 @@ alternatives considered.
   set, breaks the launcher before Maven starts. CI and a plain workstation
   are unaffected; a container that sets it must pass those flags in
   `MAVEN_OPTS` instead. (Spike experiment, 2026-09-20.)
+
+## Spotless 3.10.2
+
+- `removeUnusedImports` and `importOrder` work on this code. The CleanThat
+  step does not: with any mutator configured it throws
+  `InvocationTargetException` on `Corpus.java`, which `spotless:apply`
+  reports as a lint and otherwise ignores under `sourceJdk` 21, so the
+  step silently changes nothing. (Spike experiment, 2026-09-20.)
