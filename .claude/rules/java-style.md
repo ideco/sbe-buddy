@@ -100,7 +100,8 @@ The decisions that shaped the first code, so later code matches it.
   method names are sentences in camelCase. The corpus DSL in `Fixtures` is
   the only builder code in the repository; a corpus case holds its oracle
   as a text block beside the model that must write it.
-- Imports, never fully qualified names in code. The one exception is a
+- Imports, never fully qualified names in code. Spotless removes unused
+  imports and orders them; nothing adds an import for you. The one exception is a
   type that collides with one of ours in the same file, such as
   `javax.xml.validation.Schema` beside `Schema`; it is qualified and the
   line says why.
