@@ -1,7 +1,7 @@
 # Notes
 
-Verified facts about sbe-tool, javac and Agrona that the implementation
-relies on, especially the surprising ones. Each entry says how it was
+Verified facts about sbe-tool, javac, Agrona and the build that the
+implementation relies on, especially the surprising ones. Each entry says how it was
 verified. Nothing else goes here: no design discussion, no to-dos, no
 alternatives considered.
 
@@ -60,3 +60,18 @@ alternatives considered.
   buffer class needs `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`.
   javac needs it only if the processor touches a buffer. (Sources jar,
   read 2026-09-20.)
+
+## Maven 4.0.0-rc-6
+
+- `.mvn/jvm.config` is parsed by `bin/JvmConfigParser.java`, which strips
+  everything from a `#` to the end of the line and expands
+  `${MAVEN_PROJECTBASEDIR}`. The `only-script` wrapper execs
+  `$MAVEN_HOME/bin/mvn`, so `./mvnw` inherits that; the classic wrapper
+  joins the file with `tr` and passes the comment to the JVM, which fails
+  with `Could not find or load main class #`. (`bin/mvn`,
+  `bin/JvmConfigParser.java` and both `mvnw` variants, read 2026-09-20.)
+- `bin/mvn` captures that parser's stderr into `MAVEN_OPTS` and `eval`s it,
+  so a JVM that prints a banner, as any JDK does when `JAVA_TOOL_OPTIONS` is
+  set, breaks the launcher before Maven starts. CI and a plain workstation
+  are unaffected; a container that sets it must pass those flags in
+  `MAVEN_OPTS` instead. (Spike experiment, 2026-09-20.)
