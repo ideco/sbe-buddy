@@ -41,8 +41,17 @@ public final class SchemaXmlAssert {
 	static final Map<String, String> NAMESPACES = Map.of("sbe", SchemaXml.NAMESPACE);
 
 	// Qualified because it collides with our Schema, the subject of every assertion
-	// here.
-	private static final javax.xml.validation.Schema XSD = xsd();
+	// here. The one place it is named, so the collision is explained once.
+	private static final javax.xml.validation.Schema XSD;
+
+	static {
+		try {
+			XSD = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI)
+					.newSchema(new StreamSource(SchemaXmlAssert.class.getResourceAsStream("/fpl/sbe.xsd")));
+		} catch (SAXException e) {
+			throw new IllegalStateException(e);
+		}
+	}
 
 	private final Schema schema;
 
@@ -123,15 +132,6 @@ public final class SchemaXmlAssert {
 			XmlSchemaParser.parse(new ByteArrayInputStream(oracle.getBytes(StandardCharsets.UTF_8)), options);
 		} catch (Exception e) {
 			fail("sbe-tool rejects the oracle: %s%n%s", e.getMessage(), diagnostics.toString(StandardCharsets.UTF_8));
-		}
-	}
-
-	private static javax.xml.validation.Schema xsd() {
-		try {
-			return SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI)
-					.newSchema(new StreamSource(SchemaXmlAssert.class.getResourceAsStream("/fpl/sbe.xsd")));
-		} catch (SAXException e) {
-			throw new IllegalStateException(e);
 		}
 	}
 
