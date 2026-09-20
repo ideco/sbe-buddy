@@ -92,8 +92,10 @@ The decisions that shaped the first code, so later code matches it.
 - Checked exceptions do not leave the generator except `IOException` from
   a method that takes a `Writer`. `IllegalStateException` for cannot-happen,
   `IllegalArgumentException` for a caller's mistake.
-- Tests: JUnit, AssertJ, XMLUnit; test classes and methods package-private,
-  helpers shared across test packages public;
+- Tests: JUnit, AssertJ, XMLUnit. Every assertion is AssertJ's, exceptions
+  included (`assertThatThrownBy`); JUnit's `Assertions` are not used. Test
+  classes and methods package-private, helpers shared across test packages
+  public;
   parameterized tests over an explicit list, never classpath scanning;
   method names are sentences in camelCase. The corpus DSL in `Fixtures` is
   the only builder code in the repository; a corpus case holds its oracle
