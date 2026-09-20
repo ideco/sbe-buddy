@@ -16,6 +16,7 @@ Where this guide conflicts with project-specific architecture or constraints, th
 - Do not split coherent methods to satisfy arbitrary size or abstraction rules.
 - Prefer concrete classes. Introduce interfaces for meaningful boundaries or interchangeable behavior.
 - Build for current requirements. Avoid speculative factories, strategy hierarchies, and generic frameworks.
+- Record components that carry annotations go one per line.
 
 ## Control flow
 

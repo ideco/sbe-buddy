@@ -14,6 +14,7 @@ docs/rpc.md            parked idea, out of scope
 sbe-buddy-api          what users compile against: annotations, Codec, TypeBinding, built-ins
 sbe-buddy-processor    generator/ (model to IR to sources, no javac) and processor/ (javac to model)
 sbe-buddy-example      the running example, its trading.xml oracle, the end-to-end tests
+reference/             sbe-tool's sources as a git submodule, for reading only
 ```
 
-Build: `./mvnw verify` on JDK 25. The docs are listed in order of authority.
+Build: `./mvnw verify` on JDK 21. The docs are listed in order of authority.

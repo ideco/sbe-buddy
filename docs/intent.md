@@ -74,14 +74,15 @@ the scope above is complete, and nothing built may preclude them.
 
 ## Increments
 
-- [ ] 1. Skeleton and the oracle wiring
-- [ ] 2. Model and IR: the example records give the same IR as `trading.xml`
-- [ ] 3. Flyweights and codec: `PlaceOrder` round-trips, same bytes as the reference, cross-decodes, `encodedLength` exact
-- [ ] 4. Evolution: version 1 adds a field with `sinceVersion = 1`; nullable components; the append-only rule; cross-version tests against a frozen `trading-v0.xml`
-- [ ] 5. Unsigned, `char`, enums
-- [ ] 6. Named types, bindings, composites
-- [ ] 7. Fixed-length arrays
-- [ ] 8. Groups, including nested
-- [ ] 9. Var-data
-- [ ] 10. Sets, constants, optional presence, `deprecated`, big-endian, custom header type
-- [ ] 11. Sealed families and dispatch codecs
+- [ ] 1. The build: modules, formatter, nullness check, CI, reference checkout
+- [ ] 2. The example and its oracle: `trading.xml`, sbe-tool's reference flyweights, the first byte test
+- [ ] 3. Model and IR: the example records give the same IR as `trading.xml`
+- [ ] 4. Flyweights and codec: `PlaceOrder` round-trips, same bytes as the reference, cross-decodes, `encodedLength` exact
+- [ ] 5. Evolution: version 1 adds a field with `sinceVersion = 1`; nullable components; the append-only rule; cross-version tests against a frozen `trading-v0.xml`
+- [ ] 6. Unsigned, `char`, enums
+- [ ] 7. Named types, bindings, composites
+- [ ] 8. Fixed-length arrays
+- [ ] 9. Groups, including nested
+- [ ] 10. Var-data
+- [ ] 11. Sets, constants, optional presence, `deprecated`, big-endian, custom header type
+- [ ] 12. Sealed families and dispatch codecs

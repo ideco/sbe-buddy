@@ -14,6 +14,7 @@ sbe-buddy-processor    net.concini.sbebuddy.generator   model → IR → flyweig
                        deps: sbe-buddy-api, sbe-tool
 sbe-buddy-example      the running example, its XML oracle, the end-to-end tests; not deployed
                        deps: sbe-buddy-api; the processor on annotationProcessorPaths only
+reference/             sbe-tool's sources as a submodule, for reading
 ```
 
 `api ← processor`, `api ← example`. The example reaches the processor only
@@ -130,18 +131,29 @@ answer is cheap to pin. Reflection is banned in main code and free in tests.
 
 ## Build
 
-- JDK 25, Maven 3.9.16 through the wrapper. `./mvnw verify` is the gate;
-  `./mvnw spotless:apply` before every commit.
-- Plugins, and nothing else: maven-compiler-plugin 3.16.0
-  (`-Xlint:all,-processing -Werror`), maven-surefire-plugin 3.6.0
-  (`argLine` `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED
-  --sun-misc-unsafe-memory-access=allow`, which Agrona needs in any JVM that
-  loads a buffer class), spotless-maven-plugin 3.10.2 with
-  google-java-format 1.36.1, exec-maven-plugin 3.6.4 and
-  build-helper-maven-plugin 3.6.2 for the reference flyweights,
-  maven-jar-plugin 3.5.1 for `Automatic-Module-Name`.
-- Dependencies: agrona 2.6.1, sbe-tool 1.40.2; tests: JUnit 5.14.4,
-  AssertJ 3.27.7, compile-testing 0.23.0, ArchUnit 1.5.0. Versions live in
-  the root pom and here, nowhere else.
-- CI is one GitHub Actions job running `./mvnw -B -ntp verify` on Temurin
-  25. `main` takes pull requests only.
+- Java 21 is the compiler target, so the library and the processor run on
+  every JDK from 21 up. Maven through the wrapper. `./mvnw verify` is the
+  gate; `./mvnw spotless:apply` before every commit.
+- javac runs with its defaults: no `-Xlint`, no `-Werror`. Generated code
+  is compiled by the same javac and cannot be fixed, and lint categories
+  change with each JDK.
+- Formatting: Spotless with the Eclipse JDT formatter and a profile that
+  keeps hand-written line breaks and puts a closing parenthesis on its own
+  line when the arguments wrap; otherwise Eclipse's defaults (tabs, 120
+  columns).
+- Nullness: JSpecify annotations, `@NullMarked` on every hand-written main
+  package, checked by NullAway at error level. NullAway runs as an Error
+  Prone plugin with every other Error Prone check disabled and generated
+  sources excluded by path; the compiler-internals exports it needs live
+  in `.mvn/jvm.config`. JSpecify is `optional` in the api so users do not
+  inherit it. Test code is not checked.
+- Test JVMs carry `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`,
+  which Agrona needs in any JVM that loads a buffer class. Users' javac
+  needs no flag, because the processor never touches an Agrona buffer.
+- Dependencies and plugins are added by the increment that first needs
+  them, with their versions in the root pom and nowhere else.
+- `reference/simple-binary-encoding` is a git submodule at the sbe-tool
+  tag the build depends on. It is read to confirm behaviour and never
+  copied from or edited.
+- CI is one GitHub Actions job running `./mvnw -B -ntp verify`. `main`
+  takes pull requests only.
