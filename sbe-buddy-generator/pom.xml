@@ -13,6 +13,10 @@
 
   <dependencies>
     <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-api</artifactId>
+    </dependency>
+    <dependency>
       <groupId>uk.co.real-logic</groupId>
       <artifactId>sbe-tool</artifactId>
       <version>${sbe-tool.version}</version>

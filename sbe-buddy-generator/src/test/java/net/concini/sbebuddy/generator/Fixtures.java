@@ -815,4 +815,628 @@ public final class Fixtures {
 			);
 		}
 	}
+
+	// ---- the annotated twins
+	// ----------------------------------------------------------------------------------
+
+	/**
+	 * The api's {@code MessageHeader}, one instance, as every twin refers to it by
+	 * identity.
+	 */
+	public static final Annotated.Composite MESSAGE_HEADER = annotatedComposite("MessageHeader")
+			.name("messageHeader")
+			.members(
+					annotatedType("blockLength", PrimitiveType.UINT16),
+					annotatedType("templateId", PrimitiveType.UINT16),
+					annotatedType("schemaId", PrimitiveType.UINT16),
+					annotatedType("version", PrimitiveType.UINT16)
+			)
+			.build();
+
+	/** The api's {@code GroupSizeEncoding}, one instance. */
+	public static final Annotated.Composite GROUP_SIZE_ENCODING = annotatedComposite("GroupSizeEncoding")
+			.name("groupSizeEncoding")
+			.members(
+					annotatedType("blockLength", PrimitiveType.UINT16),
+					annotatedType("numInGroup", PrimitiveType.UINT16)
+			)
+			.build();
+
+	public static AnnotatedSchemaBuilder annotatedSchema(String packageName, int id, int version) {
+		return new AnnotatedSchemaBuilder(packageName, id, version);
+	}
+
+	public static AnnotatedTypeBuilder annotatedType(String javaName, PrimitiveType primitiveType) {
+		return new AnnotatedTypeBuilder(javaName, primitiveType);
+	}
+
+	public static AnnotatedCompositeBuilder annotatedComposite(String javaName) {
+		return new AnnotatedCompositeBuilder(javaName);
+	}
+
+	public static AnnotatedMessageBuilder annotatedMessage(String javaName, int id) {
+		return new AnnotatedMessageBuilder(javaName, id);
+	}
+
+	public static AnnotatedFieldBuilder annotatedField(String javaName, int id, Annotated.JavaType javaType) {
+		return new AnnotatedFieldBuilder(javaName, id, javaType);
+	}
+
+	public static AnnotatedGroupBuilder annotatedGroup(String javaName, int id) {
+		return new AnnotatedGroupBuilder(javaName, id);
+	}
+
+	public static AnnotatedDataBuilder annotatedData(
+			String javaName, int id, Annotated.JavaType javaType,
+			AnnotatedCompositeBuilder type
+	) {
+		return new AnnotatedDataBuilder(javaName, id, javaType, type.build());
+	}
+
+	public static Annotated.JavaType primitive(Annotated.JavaPrimitive kind) {
+		return new Annotated.Primitive(kind, false);
+	}
+
+	public static Annotated.JavaType boxed(Annotated.JavaPrimitive kind) {
+		return new Annotated.Primitive(kind, true);
+	}
+
+	public static Annotated.JavaType text() {
+		return new Annotated.Text();
+	}
+
+	public static Annotated.JavaType bytes() {
+		return new Annotated.Bytes();
+	}
+
+	public static Annotated.JavaType declared(AnnotatedDeclarationBuilder declaration) {
+		return new Annotated.Declared(declaration.build());
+	}
+
+	public interface AnnotatedDeclarationBuilder {
+		Annotated.Declaration build();
+	}
+
+	public interface AnnotatedMemberBuilder {
+		Annotated.Member build();
+	}
+
+	public interface AnnotatedComponentBuilder {
+		Annotated.Component build();
+	}
+
+	public static final class AnnotatedSchemaBuilder {
+
+		private final String packageName;
+		private final int id;
+		private final int version;
+		private final List<Annotated.Message> messages = new ArrayList<>();
+		private Annotated.Composite headerType = MESSAGE_HEADER;
+		private String semanticVersion = "";
+		private String description = "";
+		private ByteOrder byteOrder = ByteOrder.LITTLE_ENDIAN;
+
+		private AnnotatedSchemaBuilder(String packageName, int id, int version) {
+			this.packageName = packageName;
+			this.id = id;
+			this.version = version;
+		}
+
+		public AnnotatedSchemaBuilder messages(AnnotatedMessageBuilder... builders) {
+			for (AnnotatedMessageBuilder builder : builders) {
+				messages.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedSchemaBuilder headerType(AnnotatedCompositeBuilder headerType) {
+			this.headerType = headerType.build();
+			return this;
+		}
+
+		public AnnotatedSchemaBuilder semanticVersion(String semanticVersion) {
+			this.semanticVersion = semanticVersion;
+			return this;
+		}
+
+		public AnnotatedSchemaBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedSchemaBuilder byteOrder(ByteOrder byteOrder) {
+			this.byteOrder = byteOrder;
+			return this;
+		}
+
+		public Annotated build() {
+			return new Annotated(
+					packageName, id, version, headerType, messages, semanticVersion, description,
+					apiByteOrder(byteOrder)
+			);
+		}
+	}
+
+	public static final class AnnotatedTypeBuilder implements AnnotatedDeclarationBuilder, AnnotatedMemberBuilder {
+
+		private final String javaName;
+		private final PrimitiveType primitiveType;
+		private String name = "";
+		private String value = "";
+		private int length = 1;
+		private String characterEncoding = "";
+		private Presence presence = Presence.REQUIRED;
+		private String valueRef = "";
+		private String nullValue = "";
+		private String minValue = "";
+		private String maxValue = "";
+		private int offset;
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Type built;
+
+		private AnnotatedTypeBuilder(String javaName, PrimitiveType primitiveType) {
+			this.javaName = javaName;
+			this.primitiveType = primitiveType;
+		}
+
+		public AnnotatedTypeBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder value(String value) {
+			this.value = value;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder length(int length) {
+			this.length = length;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder characterEncoding(String characterEncoding) {
+			this.characterEncoding = characterEncoding;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder presence(Presence presence) {
+			this.presence = presence;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder valueRef(String valueRef) {
+			this.valueRef = valueRef;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder nullValue(String nullValue) {
+			this.nullValue = nullValue;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder minValue(String minValue) {
+			this.minValue = minValue;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder maxValue(String maxValue) {
+			this.maxValue = maxValue;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder offset(int offset) {
+			this.offset = offset;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedTypeBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Type build() {
+			if (built == null) {
+				built = new Annotated.Type(
+						javaName, apiPrimitive(primitiveType), name, value, length, characterEncoding,
+						apiPresence(presence), valueRef, nullValue, minValue, maxValue, offset, semanticType,
+						description, sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedCompositeBuilder implements AnnotatedDeclarationBuilder, AnnotatedMemberBuilder {
+
+		private final String javaName;
+		private final List<Annotated.Member> members = new ArrayList<>();
+		private String name = "";
+		private int offset;
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Composite built;
+
+		private AnnotatedCompositeBuilder(String javaName) {
+			this.javaName = javaName;
+		}
+
+		public AnnotatedCompositeBuilder members(AnnotatedMemberBuilder... builders) {
+			for (AnnotatedMemberBuilder builder : builders) {
+				members.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder offset(int offset) {
+			this.offset = offset;
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Composite build() {
+			if (built == null) {
+				built = new Annotated.Composite(
+						javaName, members, name, offset, semanticType, description,
+						sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedMessageBuilder {
+
+		private final String javaName;
+		private final int id;
+		private final List<Annotated.Component> components = new ArrayList<>();
+		private String name = "";
+		private int blockLength;
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+
+		private AnnotatedMessageBuilder(String javaName, int id) {
+			this.javaName = javaName;
+			this.id = id;
+		}
+
+		public AnnotatedMessageBuilder components(AnnotatedComponentBuilder... builders) {
+			for (AnnotatedComponentBuilder builder : builders) {
+				components.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedMessageBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedMessageBuilder blockLength(int blockLength) {
+			this.blockLength = blockLength;
+			return this;
+		}
+
+		public AnnotatedMessageBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedMessageBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedMessageBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedMessageBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		public Annotated.Message build() {
+			return new Annotated.Message(
+					javaName, id, components, name, blockLength, semanticType, description,
+					sinceVersion, deprecated
+			);
+		}
+	}
+
+	public static final class AnnotatedFieldBuilder implements AnnotatedComponentBuilder {
+
+		private final String javaName;
+		private final int id;
+		private final Annotated.JavaType javaType;
+		private Annotated.@Nullable Declaration type;
+		private @Nullable PrimitiveType primitiveType;
+		private String name = "";
+		private Presence presence = Presence.REQUIRED;
+		private String valueRef = "";
+		private int offset;
+		private String epoch = "unix";
+		private String timeUnit = "nanosecond";
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Field built;
+
+		private AnnotatedFieldBuilder(String javaName, int id, Annotated.JavaType javaType) {
+			this.javaName = javaName;
+			this.id = id;
+			this.javaType = javaType;
+		}
+
+		public AnnotatedFieldBuilder type(AnnotatedDeclarationBuilder type) {
+			this.type = type.build();
+			return this;
+		}
+
+		public AnnotatedFieldBuilder primitiveType(PrimitiveType primitiveType) {
+			this.primitiveType = primitiveType;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder presence(Presence presence) {
+			this.presence = presence;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder valueRef(String valueRef) {
+			this.valueRef = valueRef;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder offset(int offset) {
+			this.offset = offset;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder epoch(String epoch) {
+			this.epoch = epoch;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder timeUnit(String timeUnit) {
+			this.timeUnit = timeUnit;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedFieldBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Field build() {
+			if (built == null) {
+				built = new Annotated.Field(
+						javaName, javaType, id, type, apiPrimitive(primitiveType), name,
+						apiPresence(presence), valueRef,
+						offset, epoch, timeUnit, semanticType, description, sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedGroupBuilder implements AnnotatedComponentBuilder {
+
+		private final String javaName;
+		private final int id;
+		private final List<Annotated.Component> components = new ArrayList<>();
+		private Annotated.Composite dimensionType = GROUP_SIZE_ENCODING;
+		private String name = "";
+		private int blockLength;
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Group built;
+
+		private AnnotatedGroupBuilder(String javaName, int id) {
+			this.javaName = javaName;
+			this.id = id;
+		}
+
+		public AnnotatedGroupBuilder components(AnnotatedComponentBuilder... builders) {
+			for (AnnotatedComponentBuilder builder : builders) {
+				components.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedGroupBuilder dimensionType(AnnotatedCompositeBuilder dimensionType) {
+			this.dimensionType = dimensionType.build();
+			return this;
+		}
+
+		public AnnotatedGroupBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedGroupBuilder blockLength(int blockLength) {
+			this.blockLength = blockLength;
+			return this;
+		}
+
+		public AnnotatedGroupBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedGroupBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedGroupBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedGroupBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Group build() {
+			if (built == null) {
+				built = new Annotated.Group(
+						javaName, id, components, dimensionType, name, blockLength, semanticType,
+						description, sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedDataBuilder implements AnnotatedComponentBuilder {
+
+		private final String javaName;
+		private final int id;
+		private final Annotated.JavaType javaType;
+		private final Annotated.Composite type;
+		private String name = "";
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Data built;
+
+		private AnnotatedDataBuilder(String javaName, int id, Annotated.JavaType javaType, Annotated.Composite type) {
+			this.javaName = javaName;
+			this.id = id;
+			this.javaType = javaType;
+			this.type = type;
+		}
+
+		public AnnotatedDataBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedDataBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedDataBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedDataBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedDataBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Data build() {
+			if (built == null) {
+				built = new Annotated.Data(
+						javaName, javaType, id, type, name, semanticType, description,
+						sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	// The twins are written in the corpus's vocabulary, sbe-tool's enums, and the
+	// api's enums, which the annotations hold, are made from them here by name. The
+	// api's are qualified because they share their simple names with sbe-tool's.
+
+	private static net.concini.sbebuddy.PrimitiveType apiPrimitive(@Nullable PrimitiveType primitiveType) {
+		return primitiveType == null
+				? net.concini.sbebuddy.PrimitiveType.NONE
+				: net.concini.sbebuddy.PrimitiveType.valueOf(primitiveType.name());
+	}
+
+	private static net.concini.sbebuddy.Presence apiPresence(Presence presence) {
+		return net.concini.sbebuddy.Presence.valueOf(presence.name());
+	}
+
+	private static net.concini.sbebuddy.ByteOrder apiByteOrder(ByteOrder byteOrder) {
+		return byteOrder == ByteOrder.BIG_ENDIAN
+				? net.concini.sbebuddy.ByteOrder.BIG_ENDIAN
+				: net.concini.sbebuddy.ByteOrder.LITTLE_ENDIAN;
+	}
 }
