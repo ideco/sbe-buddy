@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.jupiter.api.Test;
@@ -128,14 +131,14 @@ final class XsdCoverageTest {
 		return used;
 	}
 
-	private static javax.xml.parsers.DocumentBuilder builder() throws Exception {
+	private static DocumentBuilder builder() throws Exception {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 		factory.setNamespaceAware(true);
 		return factory.newDocumentBuilder();
 	}
 
-	private static java.util.List<Element> children(Element parent) {
-		java.util.List<Element> result = new java.util.ArrayList<>();
+	private static List<Element> children(Element parent) {
+		List<Element> result = new ArrayList<>();
 		for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {
 			if (node instanceof Element element) {
 				result.add(element);

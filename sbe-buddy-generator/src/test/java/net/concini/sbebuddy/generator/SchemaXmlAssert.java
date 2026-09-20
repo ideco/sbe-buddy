@@ -40,6 +40,8 @@ public final class SchemaXmlAssert {
 
 	static final Map<String, String> NAMESPACES = Map.of("sbe", SchemaXml.NAMESPACE);
 
+	// Qualified because it collides with our Schema, the subject of every assertion
+	// here.
 	private static final javax.xml.validation.Schema XSD = xsd();
 
 	private final Schema schema;
