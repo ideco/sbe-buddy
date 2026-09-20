@@ -134,6 +134,13 @@ answer is cheap to pin. Reflection is banned in main code and free in tests.
 - Java 21 is the compiler target, so the library and the processor run on
   every JDK from 21 up. Maven through the wrapper. `./mvnw verify` is the
   gate; `./mvnw spotless:apply` before every commit.
+- Maven 4 with `4.1.0` POMs, pinned by the wrapper at `4.0.0-rc-6`: the root
+  POM carries `root="true"`, a subproject declares neither its own version
+  nor its parent's, and a dependency inside the reactor omits its version.
+  Maven installs a `4.0.0` consumer POM beside each artifact, so none of this
+  reaches a consumer. The wrapper is generated `only-script`, so `./mvnw`
+  execs the distribution's own `bin/mvn`; the classic wrapper parses
+  `.mvn/jvm.config` itself and would reject the comment in it.
 - javac runs with its defaults: no `-Xlint`, no `-Werror`. Generated code
   is compiled by the same javac and cannot be fixed, and lint categories
   change with each JDK.
