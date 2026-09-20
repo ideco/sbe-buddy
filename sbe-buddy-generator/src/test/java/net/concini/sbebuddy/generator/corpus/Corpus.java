@@ -22,7 +22,9 @@ final class Corpus {
 			new Case("Versions", Versions.schema(), Versions.XML),
 			new Case("Header", Header.schema(), Header.XML),
 			new Case("BigEndian", BigEndian.schema(), BigEndian.XML),
-			new Case("Messages", Messages.schema(), Messages.XML)
+			new Case("Messages", Messages.schema(), Messages.XML),
+			new Case("Arrays", Arrays.schema(), Arrays.XML),
+			new Case("OptionalFields", OptionalFields.schema(), OptionalFields.XML)
 	);
 
 	private Corpus() {
