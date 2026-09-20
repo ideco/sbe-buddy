@@ -61,3 +61,42 @@ Where this guide conflicts with project-specific architecture or constraints, th
 Use the repository formatter and supported Java version.
 
 Apply these rules to the code being changed. Do not perform unrelated cleanup or refactoring.
+
+## sbe-buddy specifics
+
+The decisions that shaped the first code, so later code matches it.
+
+- The schema model is one file, `Schema`, with a nested record per XSD
+  element named after it. Nesting is for that closed grammar only, not a
+  habit: `SchemaXml`, `Generator` and the codec emitter are their own
+  files. Nested model types are used qualified, `Schema.Field`, and never
+  imported: `Schema.Enum` and `Schema.Set` would shadow `java.lang` and
+  `java.util` in any file that imported them.
+- Records are pure: canonical constructor, no builder, no wither, no
+  setter. A record's compact constructor copies its lists and does nothing
+  else; every schema rule lives in `Generator.validate`, positioned. A
+  Javadoc on a record names the XSD element it mirrors and stops; the XSD
+  is the documentation.
+- Components are the XSD's attributes with the XSD's names, required ones
+  first, then children, then optional ones in XSD order. Optional is
+  `@Nullable`, boxed where the attribute is numeric; nothing has a default,
+  because a default in our code is a second copy of the XSD. Where the XML
+  holds a name that sbe-tool resolves (`type`, `encodingType`,
+  `dimensionType`, `valueRef`, `headerType`) the component is a `String`;
+  where the XSD enumerates, it is an enum (`PrimitiveType`, `Presence`,
+  `ByteOrder`); numbers the XSD types as strings stay `String`.
+- Structure encodes the order rules: a message holds `fields`, `groups`
+  and `data` as three lists because the XSD orders them; a composite holds
+  one list of a sealed `Member` because the XSD does not. Sealed types are
+  switched without `default`.
+- Checked exceptions do not leave the generator except `IOException` from
+  a method that takes a `Writer`. `IllegalStateException` for cannot-happen,
+  `IllegalArgumentException` for a caller's mistake.
+- Tests: JUnit, AssertJ, XMLUnit; test classes and methods package-private,
+  helpers shared across test packages public;
+  parameterized tests over an explicit list, never classpath scanning;
+  method names are sentences in camelCase. The corpus DSL in `Fixtures` is
+  the only builder code in the repository; a corpus case holds its oracle
+  as a text block beside the model that must write it.
+- Not used anywhere: Lombok, `Utils` classes, an interface with one
+  implementation, an abstraction for a front-end that does not exist yet.

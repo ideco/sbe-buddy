@@ -9,20 +9,23 @@
     <artifactId>sbe-buddy-parent</artifactId>
   </parent>
 
-  <artifactId>sbe-buddy-processor</artifactId>
+  <artifactId>sbe-buddy-generator</artifactId>
 
   <dependencies>
     <dependency>
-      <groupId>net.concini</groupId>
-      <artifactId>sbe-buddy-api</artifactId>
+      <groupId>uk.co.real-logic</groupId>
+      <artifactId>sbe-tool</artifactId>
+      <version>${sbe-tool.version}</version>
     </dependency>
     <dependency>
-      <groupId>net.concini</groupId>
-      <artifactId>sbe-buddy-generator</artifactId>
+      <groupId>org.xmlunit</groupId>
+      <artifactId>xmlunit-assertj3</artifactId>
+      <version>${xmlunit.version}</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
   <properties>
-    <module.name>net.concini.sbebuddy.processor</module.name>
+    <module.name>net.concini.sbebuddy.generator</module.name>
   </properties>
 </project>

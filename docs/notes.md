@@ -35,6 +35,11 @@ alternatives considered.
   rules, in `Message`, `Field`, `CompositeType`, `EncodedDataType`,
   `EnumType` and `XmlSchemaParser`; `MessageSchema.validate` adds
   `sinceVersion` above the schema version. (Read 2026-09-20.)
+- `sbe.xsd` declares `messageSchema` and `message` at top level, so both
+  are namespace-qualified (`<sbe:message>`) and every other element is
+  local and unqualified. The parser matches by local name and accepts an
+  unqualified `message` that the XSD rejects, so validating against the
+  XSD is a separate check. (Spike experiment, 2026-09-20.)
 - `MessageSchema`'s constructors are package-private and `Message`,
   `CompositeType`, `EnumType` and `SetType` are built from DOM nodes, so
   `parse(InputSource)` is the only way to obtain a `MessageSchema`.

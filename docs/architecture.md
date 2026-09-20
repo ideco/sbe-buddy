@@ -50,14 +50,17 @@ name, is computed here.
 
 ## The model
 
-- Immutable records in the generator, one per `sbe.xsd` element, named
-  after it with a `Def` suffix: `SchemaDef`, `TypeDef`, `CompositeDef`,
-  `RefDef`, `EnumDef`, `ValidValueDef`, `SetDef`, `ChoiceDef`,
-  `MessageDef`, `FieldDef`, `GroupDef`, `DataDef`. One component per XSD
+- One file, `Schema`: the `messageSchema` record with a nested record per
+  `sbe.xsd` element named after it, `Schema.Type`, `Schema.Composite`,
+  `Schema.Ref`, `Schema.Enum`, `Schema.ValidValue`, `Schema.Set`,
+  `Schema.Choice`, `Schema.Message`, `Schema.Field`, `Schema.Group`,
+  `Schema.Data`, used qualified and never imported. One component per XSD
   attribute with the XSD's name, `value` for element text. An attribute
   the XSD makes optional is `@Nullable`; nothing carries a default, so the
   model holds what was written and `SchemaXml` writes exactly that.
-  Children are `List`s in declaration order.
+  Children are `List`s in declaration order; the two sealed interfaces,
+  `Declaration` for what `types` holds and `Member` for what a composite
+  holds, need no `permits` because the file is the closed set.
 - Enumerated attributes use sbe-tool's vocabulary, `PrimitiveType` and
   `Presence`, and `java.nio.ByteOrder`. The generator depends on sbe-tool
   anyway, and its names are the names.

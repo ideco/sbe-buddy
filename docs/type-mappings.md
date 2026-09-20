@@ -31,7 +31,7 @@ memory.
   schema references them by class. Flyweights are generated into
   `<package>.sbe`.
 - The generator's model mirrors the same XSD nodes with the same names
-  (`FieldDef` for `field`, one component per attribute, `null` for
+  (`Schema.Field` for `field`, one component per attribute, `null` for
   absent), and `SchemaXml` writes one element per node and only the
   attributes that were set. A default is never written, so the XML reads
   as a person would write it.
