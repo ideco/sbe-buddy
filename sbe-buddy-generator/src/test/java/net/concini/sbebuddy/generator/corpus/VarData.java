@@ -2,26 +2,21 @@ package net.concini.sbebuddy.generator.corpus;
 
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
-import static net.concini.sbebuddy.generator.Fixtures.enumeration;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
 import static net.concini.sbebuddy.generator.Fixtures.type;
-import static net.concini.sbebuddy.generator.Fixtures.validValue;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT32;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
-import static uk.co.real_logic.sbe.xml.Presence.REQUIRED;
 
 import net.concini.sbebuddy.generator.Schema;
 
 /**
  * Variable-length data: text with a character encoding, opaque bytes without
- * one, and a length type wide enough to need its own maxValue. The XSD gives
- * data a field's attributes, so epoch, timeUnit and valueRef are declared for
- * it although sbe-tool reads nothing from them.
+ * one, and a length type wide enough to need its own maxValue.
  */
 final class VarData {
 
@@ -47,15 +42,12 @@ final class VarData {
 			            <type name="length" primitiveType="uint8"/>
 			            <type name="varData" primitiveType="uint8" length="0"/>
 			        </composite>
-			        <enum name="Model" encodingType="uint8">
-			            <validValue name="Cash">1</validValue>
-			        </enum>
 			    </types>
 			    <sbe:message name="VarData" id="1">
 			        <field name="orderId" id="1" type="int32"/>
-			        <data name="note" id="2" type="varStringEncoding" offset="4" presence="required" semanticType="String" description="A free-text note"/>
+			        <data name="note" id="2" type="varStringEncoding" offset="4" semanticType="String" description="A free-text note"/>
 			        <data name="payload" id="3" type="varBlobEncoding"/>
-			        <data name="signature" id="4" type="varByteEncoding" epoch="unix" timeUnit="nanosecond" valueRef="Model.Cash"/>
+			        <data name="signature" id="4" type="varByteEncoding"/>
 			    </sbe:message>
 			</sbe:messageSchema>
 			""";
@@ -78,8 +70,7 @@ final class VarData {
 						composite("varByteEncoding").members(
 								type("length", UINT8),
 								type("varData", UINT8).length(0)
-						),
-						enumeration("Model", "uint8").validValues(validValue("Cash", "1"))
+						)
 				)
 				.messages(
 						message("VarData", 1)
@@ -87,14 +78,10 @@ final class VarData {
 								.data(
 										data("note", 2, "varStringEncoding")
 												.offset(4)
-												.presence(REQUIRED)
 												.semanticType("String")
 												.description("A free-text note"),
 										data("payload", 3, "varBlobEncoding"),
 										data("signature", 4, "varByteEncoding")
-												.epoch("unix")
-												.timeUnit("nanosecond")
-												.valueRef("Model.Cash")
 								)
 				)
 				.build();

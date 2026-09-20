@@ -31,9 +31,22 @@ final class XsdCoverageTest {
 
 	private static final String XS = "http://www.w3.org/2001/XMLSchema";
 
+	/**
+	 * Declared by the XSD, which gives data a field's attributes, but read by
+	 * nothing in sbe-tool (notes.md), so no oracle carries them and no annotation
+	 * offers them.
+	 */
+	private static final Set<String> IGNORED_BY_SBE_TOOL = Set.of(
+			"data/@presence",
+			"data/@valueRef",
+			"data/@epoch",
+			"data/@timeUnit"
+	);
+
 	@Test
 	void everyElementAndAttributeOccursInSomeOracle() throws Exception {
 		Set<String> uncovered = declaredByXsd();
+		uncovered.removeAll(IGNORED_BY_SBE_TOOL);
 		for (Corpus.Case aCase : Corpus.CASES) {
 			uncovered.removeAll(usedBy(aCase.oracle()));
 		}
