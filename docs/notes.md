@@ -52,6 +52,19 @@ alternatives considered.
   created in the same compilation. (Spike, 2026-09.)
 - `Messager` cannot position an annotation *value* on a record component;
   the diagnostic lands on the annotation. (Spike, 2026-09.)
+- From JDK 23 javac performs no annotation processing unless `-processor`,
+  `--processor-path` or `--processor-module-path` is set, or `-proc` is
+  `only` or `full`; discovery from the compile classpath is gone. Reaching
+  the processor through `annotationProcessorPaths`, as the example does,
+  sets `--processor-path` and is unaffected.
+  (`maven-compiler-plugin:4.0.0-beta-5` plugin descriptor, `proc` and
+  `annotationProcessorPaths`, read 2026-09-20.)
+
+## Error Prone 2.50.0
+
+- On JDK 21 Error Prone refuses to run without
+  `-XDaddTypeAnnotationsToSymbol=true` and fails the compilation with that
+  sentence as the whole message. (Spike experiment, 2026-09-20.)
 
 ## Agrona 2.6.1
 
