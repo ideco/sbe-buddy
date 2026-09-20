@@ -19,13 +19,39 @@ alternatives considered.
   (Spike experiment, 2026-09.)
 - `XmlSchemaParser` with `stopOnError`, `warningsFatal` and
   `suppressOutput` throws `IllegalArgumentException` from a schema warning
-  and prints nothing. Parse the oracle with those options. (Spike
-  experiment, 2026-09.)
-- `IrGenerator` names an `ENCODING` token after its `<type>`: a field of a
-  named type and a field of the bare primitive give different IR for
-  identical bytes. (Spike experiment, 2026-09.)
-- Byte order is set only on `ENCODING` tokens; every `BEGIN_*` and `END_*`
-  token keeps `Encoding`'s default. (Spike experiment, 2026-09.)
+  and prints nothing. (Spike experiment, 2026-09.)
+- `XmlSchemaParser.parse` never validates against `sbe.xsd`; that is a
+  separate `validate(xsdFilename, InputSource, options)`, which wants the
+  XSD as a file path and sets no error handler, so the JDK's default prints
+  each violation to stderr and carries on. Validate with
+  `javax.xml.validation` and `fpl/sbe.xsd` from the jar instead.
+  (`XmlSchemaParser.java` and `SbeTool.java`, read 2026-09-20.)
+- Every parser error goes through `ErrorHandler.error(String)`, a public
+  method of a public non-final class with a public `(PrintStream,
+  ParserOptions)` constructor, and `ParserOptions` carries an
+  `errorPrintStream`. The node never reaches the handler: `handleError`
+  prefixes the message with `at <parent name="P"> <node name="N"> ` from a
+  private `formatLocationInfo`. 57 `handleError` sites, about 40 distinct
+  rules, in `Message`, `Field`, `CompositeType`, `EncodedDataType`,
+  `EnumType` and `XmlSchemaParser`; `MessageSchema.validate` adds
+  `sinceVersion` above the schema version. (Read 2026-09-20.)
+- `MessageSchema`'s constructors are package-private and `Message`,
+  `CompositeType`, `EnumType` and `SetType` are built from DOM nodes, so
+  `parse(InputSource)` is the only way to obtain a `MessageSchema`.
+  (Read 2026-09-20.)
+- `uk.co.real_logic.sbe.ir.GenerationUtil` (`collectFields`,
+  `collectGroups`, `collectVarData`) and
+  `uk.co.real_logic.sbe.generation.java.JavaUtil` (`formatPropertyName`,
+  `formatClassName`, `formatGetterName`) are public; `JavaGenerator`
+  derives every flyweight member name through them. (Read 2026-09-20.)
+- `IrEncoder` and `IrDecoder` read and write the `.sbeir` file `SbeTool`
+  accepts in place of XML and emits under `-Dsbe.generate.ir=true`.
+  `IrEncoder` imports `org.agrona.concurrent.UnsafeBuffer`, so writing an
+  IR file inside javac needs the Agrona JVM flag. `IrGenerator`, `Ir`,
+  `Token` and `Encoding` import only `org.agrona.Verify`; `JavaGenerator`
+  refers to the `DirectBuffer` and `MutableDirectBuffer` interfaces by
+  class literal, and whether loading those touches `UnsafeApi` is
+  unverified. (Read 2026-09-20.)
 - The decoder's `wrap(buffer, offset, actingBlockLength, actingVersion)`
   sets `limit = offset + actingBlockLength`, so an older decoder skips
   fields a newer version appended to the block. (`JavaGenerator.java`,

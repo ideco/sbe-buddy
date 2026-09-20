@@ -13,12 +13,14 @@ public record PlaceOrder(
     @SbeField(id = 2) int quantity) {}
 ```
 
-Compiling it runs a javac annotation processor that builds SBE's intermediate
-representation from the record, runs SBE's own `JavaGenerator` to produce the
-usual flyweights in `com.example.trading.sbe`, and generates a
-`PlaceOrderCodec` between the record and those flyweights. The wire format is
-exactly what sbe-tool produces from the equivalent XML schema, and the project
-proves that continuously against a hand-written XML oracle.
+Compiling it runs a javac annotation processor that writes the equivalent SBE
+XML schema from the records and hands it to sbe-tool, which parses it, builds
+the IR and generates the usual flyweights in `com.example.trading.sbe`; the
+processor then generates a `PlaceOrderCodec` between the record and those
+flyweights. The schema ships in the jar, so sbe-tool's other generators
+produce the same messages for C, C++, C# and Rust. The wire format is exactly
+what sbe-tool produces from the equivalent XML schema, and the project proves
+that continuously against a hand-written XML oracle.
 
 ## Scope
 
@@ -33,16 +35,17 @@ representation of all of it is `type-mappings.md`.
 
 ## Out of scope
 
-RPC (`rpc.md`), Aeron transport, typed flyweights, emitting the XML schema,
-tooling over sbe-tool's schema corpus. None of these appears in code until
+RPC (`rpc.md`), Aeron transport, typed flyweights, tooling over sbe-tool's
+schema corpus. None of these appears in code until
 the scope above is complete, and nothing built may preclude them.
 
 ## Non-negotiables
 
-1. **Byte-identical to sbe-tool.** Same IR, same `JavaGenerator`, same
-   bytes. The hand-written XML next to the example records is the oracle; it
-   grows with the records in the same change and is never edited to make a
-   test pass.
+1. **Byte-identical to sbe-tool.** sbe-buddy writes the XML schema; sbe-tool
+   parses it, builds the IR and generates the flyweights, so the bytes are
+   sbe-tool's by construction. The hand-written XML next to the example
+   records is the oracle: the written schema must equal it; it grows with the
+   records in the same change and is never edited to make a test pass.
 2. **Nothing is inferred.** Schema id, version, template ids, field ids,
    unsigned types, named types, `sinceVersion`: all written by hand in
    annotations. The only default is the same-width signed primitive for a
@@ -74,17 +77,18 @@ the scope above is complete, and nothing built may preclude them.
 
 ## Increments
 
-- [ ] 1. Build
-- [ ] 2. Example and oracle
-- [ ] 3. Annotation model
-- [ ] 4. Primitives: records to IR, flyweights, codec
-- [ ] 5. Schema evolution
-- [ ] 6. Enums
-- [ ] 7. Named types and bindings
-- [ ] 8. Composites
-- [ ] 9. Fixed-length arrays
-- [ ] 10. Groups
-- [ ] 11. Var-data
-- [ ] 12. Sets, constants, optional presence
-- [ ] 13. Byte order and header types
-- [ ] 14. Message families
+- [x] 1. Build
+- [ ] 2. The schema model and its XML, complete, with the corpus
+- [ ] 3. Annotations and the processor; the example and its oracle
+- [ ] 4. sbe-tool in the pipeline: flyweights, the schema in the jar, the backstop
+- [ ] 5. Codec: primitives
+- [ ] 6. Codec: schema evolution
+- [ ] 7. Codec: enums
+- [ ] 8. Codec: named types and bindings
+- [ ] 9. Codec: composites
+- [ ] 10. Codec: fixed-length arrays
+- [ ] 11. Codec: groups
+- [ ] 12. Codec: var-data
+- [ ] 13. Codec: sets, constants, optional presence
+- [ ] 14. Codec: byte order and header types
+- [ ] 15. Message families
