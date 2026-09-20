@@ -66,12 +66,13 @@ Apply these rules to the code being changed. Do not perform unrelated cleanup or
 
 The decisions that shaped the first code, so later code matches it.
 
-- The schema model is one file, `Schema`, with a nested record per XSD
-  element named after it. Nesting is for that closed grammar only, not a
-  habit: `SchemaXml`, `Generator` and the codec emitter are their own
-  files. Nested model types are used qualified, `Schema.Field`, and never
-  imported: `Schema.Enum` and `Schema.Set` would shadow `java.lang` and
-  `java.util` in any file that imported them.
+- A closed grammar is one file with a nested record per node: `Schema`
+  for the XSD's elements, `Annotated` for the api's annotations. Nesting
+  is for those two only, not a habit: `SchemaXml`, `Mapping`, `Generator`
+  and the codec emitter are their own files. Nested model types are used
+  qualified, `Schema.Field`, `Annotated.Field`, and never imported:
+  `Schema.Enum` and `Schema.Set` would shadow `java.lang` and `java.util`
+  in any file that imported them.
 - Records are pure: canonical constructor, no builder, no wither, no
   setter. A record's compact constructor copies its lists and does nothing
   else; every schema rule lives in `Generator.validate`, positioned. A

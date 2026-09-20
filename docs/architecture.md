@@ -1,78 +1,87 @@
 # Architecture
 
-The design decisions: modules, the pipeline, the model, the rules, how
+The design decisions: modules, the pipeline, the models, the rules, how
 generation and testing work, the build. These may change without sbe-buddy
 changing what it is; `intent.md` and `type-mappings.md` outrank this file.
 
 ## Modules
 
 ```
-sbe-buddy-generator    net.concini.sbebuddy.generator   the model, SchemaXml, Generator, the codec emitter, the corpus
-                       dep: sbe-tool
-sbe-buddy-api          annotations, PrimitiveType, Codec, TypeBinding, built-in types and bindings
-                       dep: agrona
-sbe-buddy-processor    net.concini.sbebuddy.processor   javac elements → model; Messager; Filer
-                       deps: sbe-buddy-api, sbe-buddy-generator
-sbe-buddy-example      the running example, its XML oracle, the end-to-end tests; not deployed
+sbe-buddy-api          annotations, PrimitiveType, Presence, ByteOrder, the built-in composites; Codec, TypeBinding, bindings
+                       dep: agrona, from the first release
+sbe-buddy-generator    net.concini.sbebuddy.generator   Schema, SchemaXml, Annotated, Mapping, Generator, the codec emitter, the corpus
+                       deps: sbe-buddy-api, sbe-tool
+sbe-buddy-processor    net.concini.sbebuddy.processor   javac elements → Annotated; Messager; Filer
+                       dep: sbe-buddy-generator
+sbe-buddy-example      annotated schemas, one per concern, each with its oracle; the end-to-end tests; not deployed
                        deps: sbe-buddy-api; the processor on annotationProcessorPaths only
 reference/             sbe-tool's sources as a submodule, for reading
 ```
 
-`generator ← processor`, `api ← processor`, `api ← example`. The generator
-knows nothing of javac and nothing of the api, and the example reaches the
-processor only through `annotationProcessorPaths`, so sbe-tool is never on
-a user's compile or runtime classpath; the module graph guarantees all of
-it, no build rule needed. Base package `net.concini.sbebuddy`; each
-published jar sets `Automatic-Module-Name` to its own package; no
-`module-info.java`.
+`api ← generator ← processor`, `api ← example`. The generator knows nothing
+of javac, and the example reaches the processor only through
+`annotationProcessorPaths`, so sbe-tool is never on a user's compile or
+runtime classpath; the module graph guarantees both, no build rule needed.
+Base package `net.concini.sbebuddy`; each published jar sets
+`Automatic-Module-Name` to its own package; no `module-info.java`.
 
-The generator is the core: a codec generator over sbe-tool's own toolchain,
-usable from any front-end that can build the model. The annotations and the
-processor are one such front-end.
+The generator is the core: everything from annotated Java as data to
+generated sources, over sbe-tool's own toolchain, with no javac in it. The
+processor is the javac front-end and nothing more.
 
 ## The pipeline
 
 One compilation of an `@SbeSchema` package runs, in order:
 
 ```
-1  javac elements ──► SchemaDef        ours      processor: annotations to the model, our rules
-2  SchemaDef ──► schema.xml            ours      SchemaXml: one element per node, one attribute per member set
-3  schema.xml ──► MessageSchema        sbe-tool  XmlSchemaParser.parse: the XSD's rules and the parser's
-4  MessageSchema ──► Ir                sbe-tool  IrGenerator
-5  Ir ──► flyweight sources            sbe-tool  JavaGenerator, through a Writer per file
-6  Ir + SchemaDef ──► codec sources    ours      the codec emitter
-7  schema.xml ──► a resource           ours      the schema ships in the jar
+1  javac elements ──► Annotated       ours      discovery, in the processor: annotations as data
+2  Annotated ──► Schema               ours      Mapping: type-mappings.md, and the single-element rules
+3  Schema ──► schema.xml              ours      SchemaXml: one element per node, one attribute per member set
+4  schema.xml ──► MessageSchema       sbe-tool  XmlSchemaParser.parse: the XSD's rules and the parser's
+5  MessageSchema ──► Ir               sbe-tool  IrGenerator
+6  Ir ──► flyweight sources           sbe-tool  JavaGenerator, through a Writer per file
+7  Ir + Annotated ──► codec sources   ours      the codec emitter
+8  schema.xml ──► a resource          ours      the schema ships in the jar
 ```
 
 sbe-buddy writes the XML that goes in and consumes the IR that comes out.
 Nothing with wire semantics, no offset, no null value, no flyweight method
-name, is computed here.
+name, is computed here. With step 7 off (below), the pipeline is the first
+release: annotated records in, sbe-tool's own flyweights out.
 
-## The model
+## The models
 
-- One file, `Schema`: the `messageSchema` record with a nested record per
-  `sbe.xsd` element named after it, `Schema.Type`, `Schema.Composite`,
+Two closed grammars, each one file of nested records, used qualified and
+never imported.
+
+- **`Schema`** is `sbe.xsd`: the `messageSchema` record with a nested
+  record per XSD element named after it, `Schema.Type`, `Schema.Composite`,
   `Schema.Ref`, `Schema.Enum`, `Schema.ValidValue`, `Schema.Set`,
   `Schema.Choice`, `Schema.Message`, `Schema.Field`, `Schema.Group`,
-  `Schema.Data`, used qualified and never imported. One component per XSD
-  attribute with the XSD's name, `value` for element text. An attribute
-  the XSD makes optional is `@Nullable`; nothing carries a default, so the
-  model holds what was written and `SchemaXml` writes exactly that.
-  Children are `List`s in declaration order; the two sealed interfaces,
-  `Declaration` for what `types` holds and `Member` for what a composite
-  holds, need no `permits` because the file is the closed set.
-- Enumerated attributes use sbe-tool's vocabulary, `PrimitiveType` and
-  `Presence`, and `java.nio.ByteOrder`. The generator depends on sbe-tool
-  anyway, and its names are the names.
-- Two halves. The SBE half is the XSD and the only thing `SchemaXml`
-  reads. The Java face, component types, boxing, bindings, family
-  membership, is what the codec emitter reads and XML cannot hold; how it
-  attaches to the records is decided by the codec increment, and the XML
-  never sees it.
-- No `origin`. The model is a value: equal when it says the same thing,
-  built by a test without positions. The processor keeps its own map from
-  node to javac `Element`, and `Problem(Object node, String message)`
-  names the node for the processor to place.
+  `Schema.Data`; one component per XSD attribute with the XSD's name,
+  `value` for element text. An attribute the XSD makes optional is
+  `@Nullable`; nothing carries a default, so the model holds what was
+  written and `SchemaXml` writes exactly that. Children are `List`s in
+  declaration order; the two sealed interfaces, `Declaration` for what
+  `types` holds and `Member` for what a composite holds, need no `permits`
+  because the file is the closed set. Enumerated attributes use sbe-tool's
+  `PrimitiveType` and `Presence`, and `java.nio.ByteOrder`.
+- **`Annotated`** is the api's annotations as data: a nested record per
+  annotation, one component per member with the member's name, plus what
+  an annotation cannot carry: the Java name of the thing annotated, its
+  Java type as a small sealed descriptor (a primitive, `String`, `byte[]`,
+  a `List` of a record, a declared type), and references to other
+  declarations by identity rather than by `Class`. It is the Java face: the
+  codec emitter reads it beside the IR, related to `Schema` by name, which
+  is unique per message.
+- **Both are values.** Neither carries a position. Discovery keeps an
+  identity map from each `Annotated` node to its javac `Element` and, where
+  there is one, `AnnotationMirror`; `Mapping` returns its `Schema` together
+  with an identity map from each `Schema` node to the `Annotated` node it
+  came from. A `Problem(Object node, String message)` names a node of either
+  model, and the processor resolves it in at most two lookups. Records'
+  `equals` is content-based and the identity maps ignore it, so a test
+  asserts a `Problem` by equality and the processor places it by identity.
 
 ## Rules
 
@@ -85,12 +94,18 @@ Three layers, in the order a mistake meets them.
   fails the file first.
 - **Ours, positioned.** The rules SBE has no model for, and the few of
   sbe-tool's that a user hits often enough to deserve an exact position and
-  our wording: the append-only version rule, duplicate ids and names,
-  `sinceVersion` above the schema version, field and type presence
-  mismatch, the id range, the name pattern, field then group then data
-  order. Rules decidable from one element live in the processor; rules
-  that compare nodes live in `Generator.validate`, which returns
-  `Problem`s for the processor to place. One negative compile test each.
+  our wording. Rules decidable from one node live in `Mapping`: a component
+  whose type maps to nothing (`char`, a class that is neither a declared
+  type nor a default mapping), `type` and `primitiveType` together,
+  `@SbeGroup` not on a `List` of a record, `@SbeData` not on `String` or
+  `byte[]`, a field after a group or a group after data, an id outside
+  `0..65535`, a name outside the XSD's pattern. Rules that compare nodes
+  live in `Generator.validate`: duplicate field ids and names in a message
+  or group, duplicate message names and ids, two declarations with one
+  wire name, `sinceVersion` above the schema version, `deprecated` below
+  `sinceVersion`, and the append-only rule, a node with `sinceVersion = n`
+  following every sibling with a lower one. One unit test each, asserting
+  the `Problem` and the node it names.
 - **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
   from the sbe-tool jar, then parsed with `stopOnError` and an
   `errorPrintStream` we own. Whatever is reported lands on the
@@ -101,9 +116,9 @@ Three layers, in the order a mistake meets them.
 
 ## Generation
 
-- `Generator.generate(schema, output)` runs steps 2 to 7. `Output` is where
-  sources and the resource go: the processor's is over `Filer`, a test's
-  over a map.
+- `Generator.generate(schema, annotated, output)` runs steps 3 to 8.
+  `Output` is where sources and the resource go: the processor's is over
+  `Filer`, a test's over a map.
 - `JavaGenerator` runs with one fixed configuration equal to `SbeTool`'s
   defaults: `MutableDirectBuffer` and `DirectBuffer`, no group-order
   annotation, no interfaces, no decoding of unknown enum values, no
@@ -115,15 +130,15 @@ Three layers, in the order a mistake meets them.
 - The schema goes into the jar as `<schema package>/schema.xml`, so a jar
   of records carries its own schema and sbe-tool's other generators produce
   the other side of the wire from it. The IR itself is built in memory in
-  every compilation and is what steps 5 and 6 consume; only its file form,
+  every compilation and is what steps 6 and 7 consume; only its file form,
   `.sbeir`, is not written: `IrEncoder` serializes it with Agrona's
   `UnsafeBuffer`, which would make a user's javac need a JVM flag, and
   `-Dsbe.generate.ir=true` on the resource produces it.
 - The codec emitter walks the IR the way `JavaGenerator` does, with
   `GenerationUtil.collectFields`, `collectGroups` and `collectVarData`,
   and names flyweight members through `JavaUtil`, so the codec calls what
-  was generated, by construction. Each token's Java face comes from the
-  model by name. Fields, then groups, recursing into each body, then
+  was generated, by construction. Each token's Java face comes from
+  `Annotated` by name. Fields, then groups, recursing into each body, then
   var-data; decoding is the mirror. `encodedLength` takes its shape from
   the IR and its numbers from the flyweights' constants (`BLOCK_LENGTH`,
   `sbeHeaderSize()`, `sbeBlockLength()`, `ENCODED_LENGTH`), so generated
@@ -133,12 +148,23 @@ Three layers, in the order a mistake meets them.
   encoder and decoder and the message flyweights, plus one instance of each
   binding as a private final field. Emitted with a plain `StringBuilder`,
   fully qualified names, no imports, field code in component order.
-- Nothing else is generated and none of it is configurable.
-- The processor generates each `@SbeSchema` package once, in the round that
-  first shows it, and never in the `processingOver` round; javac's `Filer`
-  cannot recreate a file. It loads no Agrona buffer class, so a user's
-  javac needs no JVM flag; that `JavaGenerator` keeps this true is checked
-  by the increment that first runs it.
+- Nothing else is generated, and one thing is configurable:
+  `@SbeSchema(codecs = false)` turns step 7 off for that schema, and the
+  processor then does exactly what the first release did. It is a member
+  of the annotation, not a processor option, because it belongs beside the
+  schema it applies to and contributes nothing to it.
+- The processor is triggered by any annotated element in a round and takes
+  that element's package as the unit of work, so an incremental build that
+  recompiles a record without its `package-info.java` still regenerates
+  the package. It generates each package once, in the round that first
+  shows it, and never in the `processingOver` round; javac's `Filer` cannot
+  recreate a file. It reads `Class`-typed members from the
+  `AnnotationMirror`, never through an annotation instance (`notes.md`),
+  and the annotations are retained at `CLASS`, so a declared type in a
+  library jar still resolves and nothing exists at runtime to reflect
+  over. It loads no Agrona buffer class, so a user's javac needs no JVM
+  flag; that `JavaGenerator` keeps this true is checked by the increment
+  that first runs it.
 
 ## The codec contract
 
@@ -167,18 +193,23 @@ public interface Codec<T> {
 
 ## Testing
 
-Three levels; the bulk sits at the first. Reflection is banned in main
-code and free in tests.
+The corpus does the work at every layer; javac appears only where it must.
+Reflection is banned in main code and free in tests.
 
-- **The corpus, in the generator.** Each case pairs a hand-built
-  `SchemaDef` with a hand-written oracle XML: one case per XSD feature,
-  and one per shape worth taking from sbe-tool's own test schemas, written
-  fresh and never copied. Per case: `SchemaXml.of(schema)` is equivalent
-  to the oracle, and the oracle parses through `XmlSchemaParser` with no
-  error and no warning, so a wrong oracle cannot agree with a wrong
-  writer. Once over the corpus: every element and attribute `sbe.xsd`
-  declares occurs in some oracle, so completeness is a test, not a claim.
-  No javac, no annotations, no IR under test.
+- **The corpus, in the generator.** Each case is one class holding three
+  views of one schema: `annotated()`, `schema()` and the hand-written
+  oracle `XML`, the first two built through the `Fixtures` DSL so the case
+  reads like the oracle. Per case: `Mapping.map(annotated())` equals
+  `schema()` by record equality; `SchemaXml.of(schema())` is equivalent to
+  the oracle; and the oracle parses through `XmlSchemaParser` with no error
+  and no warning, so a wrong oracle cannot agree with a wrong writer. Once
+  over the corpus: every element and attribute `sbe.xsd` declares occurs
+  in some oracle, except an explicit list of attributes the XSD declares
+  and sbe-tool ignores, so completeness is a test, not a claim. One case
+  per XSD feature and one per shape worth taking from sbe-tool's own test
+  schemas, written fresh and never copied. No javac.
+- **The rules** are unit tests over `Annotated` or `Schema` inputs: build
+  the mistake, assert the `Problem` and the node it names.
 - **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
   generator's tests: whitespace and comments ignored; both documents
   parsed with `sbe.xsd` attached, so the XSD's defaults are filled and an
@@ -187,21 +218,25 @@ code and free in tests.
   sequence, because offsets follow declaration order and a moved field is
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
-- **The processor.** Fixture records compiled through the Compiler API
-  with the processor attached; the model it built equals the hand-built
-  one. Negative compile tests, one per rule of ours and one per backstop
-  channel, assert the message only.
-- **The example, end to end.** `trading.xml` beside the records is the
-  oracle, and the schema resource the processor wrote is equivalent to it,
-  through `SchemaXmlAssert` from the generator's test jar. `SbeTool`
-  generates reference flyweights from the oracle into
-  `com.example.trading.xmlref` at `generate-sources`; the codec round trips
-  at a non-zero offset with `encodedLength` equal to the bytes written, the
-  codec's bytes decode with the reference flyweights, and the reference's
-  bytes decode with the codec.
-- Every past schema version stays as a frozen file (`trading-v0.xml`, ...)
-  with its own reference package, so cross-version decoding is tested in
-  both directions without old-version records.
+- **The example, end to end.** A package per concern, each a schema said
+  in annotated records and processed by the real processor through real
+  javac, with its oracle as a file in `src/main/sbe`, because `SbeTool`
+  reads it there at `generate-sources`. One parameterized test asserts
+  each package's `schema.xml` from the class output equivalent to its
+  oracle, through `SchemaXmlAssert` from the generator's test jar, and the
+  coverage test runs over all of them. From the first release on, `SbeTool`
+  generates reference flyweights from each oracle into an `xmlref` package
+  and the tests encode with ours and decode with the reference, and the
+  reverse; with codecs, they also round trip at a non-zero offset with
+  `encodedLength` equal to the bytes written. Every past schema version
+  stays as a frozen file (`<name>-v0.xml`, ...) with its own reference
+  package, so cross-version decoding is tested in both directions without
+  old-version records.
+- **The processor** has the few tests that need javac: negative snippets
+  compiled through the Compiler API with the processor attached, asserting
+  that a `Problem` lands on the element and line that carry the mistake,
+  and that discovery resolves a declared type across packages and from a
+  jar.
 - Test libraries: JUnit, AssertJ, XMLUnit with its AssertJ module. No
   test-kit module until a second consumer exists.
 
@@ -223,7 +258,7 @@ code and free in tests.
 - Formatting: Spotless with the Eclipse JDT formatter and a profile that
   keeps hand-written line breaks and puts a closing parenthesis on its own
   line when the arguments wrap; otherwise Eclipse's defaults (tabs, 120
-  columns).
+  columns). Spotless also removes unused imports and orders them.
 - Nullness: JSpecify annotations, `@NullMarked` on every hand-written main
   package, checked by NullAway at error level. NullAway runs as an Error
   Prone plugin with every other Error Prone check disabled and generated
@@ -234,7 +269,9 @@ code and free in tests.
   which Agrona needs in any JVM that loads a buffer class. Users' javac
   needs no flag, because the processor never touches an Agrona buffer.
 - Dependencies and plugins are added by the increment that first needs
-  them, with their versions in the root pom and nowhere else.
+  them, with their versions in the root pom and nowhere else. The api
+  depends on Agrona from the first release, because generated flyweights
+  compile against it and the api is all a user depends on.
 - `reference/simple-binary-encoding` is a git submodule at the sbe-tool
   tag the build depends on. It is read to confirm behaviour and never
   copied from or edited.

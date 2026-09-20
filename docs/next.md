@@ -1,80 +1,83 @@
-# Increment 2: the schema model and its XML
+# Increment 3: the annotations, and the mapping to the model
 
 ## Goal
 
-The generator's core, complete before anything touches it: a model that
-mirrors `sbe.xsd` node for node, a writer from the model to the XML
-schema, and a corpus proving the XML equivalent to hand-written schemas
-for every element and attribute the XSD declares. No annotations, no
-javac, no IR, no flyweights, no codec. sbe-tool appears only in tests, to
-confirm that each oracle is a schema it accepts.
+Annotated Java becomes the model, without javac. The api gains one
+annotation per XSD element; the generator gains `Annotated`, the
+annotations as data, and `Mapping`, the function from it to `Schema` that
+`type-mappings.md` specifies; the rules of ours land, each on the node it
+blames; and every corpus case gains a third view, so mapping is proven by
+record equality against the schemas already proven against the oracles.
+Discovery, the processor and the example are increment 4.
+
+## Before it starts, in its own pull request
+
+- The XSD coverage test takes an explicit list of attributes the XSD
+  declares and sbe-tool ignores, `data`'s `presence`, `valueRef`, `epoch`
+  and `timeUnit`, with the `notes.md` fact as its justification, and the
+  `VarData` case loses them; otherwise no annotated twin can say that
+  oracle.
+- Two corpus cases the coverage test cannot ask for: a fixed-length
+  primitive array (`primitiveType="uint8" length="3"`), and
+  `presence="optional"` on a field rather than on its type.
 
 ## What gets built
 
-- `sbe-buddy-generator`, a module depending on sbe-tool and nothing else,
-  `net.concini.sbebuddy.generator` `@NullMarked`, `Automatic-Module-Name`
-  `net.concini.sbebuddy.generator`. The processor module depends on it
-  and loses its own `generator` package; the example does not depend on
-  it. sbe-tool `1.40.2` joins the root POM.
-- The model: one file, `Schema`, the `messageSchema` record with a nested
-  record per `sbe.xsd` element named after it (`Schema.Type`,
-  `Schema.Composite`, `Schema.Ref`, `Schema.Enum`, `Schema.ValidValue`,
-  `Schema.Set`, `Schema.Choice`, `Schema.Message`, `Schema.Field`,
-  `Schema.Group`, `Schema.Data`), one component per XSD attribute with the
-  XSD's name, `value` for element text. An attribute the XSD makes
-  optional is `@Nullable`; nothing carries a default. Children are `List`s
-  in declaration order. Enumerated attributes use sbe-tool's
-  `PrimitiveType` and `Presence`, and `java.nio.ByteOrder`. What `types`
-  holds is a sealed `Declaration`, what a composite holds a sealed
-  `Member`, as the XSD allows.
-- `SchemaXml`: `Document of(SchemaDef)` and `void write(SchemaDef,
-  Writer)`. Namespace `http://fixprotocol.io/2016/sbe`, elements in the
-  XSD's order (`types`, then each `message`), children in model order, an
-  attribute written only when its component is non-null, so the document
-  reads as a person would write it and never states a default.
-- Test libraries, versions in the root POM: JUnit, AssertJ, XMLUnit with
-  its AssertJ module. The surefire and JUnit versions are checked to agree.
-- `SchemaXmlAssert` in the generator's tests: whitespace and comments
-  ignored; both documents parsed with `sbe.xsd` from the sbe-tool jar
-  attached, so XSD defaults are filled and an absent attribute equals its
-  default, which the assert's own test proves; `type`, `composite`, `enum`, `set` and `message` matched by
-  `name` regardless of order, everything else in sequence; the namespace
-  prefix registered once for XPath probes. A corpus test is one line
-  through it.
-- The corpus, `net.concini.sbebuddy.generator.corpus`: each case a class
-  with `static Schema schema()` and its oracle as a text block, `XML`,
-  beside it, built through the `Fixtures` DSL so the case reads like the
-  oracle; `Corpus.CASES` lists them. Per case: the written XML is
-  equivalent to the oracle, and the oracle parses through
-  `XmlSchemaParser` with no error and no warning. Cases, one per XSD feature and the shapes worth
-  taking from sbe-tool's own test schemas, written fresh:
-  `Primitives` (every `primitiveType` as a field), `NamedTypes` (every
-  attribute of `type`), `Constants` (constant `type`, `valueRef`, a
-  constant enum field), `Enums`, `Sets`, `Composites` (inline types,
-  `ref`, offsets, an inline enum and set, a nested composite), `Groups`
-  (nested, with data, a custom `dimensionType`), `VarData` (with and
-  without `characterEncoding`, a custom `type`), `Versions`
-  (`sinceVersion` and `deprecated` on every node kind,
-  `semanticVersion`), `Header` (a custom `headerType`), `BigEndian`,
-  `Messages` (`blockLength`, `offset`, `semanticType`, `epoch`,
-  `timeUnit`, `description` everywhere).
-- The coverage test: read `sbe.xsd` from the jar, list every element and
-  attribute it declares, assert each occurs in at least one oracle, and
-  name the missing ones. Completeness is a failing test until it is true.
+- The api: one annotation per XSD element and one member per attribute,
+  exactly as `type-mappings.md` lists them: `@SbeSchema`, `@SbeMessage`,
+  `@SbeField`, `@SbeGroup`, `@SbeData`, `@SbeType`, `@SbeComposite`,
+  `@SbeRef`, `@SbeEnum`, `@SbeEnumValue`, `@SbeSet`, `@SbeChoice`,
+  retained at `CLASS`. Members are typed as the XSD types them: the api's
+  own `PrimitiveType`, `Presence` and `ByteOrder` enums, since users never
+  see sbe-tool's; `Class<?>` where the XSD holds the name of a declared
+  type; `String` where the XSD types a number as a string. The standard
+  composites as `@SbeComposite` records, `MessageHeader`,
+  `GroupSizeEncoding`, `VarStringEncoding`, `VarAsciiEncoding`,
+  `VarDataEncoding` and `UuidWire`, each carrying SBE's conventional wire
+  name through `name`, so `@SbeSchema` defaults `headerType` to
+  `MessageHeader.class`, `@SbeGroup` defaults `dimensionType` to
+  `GroupSizeEncoding.class`, and the XML needs neither attribute. Nothing
+  of the codec: no `Codec`, no `TypeBinding`, no `@Bind`, no bindings, no
+  Agrona.
+- `Annotated`, in the generator: one file, the `@SbeSchema` package as the
+  root record with a nested record per annotation named after its element,
+  one component per member with the member's name, plus the Java name of
+  the annotated thing, its Java type as a small sealed descriptor (a
+  primitive, `String`, `byte[]`, a `List` of a record, a declared type),
+  and references to declarations by identity. A member left at its
+  default is the default's value, since that is what javac hands over; a
+  `name` left empty means the Java name.
+- `Mapping`, in the generator: `Mapped map(Annotated annotated)`, where
+  `Mapped` holds the `Schema`, the `Problem`s, and an identity map from
+  each `Schema` node to the `Annotated` node it came from. Wire name from
+  `name` or the Java name; a bare primitive component through the default
+  mapping; a reference to the declared type's wire name; every declaration
+  reached, wherever it lives, collected into `types` once, in the order
+  first reached; fields, then groups, then data. The single-element rules
+  of `architecture.md` fire here and return `Problem`s naming the
+  `Annotated` node.
+- `Generator.validate(Schema)`: the cross-node rules of `architecture.md`,
+  returning `Problem`s naming the `Schema` node.
+- The corpus, extended: every case gains `static Annotated annotated()`,
+  built through `Fixtures`, which grows the builders for annotations
+  beside the ones for the model; `CorpusTest` asserts
+  `Mapping.map(annotated()).schema()` equals `schema()` and that its
+  problems are empty. One unit test per rule, asserting the `Problem` and
+  the node it names.
 
 ## Criteria
 
-- Every corpus case passes both assertions, and the coverage test passes.
-- The generator module's compile classpath holds sbe-tool and JSpecify
-  only; nothing in it names `javax.lang.model` or
-  `javax.annotation.processing`.
-- A deliberately wrong attribute in one case fails with the XPath of the
-  difference and both values; tried once and not committed.
+- Every corpus case maps to its schema by equality, with no problems.
+- Every rule of ours has a test that builds the mistake and asserts the
+  `Problem` and the node; every rule is reachable from `Annotated` or
+  `Schema` alone.
+- The generator's compile classpath holds the api, sbe-tool and JSpecify;
+  nothing in it names `javax.lang.model` or `javax.annotation.processing`.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Annotations, the processor, javac, `Generator.validate` and every rule,
-the IR, flyweights, the codec, the schema resource in the jar, the
-example module's contents, the api module's contents.
+Discovery, the processor, javac, `Filer`, `Messager`, the schema resource,
+the example module. sbe-tool in the pipeline. `Codec`, `TypeBinding`,
+`@Bind`, the built-in bindings, message families, Agrona.
