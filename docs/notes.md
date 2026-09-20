@@ -35,6 +35,11 @@ alternatives considered.
   rules, in `Message`, `Field`, `CompositeType`, `EncodedDataType`,
   `EnumType` and `XmlSchemaParser`; `MessageSchema.validate` adds
   `sinceVersion` above the schema version. (Read 2026-09-20.)
+- `sbe.xsd` declares `messageSchema` and `message` at top level, so both
+  are namespace-qualified (`<sbe:message>`) and every other element is
+  local and unqualified. The parser matches by local name and accepts an
+  unqualified `message` that the XSD rejects, so validating against the
+  XSD is a separate check. (Spike experiment, 2026-09-20.)
 - `MessageSchema`'s constructors are package-private and `Message`,
   `CompositeType`, `EnumType` and `SetType` are built from DOM nodes, so
   `parse(InputSource)` is the only way to obtain a `MessageSchema`.
@@ -69,6 +74,30 @@ alternatives considered.
 - `semanticVersion` is a free string emitted as the `SEMANTIC_VERSION`
   constant; `deprecated` marks the generated member `@Deprecated`.
   (`JavaGenerator.java`, read 2026-09-20.)
+- A composite named as a group's `dimensionType` must hold `blockLength` and
+  `numInGroup`, and a composite named as a `data` field's type must hold
+  `length` and `varData`. Each is warned unless its primitive is what SBE
+  expects, `uint8` or `uint16` for the dimensions and `uint8`, `uint16` or
+  `uint32` for the length, and a `uint32` length errors unless it carries a
+  `maxValue` no greater than `Integer.MAX_VALUE`. The message header needs
+  `blockLength`, `templateId`, `schemaId` and `version`, all warned unless
+  `uint16`, and ignores any further member.
+  (`CompositeType.java`, read 2026-09-20, and the corpus.)
+- A `ref` resolves against `/messageSchema/types/*[@name=...]`, so its target
+  must be declared at the top level; a ref to a member of another composite
+  does not resolve. `ref` carries only `name`, `type`, `offset`,
+  `sinceVersion` and `deprecated`, and the parser reads the last two onto the
+  copied type. (`CompositeType.java`, read 2026-09-20, and the corpus.)
+- `nullValue` on a type whose presence is not `optional` is a warning, which
+  `warningsFatal` makes fatal; so is an enum valid value equal to the
+  encoding's null value. (`EncodedDataType.java` and `EnumType.java`, read
+  2026-09-20, and the corpus.)
+- The XSD gives `data` the same attribute groups as `field`, so `presence`,
+  `valueRef`, `epoch` and `timeUnit` are declared for it. `parseDataField`
+  reads presence, epoch and timeUnit, and `Field.validate` checks a
+  `valueRef` resolves to an enum valid value, but nothing downstream uses
+  them for a data field. (`Message.java` and `Field.java`, read 2026-09-20,
+  and the corpus.)
 
 ## javac
 
@@ -114,6 +143,14 @@ alternatives considered.
   set, breaks the launcher before Maven starts. CI and a plain workstation
   are unaffected; a container that sets it must pass those flags in
   `MAVEN_OPTS` instead. (Spike experiment, 2026-09-20.)
+
+## Surefire 3.6.0
+
+- The plugin's own descriptor names junit-platform-launcher 1.14.4, but it
+  resolves the launcher to the JUnit Platform version it finds on the test
+  classpath, 6.1.3 here, and runs that. Declaring the launcher through the
+  JUnit BOM takes the alignment out of surefire's hands and puts the version
+  in the root POM. (Spike experiment with `-X`, 2026-09-20.)
 
 ## Spotless 3.10.2
 

@@ -1,0 +1,77 @@
+package net.concini.sbebuddy.generator.corpus;
+
+import static net.concini.sbebuddy.generator.Fixtures.enumeration;
+import static net.concini.sbebuddy.generator.Fixtures.field;
+import static net.concini.sbebuddy.generator.Fixtures.message;
+import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
+import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.type;
+import static net.concini.sbebuddy.generator.Fixtures.validValue;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
+
+import net.concini.sbebuddy.generator.Schema;
+
+/**
+ * Enumerations over a primitive and over a named type, which sbe-tool resolves
+ * to the primitive it encodes.
+ */
+final class Enums {
+
+	static final String XML = """
+			<?xml version="1.0" encoding="UTF-8"?>
+			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.enums" id="1" version="0">
+			    <types>
+			        <composite name="messageHeader">
+			            <type name="blockLength" primitiveType="uint16"/>
+			            <type name="templateId" primitiveType="uint16"/>
+			            <type name="schemaId" primitiveType="uint16"/>
+			            <type name="version" primitiveType="uint16"/>
+			        </composite>
+			        <type name="StatusCode" primitiveType="uint8"/>
+			        <enum name="Side" encodingType="char" semanticType="Side" description="Which side of the market an order takes">
+			            <validValue name="Buy" description="The order buys">B</validValue>
+			            <validValue name="Sell" description="The order sells">S</validValue>
+			        </enum>
+			        <enum name="OrderStatus" encodingType="StatusCode">
+			            <validValue name="New">0</validValue>
+			            <validValue name="PartiallyFilled">1</validValue>
+			            <validValue name="Filled">2</validValue>
+			        </enum>
+			    </types>
+			    <sbe:message name="Enums" id="1">
+			        <field name="side" id="1" type="Side"/>
+			        <field name="status" id="2" type="OrderStatus"/>
+			    </sbe:message>
+			</sbe:messageSchema>
+			""";
+
+	private Enums() {
+	}
+
+	static Schema schema() {
+		return messageSchema("corpus.enums", 1, 0)
+				.types(
+						messageHeader(),
+						type("StatusCode", UINT8),
+						enumeration("Side", "char")
+								.semanticType("Side")
+								.description("Which side of the market an order takes")
+								.validValues(
+										validValue("Buy", "B").description("The order buys"),
+										validValue("Sell", "S").description("The order sells")
+								),
+						enumeration("OrderStatus", "StatusCode").validValues(
+								validValue("New", "0"),
+								validValue("PartiallyFilled", "1"),
+								validValue("Filled", "2")
+						)
+				)
+				.messages(
+						message("Enums", 1).fields(
+								field("side", 1, "Side"),
+								field("status", 2, "OrderStatus")
+						)
+				)
+				.build();
+	}
+}

@@ -16,16 +16,17 @@ confirm that each oracle is a schema it accepts.
   `net.concini.sbebuddy.generator`. The processor module depends on it
   and loses its own `generator` package; the example does not depend on
   it. sbe-tool `1.40.2` joins the root POM.
-- The model: immutable records, one per `sbe.xsd` element, named after it
-  with a `Def` suffix (`SchemaDef`, `TypeDef`, `CompositeDef`, `RefDef`,
-  `EnumDef`, `ValidValueDef`, `SetDef`, `ChoiceDef`, `MessageDef`,
-  `FieldDef`, `GroupDef`, `DataDef`), one component per XSD attribute
-  with the XSD's name, `value` for element text. An attribute the XSD
-  makes optional is `@Nullable`; nothing carries a default. Children are
-  `List`s in declaration order. Enumerated attributes use sbe-tool's
-  `PrimitiveType` and `Presence`, and `java.nio.ByteOrder`. A composite's
-  members are a sealed choice of `TypeDef`, `RefDef`, `EnumDef`, `SetDef`
-  and `CompositeDef`, as the XSD allows.
+- The model: one file, `Schema`, the `messageSchema` record with a nested
+  record per `sbe.xsd` element named after it (`Schema.Type`,
+  `Schema.Composite`, `Schema.Ref`, `Schema.Enum`, `Schema.ValidValue`,
+  `Schema.Set`, `Schema.Choice`, `Schema.Message`, `Schema.Field`,
+  `Schema.Group`, `Schema.Data`), one component per XSD attribute with the
+  XSD's name, `value` for element text. An attribute the XSD makes
+  optional is `@Nullable`; nothing carries a default. Children are `List`s
+  in declaration order. Enumerated attributes use sbe-tool's
+  `PrimitiveType` and `Presence`, and `java.nio.ByteOrder`. What `types`
+  holds is a sealed `Declaration`, what a composite holds a sealed
+  `Member`, as the XSD allows.
 - `SchemaXml`: `Document of(SchemaDef)` and `void write(SchemaDef,
   Writer)`. Namespace `http://fixprotocol.io/2016/sbe`, elements in the
   XSD's order (`types`, then each `message`), children in model order, an
@@ -36,15 +37,16 @@ confirm that each oracle is a schema it accepts.
 - `SchemaXmlAssert` in the generator's tests: whitespace and comments
   ignored; both documents parsed with `sbe.xsd` from the sbe-tool jar
   attached, so XSD defaults are filled and an absent attribute equals its
-  default; `type`, `composite`, `enum`, `set` and `message` matched by
+  default, which the assert's own test proves; `type`, `composite`, `enum`, `set` and `message` matched by
   `name` regardless of order, everything else in sequence; the namespace
   prefix registered once for XPath probes. A corpus test is one line
   through it.
 - The corpus, `net.concini.sbebuddy.generator.corpus`: each case a class
-  with `static SchemaDef schema()` beside a same-named oracle `.xml`
-  resource, listed explicitly. Per case: the emitted XML is equivalent to
-  the oracle, and the oracle parses through `XmlSchemaParser` with no
-  error and no warning. Cases, one per XSD feature and the shapes worth
+  with `static Schema schema()` and its oracle as a text block, `XML`,
+  beside it, built through the `Fixtures` DSL so the case reads like the
+  oracle; `Corpus.CASES` lists them. Per case: the written XML is
+  equivalent to the oracle, and the oracle parses through
+  `XmlSchemaParser` with no error and no warning. Cases, one per XSD feature and the shapes worth
   taking from sbe-tool's own test schemas, written fresh:
   `Primitives` (every `primitiveType` as a field), `NamedTypes` (every
   attribute of `type`), `Constants` (constant `type`, `valueRef`, a
