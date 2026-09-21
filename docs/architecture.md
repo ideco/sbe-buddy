@@ -69,9 +69,10 @@ never imported.
 - **`Annotated`** is the api's annotations as data: a nested record per
   annotation, one component per member with the member's name, plus what
   an annotation cannot carry: the Java name of the thing annotated, its
-  Java type as a small sealed descriptor (a primitive, `String`, `byte[]`,
-  a `List` of a record, a declared type), and references to other
-  declarations by identity rather than by `Class`. It is the Java face: the
+  Java type as a small sealed descriptor (a primitive, `String`,
+  `byte[]`, a `List` of a record, a `Set` of an `@SbeSet` enum, a declared
+  type), for an enum or a set the qualified name code uses, and references
+  to other declarations by identity rather than by `Class`. It is the Java face: the
   codec emitter reads it beside the IR, related to `Schema` by name, which
   is unique per message.
 - **Both are values.** Neither carries a position. `Discovery` returns its
@@ -101,7 +102,8 @@ Three layers, in the order a mistake meets them.
   our wording. Rules only javac can see live in `Discovery` and name the
   `Element`: a schema annotation on something that is not a record, a
   component annotation outside a message or group record, `@SbeEnumValue`
-  on anything but an enum constant, `@SbeChoice` outside a set, a `Class`
+  on anything but an enum constant, `@SbeChoice` outside a set, `@UnknownValue` beside
+  `@SbeEnumValue`, twice in one enum or on a set's constant, a `Class`
   member naming a type that carries no declaration annotation, a `List<E>`
   whose `E` is not a record. Rules decidable from one node live in
   `Mapping`: a component whose type maps to nothing (`char`, a class that
@@ -112,7 +114,10 @@ Three layers, in the order a mistake meets them.
   `0..65535`, a name outside the XSD's pattern, a `baselineVersion` above
   the schema's version, a primitive component on a field that can be
   absent, and the one warning, a box on a field that never is
-  (`type-mappings.md`, absence). Rules that compare nodes
+  (`type-mappings.md`, absence), a field of an enum whose component is
+  not that enum, a field of a set whose component is not a `Set` of that
+  enum, and `presence = OPTIONAL` on a set field, which has no null value.
+  Rules that compare nodes
   live in `Generator.validate`: duplicate field ids and names in a message
   or group, duplicate message names and ids, two declarations with one
   wire name, `sinceVersion` above the schema version, `deprecated` below
@@ -190,13 +195,34 @@ Three layers, in the order a mistake meets them.
   to the baseline into a primitive component. The baseline is the one
   literal a codec holds; sbe-tool has no constant for it. `decodedLength`
   stays a length and refuses nothing.
+- A declared type is mapped by one pair of private static methods per
+  codec that uses it, after the codec's own methods, in order of first
+  use. For an enum, `encode<Enum>` is a `switch` expression over the
+  user's constants to the flyweight's, exhaustive, and throws for the
+  `@UnknownValue` constant, which has no wire form; `decode<Enum>` is a
+  `switch` over the raw value, `<field>Raw()`, with the literals
+  `JavaUtil.generateLiteral` gives the valid values, defaulting to the
+  designated constant or an `IllegalArgumentException` naming the enum
+  and the value; the flyweight's own enum and its `get` are never on the
+  path. For a set, `encode<Set>` clears the set flyweight and sets each
+  choice from `Set.contains`, and `decode<Set>` refuses a bit no choice
+  names, against a mask written as `1L << bit` per declared choice, and
+  adds each choice the wire has to an `EnumSet`. The field shapes wrap
+  the pair: an optional enum writes and tests `NULL_VAL`, an added enum
+  or set tests the version, and the checked encode shape, `null` refused
+  before the call, covers every component that may be null on a required
+  field, boxed primitive, enum or set. The only literals in generated
+  code are the schema's own declarations: the baseline, the valid values'
+  text and the choices' bits.
 - The emitter is templates. Every construct it emits is a Java text block
   with named placeholders, beside the method that fills it and named after
   the construct, filled through `Template`: names and values in, a failure
   for a name left unfilled or a value never used, a multi-line value
-  indented to its placeholder's column, and a placeholder alone on its
-  line filled empty takes the line with it, so a block left out leaves no
-  blank line. What varies is decided in Java and pasted in; the templates hold no conditionals and no loops, and no code
+  indented to its placeholder's column with its blank lines left blank,
+  and a placeholder alone on its line indenting its value's first line
+  the same way, so a value may open with a blank line, and filled empty
+  taking the line with it, so a block left out leaves no blank line. What
+  varies is decided in Java and pasted in; the templates hold no conditionals and no loops, and no code
   fragment is assembled by concatenation. The emitter is the file that
   grows with every increment, and this is what keeps it readable: the
   generated shape is read in the emitter the way it is read in the output.
@@ -332,9 +358,9 @@ Reflection is banned in main code and free in tests.
   into an `xmlref` package under the schema package, and the tests encode
   with ours and decode with the reference, and the reverse. Every past
   schema version stays as a frozen file beside the oracle, `quotes-v0.xml`,
-  `quotes-v1.xml`, the oracle as it was with only its leading comment
-  saying so and never edited again, each with its own reference package,
-  `xmlref.v0`, `xmlref.v1`, so cross-version decoding is tested in both
+  `quotes-v1.xml` and so on, the oracle as it was with only its leading
+  comment saying so and never edited again, each with its own reference
+  package, `xmlref.v0`, `xmlref.v1` and so on, so cross-version decoding is tested in both
   directions without old-version records: a message from an older writer
   decodes with its later fields `null`, an older reader consumes a newer
   message whole, and a message below the baseline is refused.

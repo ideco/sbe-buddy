@@ -200,8 +200,15 @@ package com.example.trading;
 A required field added at or below the baseline is a plain primitive again,
 and a message older than the baseline is refused on decode.
 
+An `@SbeEnum` field decodes to the user's own enum constant, read raw from
+the wire and mapped by `@SbeEnumValue`; a value the schema does not know is
+an `IllegalArgumentException`, or the constant the enum marks with
+`@UnknownValue`, which has no wire form of its own. An `@SbeSet` field is a
+`Set` of the user's enum.
+
 Codec generation is still incomplete. It currently covers messages made up
-of primitive fields, required or optional, across schema versions.
+of primitive, enum and set fields, required or optional, across schema
+versions.
 
 Schemas using constructs not yet supported by the codec generator can
 disable codecs:

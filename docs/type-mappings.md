@@ -63,6 +63,11 @@ primitive it is the default mapping below; anything else is an error.
 | `set` | `@SbeSet` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `choice` | `@SbeChoice` on each constant | `value` (the bit, 0 to 63), `name`, `description`, `sinceVersion`, `deprecated` |
 
+The Java side adds two annotations that contribute nothing to the schema:
+`@UnknownValue` on one constant of an `@SbeEnum` in place of
+`@SbeEnumValue` (unknown values, below), and `@Bind` on a component
+(bindings, below).
+
 Inside an `@SbeComposite` record every component is one of: `@SbeType` (an
 inline `type` element), `@SbeRef` (a `ref` element), or a component whose
 type is an `@SbeEnum`, `@SbeSet` or `@SbeComposite` declared as a member type
@@ -117,6 +122,10 @@ group that is present with zero entries is an empty list, not `null`. The
 null value is the type's `nullValue` or the primitive's default, exactly as
 sbe-tool applies it. A field left at the default presence takes its named
 type's, as sbe-tool reads the document.
+
+A set field cannot be optional: a set has no null value, and an empty set is
+a value; the compiler rejects `presence = OPTIONAL` on one. A field of an
+enum or a set is absent below the acting version like any other.
 
 A field *can be absent* when it is optional, or when its `sinceVersion` is
 above the schema's `baselineVersion` and it is not a constant. A primitive
