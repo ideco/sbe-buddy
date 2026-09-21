@@ -13,7 +13,7 @@ sbe-buddy-generator    net.concini.sbebuddy.generator   Schema, SchemaXml, Annot
                        deps: sbe-buddy-api, sbe-tool
 sbe-buddy-processor    net.concini.sbebuddy.processor   javac elements → Annotated; Messager; Filer
                        dep: sbe-buddy-generator
-sbe-buddy-example      annotated schemas, one per concern, each with its oracle; the end-to-end tests; not deployed
+sbe-buddy-example      a realistic annotated schema with its oracle; the integration proof; not deployed
                        deps: sbe-buddy-api; the processor on annotationProcessorPaths only
 reference/             sbe-tool's sources as a submodule, for reading
 ```
@@ -74,14 +74,16 @@ never imported.
   declarations by identity rather than by `Class`. It is the Java face: the
   codec emitter reads it beside the IR, related to `Schema` by name, which
   is unique per message.
-- **Both are values.** Neither carries a position. Discovery keeps an
-  identity map from each `Annotated` node to its javac `Element` and, where
-  there is one, `AnnotationMirror`; `Mapping` returns its `Schema` together
-  with an identity map from each `Schema` node to the `Annotated` node it
-  came from. A `Problem(Object node, String message)` names a node of either
-  model, and the processor resolves it in at most two lookups. Records'
-  `equals` is content-based and the identity maps ignore it, so a test
-  asserts a `Problem` by equality and the processor places it by identity.
+- **Both are values.** Neither carries a position. `Discovery` returns its
+  `Annotated` together with identity maps from each `Annotated` node to its
+  javac `Element` and, where there is one, `AnnotationMirror`; `Mapping`
+  returns its `Schema` together with an identity map from each `Schema`
+  node to the `Annotated` node it came from. A `Problem(Object node, String
+  message)` names a node of either model, or an `Element` when only javac
+  can see the mistake, and the processor resolves it in at most two
+  lookups. Records' `equals` is content-based and the identity maps ignore
+  it, so a test asserts a `Problem` by equality and the processor places it
+  by identity.
 
 ## Rules
 
@@ -94,9 +96,15 @@ Three layers, in the order a mistake meets them.
   fails the file first.
 - **Ours, positioned.** The rules SBE has no model for, and the few of
   sbe-tool's that a user hits often enough to deserve an exact position and
-  our wording. Rules decidable from one node live in `Mapping`: a component
-  whose type maps to nothing (`char`, a class that is neither a declared
-  type nor a default mapping), `type` and `primitiveType` together,
+  our wording. Rules only javac can see live in `Discovery` and name the
+  `Element`: a schema annotation on something that is not a record, a
+  component annotation outside a message or group record, `@SbeEnumValue`
+  on anything but an enum constant, `@SbeChoice` outside a set, a `Class`
+  member naming a type that carries no declaration annotation, a `List<E>`
+  whose `E` is not a record. Rules decidable from one node live in
+  `Mapping`: a component whose type maps to nothing (`char`, a class that
+  is neither a declared type nor a default mapping), `type` and
+  `primitiveType` together,
   `@SbeGroup` not on a `List` of a record, `@SbeData` not on `String` or
   `byte[]`, a field after a group or a group after data, an id outside
   `0..65535`, a name outside the XSD's pattern. Rules that compare nodes
@@ -158,7 +166,9 @@ Three layers, in the order a mistake meets them.
   recompiles a record without its `package-info.java` still regenerates
   the package. It generates each package once, in the round that first
   shows it, and never in the `processingOver` round; javac's `Filer` cannot
-  recreate a file. It reads `Class`-typed members from the
+  recreate a file. A package with any `Problem` gets its errors through
+  `Messager`, each on the element it names with the `AnnotationMirror`
+  where there is one, and no output. It reads `Class`-typed members from the
   `AnnotationMirror`, never through an annotation instance (`notes.md`),
   and the annotations are retained at `CLASS`, so a declared type in a
   library jar still resolves and nothing exists at runtime to reflect
@@ -196,13 +206,18 @@ public interface Codec<T> {
 The corpus does the work at every layer; javac appears only where it must.
 Reflection is banned in main code and free in tests.
 
-- **The corpus, in the generator.** Each case is one class holding three
-  views of one schema: `annotated()`, `schema()` and the hand-written
-  oracle `XML`, the first two built through the `Fixtures` DSL so the case
-  reads like the oracle. Per case: `Mapping.map(annotated())` equals
-  `schema()` by record equality; `SchemaXml.of(schema())` is equivalent to
-  the oracle; and the oracle parses through `XmlSchemaParser` with no error
-  and no warning, so a wrong oracle cannot agree with a wrong writer. A
+- **The corpus, in the generator.** Each case is one class holding four
+  views of one schema: the Java source as text blocks, `PACKAGE_INFO` and
+  `SOURCE`; `annotated()` and `schema()`, built through the `Fixtures` DSL
+  so the case reads like the oracle; and the hand-written oracle `XML`. In
+  the generator, per case: `Mapping.map(annotated())` equals `schema()` by
+  record equality; `SchemaXml.of(schema())` is equivalent to the oracle;
+  and the oracle parses through `XmlSchemaParser` with no error and no
+  warning, so a wrong oracle cannot agree with a wrong writer. In the
+  processor, which takes the corpus from the generator's test jar: the
+  source discovers to `annotated()` by record equality, and compiles
+  through the real processor to a `schema.xml` equivalent to the oracle.
+  One corpus, source to XML. A
   model says what an annotation can say: a String member is absent only
   when empty, so `epoch="unix"` written is `epoch="unix"` emitted, while an
   enum or int member left at the XSD's default, `presence`, `length`,
@@ -223,25 +238,28 @@ Reflection is banned in main code and free in tests.
   sequence, because offsets follow declaration order and a moved field is
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
-- **The example, end to end.** A package per concern, each a schema said
-  in annotated records and processed by the real processor through real
-  javac, with its oracle as a file in `src/main/sbe`, because `SbeTool`
-  reads it there at `generate-sources`. One parameterized test asserts
-  each package's `schema.xml` from the class output equivalent to its
-  oracle, through `SchemaXmlAssert` from the generator's test jar, and the
-  coverage test runs over all of them. From the first release on, `SbeTool`
-  generates reference flyweights from each oracle into an `xmlref` package
-  and the tests encode with ours and decode with the reference, and the
-  reverse; with codecs, they also round trip at a non-zero offset with
-  `encodedLength` equal to the bytes written. Every past schema version
-  stays as a frozen file (`<name>-v0.xml`, ...) with its own reference
-  package, so cross-version decoding is tested in both directions without
-  old-version records.
-- **The processor** has the few tests that need javac: negative snippets
-  compiled through the Compiler API with the processor attached, asserting
-  that a `Problem` lands on the element and line that carry the mistake,
-  and that discovery resolves a declared type across packages and from a
-  jar.
+- **The example, as integration.** A realistic schema a user would
+  write, `com.example.trading`, compiled by the real build with the
+  processor on `annotationProcessorPaths`, its oracle a file in
+  `src/main/sbe`, because `SbeTool` reads it there at `generate-sources`.
+  One test asserts the `schema.xml` in the class output equivalent to the
+  oracle, through `SchemaXmlAssert` from the generator's test jar. It
+  proves the wiring and shows the product; coverage stays in the corpus.
+  From the first release on, `SbeTool` generates reference flyweights from
+  the oracle into an `xmlref` package and the tests encode with ours and
+  decode with the reference, and the reverse; with codecs, they also round
+  trip at a non-zero offset with `encodedLength` equal to the bytes
+  written. Every past schema version stays as a frozen file
+  (`<name>-v0.xml`, ...) with its own reference package, so cross-version
+  decoding is tested in both directions without old-version records.
+- **The processor** runs javac in memory through the Compiler API, with
+  one helper: sources as strings, `-proc:only`, diagnostics and written
+  files collected. The corpus tests above; one negative snippet per rule
+  layer, discovery, `Mapping` and `Generator.validate`, asserting the
+  diagnostic's element and line, which proves placement while the rules
+  themselves are tested in the generator; and one snippet resolving a
+  declared type across a package boundary. Resolution from a jar is every
+  corpus case, through the api's `MessageHeader`.
 - Test libraries: JUnit, AssertJ, XMLUnit with its AssertJ module. No
   test-kit module until a second consumer exists.
 

@@ -1,88 +1,120 @@
-# Increment 3: the annotations, and the mapping to the model
+# Increment 4: discovery, the processor, and the schema in the jar
 
 ## Goal
 
-Annotated Java becomes the model, without javac. The api gains one
-annotation per XSD element; the generator gains `Annotated`, the
-annotations as data, and `Mapping`, the function from it to `Schema` that
-`type-mappings.md` specifies; the rules of ours land, each on the node it
-blames; and every corpus case gains a third view, so mapping is proven by
-record equality against the schemas already proven against the oracles.
-Discovery, the processor and the example are increment 4.
+Annotated records compile into their schema. The processor gains
+discovery, javac elements to `Annotated`, and around it the few lines that
+make it an annotation processor: the package as the unit of work, every
+`Problem` placed on the element that carries the mistake, and `schema.xml`
+written into the jar. The corpus gains a fourth view, the Java source, so
+one corpus proves source to `Annotated` to `Schema` to XML, and the
+processor is tested over it without Maven. The example module becomes the
+integration proof: a realistic schema compiled by the real build, its
+resource checked against a file oracle. sbe-tool in the pipeline, the
+flyweights and the first release are increment 5.
 
 ## Before it starts, in its own pull request
 
-- The XSD coverage test takes an explicit list of attributes the XSD
-  declares and sbe-tool ignores, `data`'s `presence`, `valueRef`, `epoch`
-  and `timeUnit`, with the `notes.md` fact as its justification, and the
-  `VarData` case loses them; otherwise no annotated twin can say that
-  oracle.
-- Two corpus cases the coverage test cannot ask for: a fixed-length
-  primitive array (`primitiveType="uint8" length="3"`), and
-  `presence="optional"` on a field rather than on its type.
+- A spike, recorded in `notes.md`: javac exposes `CLASS`-retained
+  annotations on the record components of a type loaded from a class file,
+  through `Element.getAnnotationMirrors()` on the component. Discovery
+  needs it for the api's `MessageHeader` and for a user's declared types in
+  a library jar. If it does not hold, `MessageHeader` and the other
+  built-ins move to `RUNTIME` retention or discovery reads them from the
+  `Record` attribute another way, and that decision is made before the
+  increment, not inside it.
+- The generator publishes its tests as a test jar, and `Corpus`, `Case`
+  and the corpus cases become public, so the processor's tests can read
+  `Corpus.CASES`.
 
 ## What gets built
 
-- The api: one annotation per XSD element and one member per attribute,
-  exactly as `type-mappings.md` lists them: `@SbeSchema`, `@SbeMessage`,
-  `@SbeField`, `@SbeGroup`, `@SbeData`, `@SbeType`, `@SbeComposite`,
-  `@SbeRef`, `@SbeEnum`, `@SbeEnumValue`, `@SbeSet`, `@SbeChoice`,
-  retained at `CLASS`. Members are typed as the XSD types them: the api's
-  own `PrimitiveType`, `Presence` and `ByteOrder` enums, since users never
-  see sbe-tool's; `Class<?>` where the XSD holds the name of a declared
-  type; `String` where the XSD types a number as a string. The standard
-  composites as `@SbeComposite` records, `MessageHeader`,
-  `GroupSizeEncoding`, `VarStringEncoding`, `VarAsciiEncoding`,
-  `VarDataEncoding` and `UuidWire`, each carrying SBE's conventional wire
-  name through `name`, so `@SbeSchema` defaults `headerType` to
-  `MessageHeader.class`, `@SbeGroup` defaults `dimensionType` to
-  `GroupSizeEncoding.class`, and the XML needs neither attribute. Nothing
-  of the codec: no `Codec`, no `TypeBinding`, no `@Bind`, no bindings, no
-  Agrona.
-- `Annotated`, in the generator: one file, the `@SbeSchema` package as the
-  root record with a nested record per annotation named after its element,
-  one component per member with the member's name, plus the Java name of
-  the annotated thing, its Java type as a small sealed descriptor (a
-  primitive, `String`, `byte[]`, a `List` of a record, a declared type),
-  and references to declarations by identity. A member left at its
-  default is the default's value, since that is what javac hands over; a
-  `name` left empty means the Java name. The root also holds the
-  declarations the package makes, in source order: a declared type no
-  message references still belongs in `types`, and nothing else could
-  put it there.
-- `Mapping`, in the generator: `Mapped map(Annotated annotated)`, where
-  `Mapped` holds the `Schema`, the `Problem`s, and an identity map from
-  each `Schema` node to the `Annotated` node it came from. Wire name from
-  `name` or the Java name; a bare primitive component through the default
-  mapping; a reference to the declared type's wire name; `types` holding
-  the header, then what the schema declares in its own order, then what a
-  reference reaches elsewhere in the order first reached, each once and
-  every one after the declarations it refers to; fields, then groups, then
-  data. The single-element rules
-  of `architecture.md` fire here and return `Problem`s naming the
-  `Annotated` node.
-- `Generator.validate(Schema)`: the cross-node rules of `architecture.md`,
-  returning `Problem`s naming the `Schema` node.
-- The corpus, extended: every case gains `static Annotated annotated()`,
-  built through `Fixtures`, which grows the builders for annotations
-  beside the ones for the model; `CorpusTest` asserts
-  `Mapping.map(annotated()).schema()` equals `schema()` and that its
-  problems are empty. One unit test per rule, asserting the `Problem` and
-  the node it names.
+- **The corpus's fourth view.** Each case gains two text blocks,
+  `PACKAGE_INFO` and `SOURCE`: the `package-info.java` carrying
+  `@SbeSchema`, and one compilation unit holding the case's records,
+  package-private and several to a file, nested where a user would nest.
+  The package is the one the twin names (`corpus.primitives`), the Java
+  names are the twin's, the annotations say what the twin holds and
+  nothing more. `Corpus.Case` carries both. A case then reads top to
+  bottom as source, annotated, schema, XML.
+- **`Discovery`, in the processor.** `Discovered discover(PackageElement
+  schemaPackage, Elements elements, Types types)`, where `Discovered` holds
+  the `Annotated`, the `Problem`s, and identity maps from each `Annotated`
+  node to its `Element` and, where there is one, its `AnnotationMirror`.
+  The package annotation from the `PackageElement`; the declarations the
+  package makes from its enclosed types in source order, nested types
+  included; the messages likewise; each `Class`-typed member from the
+  `AnnotationMirror`, resolved to the `TypeElement` and from there to the
+  declaration it names, across packages and from jars, each declaration
+  one instance however often it is reached. The Java type descriptor from
+  the component's `TypeMirror`: a primitive or its box, `String`,
+  `byte[]`, `List<E>` with `E` a record, a type carrying a declaration
+  annotation, or `Other` with its name. Rules that only javac can see fire
+  here and name the `Element`: a schema annotation on something that is
+  not a record, `@SbeField`, `@SbeGroup` or `@SbeData` on a component
+  outside a message or group record, `@SbeEnumValue` on anything but an
+  enum constant, `@SbeChoice` outside a set, a `Class` member naming a
+  type that carries no declaration annotation, and a `List<E>` whose `E`
+  is not a record.
+- **The processor.** `SbeProcessor`, registered through
+  `META-INF/services`, supporting `net.concini.sbebuddy.*` and the latest
+  source version. Triggered by any annotated element in a round, it takes
+  that element's package as the unit of work and handles each package once,
+  in the round that first shows it, never in the `processingOver` round.
+  Per package: discover, map, validate; every `Problem` becomes a
+  `Messager` error on the element it names, resolved through the identity
+  maps in at most two lookups, with the `AnnotationMirror` where there is
+  one; a package with any problem gets its errors and no output. Otherwise
+  `schema.xml` goes through `Filer.createResource` into `CLASS_OUTPUT`
+  under the package, written by `SchemaXml`. Nothing else is generated
+  yet; the pipeline stops at step 3 and step 8.
+- **The processor's tests.** One in-memory compilation helper over the
+  Compiler API: sources as strings, the test classpath so the api is
+  visible, `-proc:only`, diagnostics and written files collected. Over the
+  corpus, two parameterized tests: a capturing processor hands the package
+  element to `Discovery` and the discovered `Annotated` equals the case's
+  `annotated()` by record equality with no problems and no diagnostics;
+  the real processor runs and the `schema.xml` it wrote is equivalent to
+  the case's oracle through `SchemaXmlAssert`. Beside them: one negative
+  snippet per layer, a discovery rule, a `Mapping` rule and a
+  `Generator.validate` rule, asserting the diagnostic's kind, element and
+  line, which proves placement, since the rules themselves are tested in
+  the generator; and one snippet resolving a declared type across a
+  package boundary in the same compilation. Resolution from a jar is
+  every corpus case, through the api's `MessageHeader`.
+- **The example module.** One realistic schema, `com.example.trading`,
+  said in annotated records a user would write: an order with an enum, a
+  composite, a group and var-data, and a second message. The processor
+  reaches it through `annotationProcessorPaths` only. Its oracle is
+  `src/main/sbe/trading.xml`, where `SbeTool` will read it in the next
+  increment, and one test asserts the `schema.xml` in the class output
+  equivalent to it through `SchemaXmlAssert` from the generator's test
+  jar. The example is the integration proof and the thing a user reads;
+  coverage stays in the corpus.
+- **The documents.** `notes.md` takes every javac fact the increment
+  relies on, with the spike or file it came from.
 
 ## Criteria
 
-- Every corpus case maps to its schema by equality, with no problems.
-- Every rule of ours has a test that builds the mistake and asserts the
-  `Problem` and the node; every rule is reachable from `Annotated` or
-  `Schema` alone.
-- The generator's compile classpath holds the api, sbe-tool and JSpecify;
-  nothing in it names `javax.lang.model` or `javax.annotation.processing`.
+- Every corpus case's source discovers to its `annotated()` by equality,
+  and compiles through the real processor to a `schema.xml` equivalent to
+  its oracle.
+- Every rule of ours reaches the user as a javac error on the element
+  that carries the mistake; the three placement snippets prove one per
+  layer.
+- `./mvnw verify` builds the example through the processor and its
+  resource matches its oracle; the example's compile classpath holds the
+  api and nothing of the generator, sbe-tool or the processor.
+- Nothing in the generator's main sources names `javax.lang.model` or
+  `javax.annotation.processing`; nothing in the processor loads an Agrona
+  class, so a user's javac needs no JVM flag.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Discovery, the processor, javac, `Filer`, `Messager`, the schema resource,
-the example module. sbe-tool in the pipeline. `Codec`, `TypeBinding`,
-`@Bind`, the built-in bindings, message families, Agrona.
+sbe-tool in the pipeline: `XmlSchemaParser` as backstop, `IrGenerator`,
+`JavaGenerator`, the flyweights, `Generator.generate` and `Output`. The
+first release. `@SbeSchema(codecs = false)`, `Codec`, `TypeBinding`,
+`@Bind`, the built-in bindings, message families, Agrona. Reference
+flyweights and frozen schema versions in the example.
