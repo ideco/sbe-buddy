@@ -2,7 +2,7 @@
 
 ## Getting started
 
-- Getting started — a first message, end to end
+- [Getting started](getting-started.md) — a first message, end to end
 
 ## Reference
 
