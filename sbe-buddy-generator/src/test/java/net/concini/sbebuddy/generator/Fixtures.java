@@ -854,6 +854,26 @@ public final class Fixtures {
 		return new AnnotatedCompositeBuilder(javaName);
 	}
 
+	public static AnnotatedRefBuilder annotatedRef(String javaName, Annotated.JavaType javaType) {
+		return new AnnotatedRefBuilder(javaName, javaType);
+	}
+
+	public static AnnotatedEnumBuilder annotatedEnum(String javaName) {
+		return new AnnotatedEnumBuilder(javaName);
+	}
+
+	public static AnnotatedEnumValueBuilder annotatedEnumValue(String javaName, String value) {
+		return new AnnotatedEnumValueBuilder(javaName, value);
+	}
+
+	public static AnnotatedSetBuilder annotatedSet(String javaName) {
+		return new AnnotatedSetBuilder(javaName);
+	}
+
+	public static AnnotatedChoiceBuilder annotatedChoice(String javaName, int value) {
+		return new AnnotatedChoiceBuilder(javaName, value);
+	}
+
 	public static AnnotatedMessageBuilder annotatedMessage(String javaName, int id) {
 		return new AnnotatedMessageBuilder(javaName, id);
 	}
@@ -891,6 +911,10 @@ public final class Fixtures {
 
 	public static Annotated.JavaType declared(AnnotatedDeclarationBuilder declaration) {
 		return new Annotated.Declared(declaration.build());
+	}
+
+	public static Annotated.JavaType listOfRecord(String elementName) {
+		return new Annotated.ListOfRecord(elementName);
 	}
 
 	public interface AnnotatedDeclarationBuilder {
@@ -1438,6 +1462,288 @@ public final class Fixtures {
 				);
 			}
 			return built;
+		}
+	}
+
+	public static final class AnnotatedRefBuilder implements AnnotatedMemberBuilder {
+
+		private final String javaName;
+		private final Annotated.JavaType javaType;
+		private Annotated.@Nullable Declaration value;
+		private String name = "";
+		private int offset;
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Ref built;
+
+		private AnnotatedRefBuilder(String javaName, Annotated.JavaType javaType) {
+			this.javaName = javaName;
+			this.javaType = javaType;
+		}
+
+		public AnnotatedRefBuilder value(AnnotatedDeclarationBuilder value) {
+			this.value = value.build();
+			return this;
+		}
+
+		public AnnotatedRefBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedRefBuilder offset(int offset) {
+			this.offset = offset;
+			return this;
+		}
+
+		public AnnotatedRefBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedRefBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Ref build() {
+			if (built == null) {
+				built = new Annotated.Ref(javaName, javaType, value, name, offset, sinceVersion, deprecated);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedEnumBuilder implements AnnotatedDeclarationBuilder, AnnotatedMemberBuilder {
+
+		private final String javaName;
+		private final List<Annotated.ValidValue> values = new ArrayList<>();
+		private Annotated.@Nullable Declaration encodingType;
+		private @Nullable PrimitiveType primitiveType;
+		private String name = "";
+		private int offset;
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Enum built;
+
+		private AnnotatedEnumBuilder(String javaName) {
+			this.javaName = javaName;
+		}
+
+		public AnnotatedEnumBuilder values(AnnotatedEnumValueBuilder... builders) {
+			for (AnnotatedEnumValueBuilder builder : builders) {
+				values.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedEnumBuilder encodingType(AnnotatedDeclarationBuilder encodingType) {
+			this.encodingType = encodingType.build();
+			return this;
+		}
+
+		public AnnotatedEnumBuilder primitiveType(PrimitiveType primitiveType) {
+			this.primitiveType = primitiveType;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder offset(int offset) {
+			this.offset = offset;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Enum build() {
+			if (built == null) {
+				built = new Annotated.Enum(
+						javaName, values, encodingType, apiPrimitive(primitiveType), name, offset,
+						semanticType, description, sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedEnumValueBuilder {
+
+		private final String javaName;
+		private final String value;
+		private String name = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+
+		private AnnotatedEnumValueBuilder(String javaName, String value) {
+			this.javaName = javaName;
+			this.value = value;
+		}
+
+		public AnnotatedEnumValueBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedEnumValueBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedEnumValueBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedEnumValueBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		Annotated.ValidValue build() {
+			return new Annotated.ValidValue(javaName, value, name, description, sinceVersion, deprecated);
+		}
+	}
+
+	public static final class AnnotatedSetBuilder implements AnnotatedDeclarationBuilder, AnnotatedMemberBuilder {
+
+		private final String javaName;
+		private final List<Annotated.Choice> choices = new ArrayList<>();
+		private Annotated.@Nullable Declaration encodingType;
+		private @Nullable PrimitiveType primitiveType;
+		private String name = "";
+		private int offset;
+		private String semanticType = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+		private Annotated.@Nullable Set built;
+
+		private AnnotatedSetBuilder(String javaName) {
+			this.javaName = javaName;
+		}
+
+		public AnnotatedSetBuilder choices(AnnotatedChoiceBuilder... builders) {
+			for (AnnotatedChoiceBuilder builder : builders) {
+				choices.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedSetBuilder encodingType(AnnotatedDeclarationBuilder encodingType) {
+			this.encodingType = encodingType.build();
+			return this;
+		}
+
+		public AnnotatedSetBuilder primitiveType(PrimitiveType primitiveType) {
+			this.primitiveType = primitiveType;
+			return this;
+		}
+
+		public AnnotatedSetBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedSetBuilder offset(int offset) {
+			this.offset = offset;
+			return this;
+		}
+
+		public AnnotatedSetBuilder semanticType(String semanticType) {
+			this.semanticType = semanticType;
+			return this;
+		}
+
+		public AnnotatedSetBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedSetBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedSetBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		@Override
+		public Annotated.Set build() {
+			if (built == null) {
+				built = new Annotated.Set(
+						javaName, choices, encodingType, apiPrimitive(primitiveType), name, offset,
+						semanticType, description, sinceVersion, deprecated
+				);
+			}
+			return built;
+		}
+	}
+
+	public static final class AnnotatedChoiceBuilder {
+
+		private final String javaName;
+		private final int value;
+		private String name = "";
+		private String description = "";
+		private int sinceVersion;
+		private int deprecated;
+
+		private AnnotatedChoiceBuilder(String javaName, int value) {
+			this.javaName = javaName;
+			this.value = value;
+		}
+
+		public AnnotatedChoiceBuilder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public AnnotatedChoiceBuilder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public AnnotatedChoiceBuilder sinceVersion(int sinceVersion) {
+			this.sinceVersion = sinceVersion;
+			return this;
+		}
+
+		public AnnotatedChoiceBuilder deprecated(int deprecated) {
+			this.deprecated = deprecated;
+			return this;
+		}
+
+		Annotated.Choice build() {
+			return new Annotated.Choice(javaName, value, name, description, sinceVersion, deprecated);
 		}
 	}
 
