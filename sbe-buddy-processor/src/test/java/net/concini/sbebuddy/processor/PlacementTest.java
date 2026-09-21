@@ -13,10 +13,10 @@ import net.concini.sbebuddy.generator.SchemaXmlAssert;
 
 /**
  * Where a rule reaches the user. One snippet per layer, discovery, {@code
- * Mapping}, {@code Generator.validate} and sbe-tool as the backstop, asserting
- * that the error lands on the element carrying the mistake; the rules
- * themselves are tested in the generator. Beside them, a declared type resolved
- * across a package boundary.
+ * Mapping}, {@code Generator.validate}, sbe-tool as the backstop and the codec
+ * emitter, asserting that the error lands on the element carrying the mistake
+ * and that nothing was written; the rules themselves are tested in the
+ * generator. Beside them, a declared type resolved across a package boundary.
  */
 final class PlacementTest {
 
@@ -95,6 +95,39 @@ final class PlacementTest {
 		Javac.Result result = compile(source);
 
 		assertOnlyError(result, source, "long accountId", "two members have id 1");
+	}
+
+	@Test
+	void theCodecNamesTheMessageAndNothingIsWritten() {
+		// sbe-tool accepts the schema, so the flyweights were generated when the
+		// codec refused; none of them may have reached the Filer.
+		String source = """
+				package placement;
+
+				import java.util.List;
+
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeGroup;
+				import net.concini.sbebuddy.SbeMessage;
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1) long orderId,
+						@SbeGroup(id = 2) List<Leg> legs
+				) {
+
+					record Leg(
+							@SbeField(id = 3) long instrumentId
+					) {
+					}
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(
+				result, source, "@SbeMessage(id = 1)", "no codec for a group yet; set codecs = false on @SbeSchema"
+		);
 	}
 
 	@Test

@@ -5,7 +5,9 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.agrona.generation.DynamicPackageOutputManager;
 import org.jspecify.annotations.Nullable;
@@ -101,23 +103,34 @@ public final class CodecEmitter {
 	}
 
 	/**
-	 * Writes each message's codec through the output, which must already name the
-	 * schema package; an output that fails to write is an
-	 * {@link UncheckedIOException}.
+	 * Writes each message's codec through the output under the schema package, or
+	 * writes nothing and returns the problems: a construct the codec lacks in any
+	 * message is collected, never a partial write. An output that fails to write is
+	 * an {@link UncheckedIOException}.
 	 */
 	public static List<Problem> emit(Ir ir, Annotated annotated, DynamicPackageOutputManager output) {
 		CodecEmitter emitter = new CodecEmitter(ir, annotated);
+		Map<String, String> sources = new LinkedHashMap<>();
 		for (Annotated.Message message : annotated.messages()) {
 			String source = emitter.codec(message);
 			if (source != null) {
-				try (Writer writer = output.createOutput(message.javaName() + "Codec")) {
-					writer.write(source);
-				} catch (IOException e) {
-					throw new UncheckedIOException(e);
-				}
+				sources.put(message.javaName() + "Codec", source);
 			}
 		}
-		return List.copyOf(emitter.problems);
+		if (!emitter.problems.isEmpty()) {
+			return List.copyOf(emitter.problems);
+		}
+		for (Map.Entry<String, String> source : sources.entrySet()) {
+			// Before every file: Agrona's manager falls back to the first package it
+			// was given when a writer closes.
+			output.setPackageName(annotated.packageName());
+			try (Writer writer = output.createOutput(source.getKey())) {
+				writer.write(source.getValue());
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		}
+		return List.of();
 	}
 
 	/**

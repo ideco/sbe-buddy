@@ -56,7 +56,6 @@ final class CorpusTest {
 	@MethodSource("casesTheCodecCovers")
 	void emitsItsCodecs(Corpus.Case aCase) {
 		StringWriterOutputManager output = new StringWriterOutputManager();
-		output.setPackageName(aCase.annotated().packageName());
 
 		List<Problem> problems = CodecEmitter.emit(Generator.ir(aCase.schema()), aCase.annotated(), output);
 
@@ -72,7 +71,6 @@ final class CorpusTest {
 	@MethodSource("casesTheCodecLacks")
 	void namesTheConstructTheCodecLacks(Corpus.Case aCase) {
 		StringWriterOutputManager output = new StringWriterOutputManager();
-		output.setPackageName(aCase.annotated().packageName());
 
 		List<Problem> problems = CodecEmitter.emit(Generator.ir(aCase.schema()), aCase.annotated(), output);
 
