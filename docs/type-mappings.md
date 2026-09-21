@@ -117,6 +117,30 @@ group that is present with zero entries is an empty list, not `null`. The
 null value is the type's `nullValue` or the primitive's default, exactly as
 sbe-tool applies it.
 
+## Unknown values
+
+A newer writer may send an enum value the reader's schema does not know, a
+`validValue` added with a later `sinceVersion`. That value is *unknown*: not
+absent, because the null value was not written, and not representable,
+because the Java enum has no constant for it. The codec reads the field raw
+and maps the wire value to the constant whose `@SbeEnumValue` carries it,
+never through the flyweight's generated enum.
+
+- By default, decoding an unknown value is an `IllegalArgumentException`
+  naming the enum and the value: the message cannot become the record it
+  maps to. This is what sbe-tool's own Java flyweights do.
+- An enum may designate one constant as its unknown value with
+  `@UnknownValue` in place of `@SbeEnumValue`. It is the Java side, like
+  `@Bind`, and contributes no `validValue` to the schema. Every unknown wire
+  value decodes to it, so a reader that opts in keeps working when a writer
+  adds values. Encoding it is an `IllegalArgumentException`: it has no wire
+  form, and writing the null value in its place would be a silent loss.
+- A set has no unknown value: a bit no `@SbeChoice` names is an
+  `IllegalArgumentException` on decode, because a `Set<E>` cannot carry it.
+
+The unknown value and absence stay distinct: the null value decodes to
+`null`, an unknown value to the designated constant or an exception.
+
 ## Constants
 
 A `presence="constant"` field or type carries no bytes. Its record component
