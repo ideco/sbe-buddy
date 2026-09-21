@@ -31,4 +31,12 @@ public @interface SbeSchema {
 	 * schema and the flyweights alone. Contributes nothing to the schema.
 	 */
 	boolean codecs() default true;
+
+	/**
+	 * The oldest version the codecs still decode: a required field added at or
+	 * below it is never absent, so its component is a plain primitive rather than a
+	 * box, and a message of an older version is refused. Contributes nothing to the
+	 * schema.
+	 */
+	int baselineVersion() default 0;
 }

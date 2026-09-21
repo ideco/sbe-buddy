@@ -27,7 +27,8 @@ public record Annotated(
 		String semanticVersion,
 		String description,
 		ByteOrder byteOrder,
-		boolean codecs
+		boolean codecs,
+		int baselineVersion
 ) {
 
 	public Annotated {

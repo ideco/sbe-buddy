@@ -13,6 +13,7 @@ import static net.concini.sbebuddy.generator.Fixtures.annotatedRef;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.choice;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
@@ -24,7 +25,6 @@ import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
-import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.ref;
 import static net.concini.sbebuddy.generator.Fixtures.set;
 import static net.concini.sbebuddy.generator.Fixtures.text;
@@ -111,7 +111,7 @@ final class Versions {
 
 			@SbeMessage(id = 1, sinceVersion = 1, deprecated = 3)
 			record Versions(
-					@SbeField(id = 1, type = Added.class, sinceVersion = 1, deprecated = 3) int added,
+					@SbeField(id = 1, type = Added.class, sinceVersion = 1, deprecated = 3) Integer added,
 					@SbeGroup(id = 2, sinceVersion = 2, deprecated = 3) List<Extra> extra,
 					@SbeData(id = 4, type = VarStringEncoding.class, sinceVersion = 2, deprecated = 3) String note
 			) {
@@ -242,7 +242,7 @@ final class Versions {
 								.sinceVersion(1)
 								.deprecated(3)
 								.components(
-										annotatedField("added", 1, primitive(INT))
+										annotatedField("added", 1, boxed(INT))
 												.type(added)
 												.sinceVersion(1)
 												.deprecated(3),

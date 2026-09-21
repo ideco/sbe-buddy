@@ -946,6 +946,7 @@ public final class Fixtures {
 		private String description = "";
 		private ByteOrder byteOrder = ByteOrder.LITTLE_ENDIAN;
 		private boolean codecs = true;
+		private int baselineVersion;
 
 		private AnnotatedSchemaBuilder(String packageName, int id, int version) {
 			this.packageName = packageName;
@@ -992,10 +993,15 @@ public final class Fixtures {
 			return this;
 		}
 
+		public AnnotatedSchemaBuilder baselineVersion(int baselineVersion) {
+			this.baselineVersion = baselineVersion;
+			return this;
+		}
+
 		public Annotated build() {
 			return new Annotated(
 					packageName, id, version, headerType, types, messages, semanticVersion, description,
-					apiByteOrder(byteOrder), codecs
+					apiByteOrder(byteOrder), codecs, baselineVersion
 			);
 		}
 	}

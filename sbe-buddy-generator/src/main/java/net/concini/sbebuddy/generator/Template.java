@@ -11,9 +11,10 @@ import java.util.regex.Pattern;
  * A text block with named placeholders, {@code {name}}, and nothing else: no
  * conditionals, no loops; what varies is decided in Java and pasted in. A value
  * that spans lines is indented to its placeholder's column, so a body pasted
- * into a class lands at the right depth. A name left unfilled or a value never
- * used fails, because a gap in generated code is a bug nobody sees until it
- * compiles.
+ * into a class lands at the right depth, and a placeholder alone on its line
+ * filled with an empty value takes the line with it, so a block left out leaves
+ * no blank line behind. A name left unfilled or a value never used fails,
+ * because a gap in generated code is a bug nobody sees until it compiles.
  */
 public final class Template {
 
@@ -51,6 +52,11 @@ public final class Template {
 				throw new IllegalArgumentException("{" + name + "} is not filled");
 			}
 			unused.remove(name);
+			if (value.isEmpty() && aloneOnItsLine(placeholder.start(), placeholder.end())) {
+				filled.append(text, copied, lineStart(placeholder.start()));
+				copied = Math.min(placeholder.end() + 1, text.length());
+				continue;
+			}
 			filled.append(text, copied, placeholder.start());
 			filled.append(value.replace("\n", "\n" + indentationBefore(placeholder.start())));
 			copied = placeholder.end();
@@ -67,7 +73,15 @@ public final class Template {
 	 * it.
 	 */
 	private String indentationBefore(int position) {
-		String before = text.substring(text.lastIndexOf('\n', position - 1) + 1, position);
+		String before = text.substring(lineStart(position), position);
 		return before.isBlank() ? before : "";
+	}
+
+	private boolean aloneOnItsLine(int start, int end) {
+		return text.substring(lineStart(start), start).isBlank() && (end == text.length() || text.charAt(end) == '\n');
+	}
+
+	private int lineStart(int position) {
+		return text.lastIndexOf('\n', position - 1) + 1;
 	}
 }
