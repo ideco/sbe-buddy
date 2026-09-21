@@ -1,5 +1,14 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
@@ -8,11 +17,15 @@ import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedCompositeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -64,7 +77,6 @@ final class Groups {
 		return messageSchema("corpus.groups", 1, 0)
 				.types(
 						messageHeader(),
-						groupSizeEncoding(),
 						composite("smallGroupSizeEncoding").members(
 								type("blockLength", UINT8),
 								type("numInGroup", UINT8)
@@ -72,7 +84,8 @@ final class Groups {
 						composite("varStringEncoding").members(
 								type("length", UINT16),
 								type("varData", CHAR).length(0).characterEncoding("UTF-8")
-						)
+						),
+						groupSizeEncoding()
 				)
 				.messages(
 						message("Groups", 1)
@@ -90,6 +103,42 @@ final class Groups {
 												)
 												.data(data("legNote", 14, "varStringEncoding"))
 								)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedCompositeBuilder smallGroupSizeEncoding = annotatedComposite("SmallGroupSizeEncoding")
+				.name("smallGroupSizeEncoding")
+				.members(
+						annotatedType("blockLength", UINT8),
+						annotatedType("numInGroup", UINT8)
+				);
+		AnnotatedCompositeBuilder varStringEncoding = annotatedComposite("VarStringEncoding")
+				.name("varStringEncoding")
+				.members(
+						annotatedType("length", UINT16),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
+				);
+		return annotatedSchema("corpus.groups", 1, 0)
+				.types(smallGroupSizeEncoding, varStringEncoding)
+				.messages(
+						annotatedMessage("Groups", 1).components(
+								annotatedField("orderId", 1, primitive(LONG)),
+								annotatedGroup("legs", 10)
+										.blockLength(8)
+										.semanticType("NoLegs")
+										.description("The legs of a multi-leg order")
+										.components(
+												annotatedField("legId", 11, primitive(INT)),
+												annotatedGroup("allocations", 12)
+														.dimensionType(smallGroupSizeEncoding)
+														.components(
+																annotatedField("account", 13, primitive(INT))
+														),
+												annotatedData("legNote", 14, text(), varStringEncoding)
+										)
+						)
 				)
 				.build();
 	}

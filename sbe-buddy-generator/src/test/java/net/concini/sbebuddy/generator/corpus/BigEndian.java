@@ -1,11 +1,17 @@
 package net.concini.sbebuddy.generator.corpus;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
 /** A schema on the wire the other way round. */
@@ -37,6 +43,17 @@ final class BigEndian {
 				.types(messageHeader())
 				.messages(
 						message("BigEndian", 1).fields(field("orderId", 1, "int64"))
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		return annotatedSchema("corpus.bigendian", 1, 0)
+				.byteOrder(BIG_ENDIAN)
+				.messages(
+						annotatedMessage("BigEndian", 1).components(
+								annotatedField("orderId", 1, primitive(LONG))
+						)
 				)
 				.build();
 	}

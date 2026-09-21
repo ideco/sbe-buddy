@@ -1,5 +1,12 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnum;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnumValue;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.enumeration;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
@@ -7,8 +14,12 @@ import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static net.concini.sbebuddy.generator.Fixtures.validValue;
+import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedEnumBuilder;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedTypeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -70,6 +81,34 @@ final class Enums {
 						message("Enums", 1).fields(
 								field("side", 1, "Side"),
 								field("status", 2, "OrderStatus")
+						)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedTypeBuilder statusCode = annotatedType("StatusCode", UINT8);
+		AnnotatedEnumBuilder side = annotatedEnum("Side")
+				.primitiveType(CHAR)
+				.semanticType("Side")
+				.description("Which side of the market an order takes")
+				.values(
+						annotatedEnumValue("Buy", "B").description("The order buys"),
+						annotatedEnumValue("Sell", "S").description("The order sells")
+				);
+		AnnotatedEnumBuilder orderStatus = annotatedEnum("OrderStatus")
+				.encodingType(statusCode)
+				.values(
+						annotatedEnumValue("New", "0"),
+						annotatedEnumValue("PartiallyFilled", "1"),
+						annotatedEnumValue("Filled", "2")
+				);
+		return annotatedSchema("corpus.enums", 1, 0)
+				.types(statusCode, side, orderStatus)
+				.messages(
+						annotatedMessage("Enums", 1).components(
+								annotatedField("side", 1, declared(side)),
+								annotatedField("status", 2, declared(orderStatus))
 						)
 				)
 				.build();

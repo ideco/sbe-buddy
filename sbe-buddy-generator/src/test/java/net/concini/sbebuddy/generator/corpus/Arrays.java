@@ -1,13 +1,21 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.bytes;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.other;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static uk.co.real_logic.sbe.PrimitiveType.INT32;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedTypeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -50,6 +58,22 @@ final class Arrays {
 						message("Arrays", 1).fields(
 								field("colour", 1, "Rgb"),
 								field("samples", 2, "Samples")
+						)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedTypeBuilder rgb = annotatedType("Rgb", UINT8).length(3);
+		AnnotatedTypeBuilder samples = annotatedType("Samples", INT32)
+				.length(4)
+				.description("Four readings, oldest first");
+		return annotatedSchema("corpus.arrays", 1, 0)
+				.types(rgb, samples)
+				.messages(
+						annotatedMessage("Arrays", 1).components(
+								annotatedField("colour", 1, bytes()).type(rgb),
+								annotatedField("samples", 2, other("int[]")).type(samples)
 						)
 				)
 				.build();

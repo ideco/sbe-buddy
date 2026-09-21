@@ -1,10 +1,17 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT64;
 
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -60,6 +67,34 @@ final class Messages {
 						message("CancelOrder", 2)
 								.semanticType("F")
 								.fields(field("orderId", 1, "int64"))
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		return annotatedSchema("corpus.messages", 1, 0)
+				.description("What a message and its fields may say about themselves")
+				.messages(
+						annotatedMessage("NewOrder", 1)
+								.blockLength(32)
+								.semanticType("D")
+								.description("A new single order")
+								.components(
+										annotatedField("orderId", 1, primitive(LONG))
+												.description("The identifier the sender gave the order"),
+										annotatedField("sentAt", 2, primitive(LONG))
+												.primitiveType(UINT64)
+												.epoch("unix")
+												.timeUnit("nanosecond")
+												.semanticType("UTCTimestamp")
+												.description("When the order was sent"),
+										annotatedField("price", 3, primitive(LONG))
+												.offset(16)
+												.semanticType("Price")
+								),
+						annotatedMessage("CancelOrder", 2)
+								.semanticType("F")
+								.components(annotatedField("orderId", 1, primitive(LONG)))
 				)
 				.build();
 	}

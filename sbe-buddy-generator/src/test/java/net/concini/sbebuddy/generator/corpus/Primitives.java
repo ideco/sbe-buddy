@@ -1,13 +1,32 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.BYTE;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.DOUBLE;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.FLOAT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.SHORT;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT32;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT64;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
-/** Every primitive type as a field. */
+/**
+ * Every primitive type as a field: the signed ones and the floats by the
+ * default mapping, the rest said explicitly.
+ */
 final class Primitives {
 
 	static final String XML = """
@@ -56,6 +75,26 @@ final class Primitives {
 								field("aUint64", 9, "uint64"),
 								field("aFloat", 10, "float"),
 								field("aDouble", 11, "double")
+						)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		return annotatedSchema("corpus.primitives", 1, 0)
+				.messages(
+						annotatedMessage("Primitives", 1).components(
+								annotatedField("aChar", 1, primitive(BYTE)).primitiveType(CHAR),
+								annotatedField("anInt8", 2, primitive(BYTE)),
+								annotatedField("anInt16", 3, primitive(SHORT)),
+								annotatedField("anInt32", 4, primitive(INT)),
+								annotatedField("anInt64", 5, primitive(LONG)),
+								annotatedField("aUint8", 6, primitive(SHORT)).primitiveType(UINT8),
+								annotatedField("aUint16", 7, primitive(INT)).primitiveType(UINT16),
+								annotatedField("aUint32", 8, primitive(LONG)).primitiveType(UINT32),
+								annotatedField("aUint64", 9, primitive(LONG)).primitiveType(UINT64),
+								annotatedField("aFloat", 10, primitive(FLOAT)),
+								annotatedField("aDouble", 11, primitive(DOUBLE))
 						)
 				)
 				.build();

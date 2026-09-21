@@ -1,17 +1,29 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.bytes;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT32;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedCompositeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -83,6 +95,41 @@ final class VarData {
 										data("payload", 3, "varBlobEncoding"),
 										data("signature", 4, "varByteEncoding")
 								)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedCompositeBuilder varStringEncoding = annotatedComposite("VarStringEncoding")
+				.name("varStringEncoding")
+				.members(
+						annotatedType("length", UINT16),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
+				);
+		AnnotatedCompositeBuilder varBlobEncoding = annotatedComposite("VarBlobEncoding")
+				.name("varBlobEncoding")
+				.members(
+						annotatedType("length", UINT32).maxValue("1073741824"),
+						annotatedType("varData", UINT8).length(0)
+				);
+		AnnotatedCompositeBuilder varByteEncoding = annotatedComposite("VarByteEncoding")
+				.name("varByteEncoding")
+				.members(
+						annotatedType("length", UINT8),
+						annotatedType("varData", UINT8).length(0)
+				);
+		return annotatedSchema("corpus.vardata", 1, 0)
+				.types(varStringEncoding, varBlobEncoding, varByteEncoding)
+				.messages(
+						annotatedMessage("VarData", 1).components(
+								annotatedField("orderId", 1, primitive(INT)),
+								annotatedData("note", 2, text(), varStringEncoding)
+										.offset(4)
+										.semanticType("String")
+										.description("A free-text note"),
+								annotatedData("payload", 3, bytes(), varBlobEncoding),
+								annotatedData("signature", 4, bytes(), varByteEncoding)
+						)
 				)
 				.build();
 	}

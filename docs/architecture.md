@@ -202,7 +202,12 @@ Reflection is banned in main code and free in tests.
   reads like the oracle. Per case: `Mapping.map(annotated())` equals
   `schema()` by record equality; `SchemaXml.of(schema())` is equivalent to
   the oracle; and the oracle parses through `XmlSchemaParser` with no error
-  and no warning, so a wrong oracle cannot agree with a wrong writer. Once
+  and no warning, so a wrong oracle cannot agree with a wrong writer. A
+  model says what an annotation can say: a String member is absent only
+  when empty, so `epoch="unix"` written is `epoch="unix"` emitted, while an
+  enum or int member left at the XSD's default, `presence`, `length`,
+  `byteOrder`, reaches the model as absent and the XML omits it, the same
+  document to any XSD-aware reader and the same IR from sbe-tool. Once
   over the corpus: every element and attribute `sbe.xsd` declares occurs
   in some oracle, except an explicit list of attributes the XSD declares
   and sbe-tool ignores, so completeness is a test, not a claim. One case

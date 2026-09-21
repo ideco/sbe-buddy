@@ -2,35 +2,36 @@ package net.concini.sbebuddy.generator.corpus;
 
 import java.util.List;
 
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
  * The corpus: every case pairs a hand-built schema with the hand-written oracle
- * it must write.
+ * it must write, and the annotated twin that must map to that schema.
  */
 final class Corpus {
 
 	static final List<Case> CASES = List.of(
-			new Case("Primitives", Primitives.schema(), Primitives.XML),
-			new Case("NamedTypes", NamedTypes.schema(), NamedTypes.XML),
-			new Case("Constants", Constants.schema(), Constants.XML),
-			new Case("Enums", Enums.schema(), Enums.XML),
-			new Case("Sets", Sets.schema(), Sets.XML),
-			new Case("Composites", Composites.schema(), Composites.XML),
-			new Case("Groups", Groups.schema(), Groups.XML),
-			new Case("VarData", VarData.schema(), VarData.XML),
-			new Case("Versions", Versions.schema(), Versions.XML),
-			new Case("Header", Header.schema(), Header.XML),
-			new Case("BigEndian", BigEndian.schema(), BigEndian.XML),
-			new Case("Messages", Messages.schema(), Messages.XML),
-			new Case("Arrays", Arrays.schema(), Arrays.XML),
-			new Case("OptionalFields", OptionalFields.schema(), OptionalFields.XML)
+			new Case("Primitives", Primitives.schema(), Primitives.XML, Primitives.annotated()),
+			new Case("NamedTypes", NamedTypes.schema(), NamedTypes.XML, NamedTypes.annotated()),
+			new Case("Constants", Constants.schema(), Constants.XML, Constants.annotated()),
+			new Case("Enums", Enums.schema(), Enums.XML, Enums.annotated()),
+			new Case("Sets", Sets.schema(), Sets.XML, Sets.annotated()),
+			new Case("Composites", Composites.schema(), Composites.XML, Composites.annotated()),
+			new Case("Groups", Groups.schema(), Groups.XML, Groups.annotated()),
+			new Case("VarData", VarData.schema(), VarData.XML, VarData.annotated()),
+			new Case("Versions", Versions.schema(), Versions.XML, Versions.annotated()),
+			new Case("Header", Header.schema(), Header.XML, Header.annotated()),
+			new Case("BigEndian", BigEndian.schema(), BigEndian.XML, BigEndian.annotated()),
+			new Case("Messages", Messages.schema(), Messages.XML, Messages.annotated()),
+			new Case("Arrays", Arrays.schema(), Arrays.XML, Arrays.annotated()),
+			new Case("OptionalFields", OptionalFields.schema(), OptionalFields.XML, OptionalFields.annotated())
 	);
 
 	private Corpus() {
 	}
 
-	record Case(String name, Schema schema, String oracle) {
+	record Case(String name, Schema schema, String oracle, Annotated annotated) {
 
 		@Override
 		public String toString() {
