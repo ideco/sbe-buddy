@@ -134,6 +134,34 @@ alternatives considered.
   `valueRef` resolves to an enum valid value, but nothing downstream uses
   them for a data field. (`Message.java` and `Field.java`, read 2026-09-20,
   and the corpus.)
+- The Java face of each primitive, `JavaUtil.javaTypeName`: `char` and
+  `int8` are `byte`, `int16` is `short`, `int32` is `int`, `int64` is
+  `long`, `uint8` is `short`, `uint16` is `int`, `uint32` and `uint64` are
+  `long`, `float` and `double` are themselves. A field's accessor and
+  mutator are named by `JavaUtil.formatPropertyName`, the flyweight
+  classes by `JavaUtil.formatClassName`. (`JavaUtil.java`, read
+  2026-09-21.)
+- A message's tokens, `Ir.getMessage(id)`, open with `BEGIN_MESSAGE`; from
+  index 1, `GenerationUtil.collectFields`, `collectGroups` and
+  `collectVarData` split them into the three lists in that order, each
+  returning the index the next starts at. A field's tokens run from
+  `BEGIN_FIELD` for `componentTokenCount()` tokens with its type token
+  second: `ENCODING` for a primitive, whose `arrayLength()` and
+  `encoding().presence()` tell an array and a constant or optional
+  apart, or `BEGIN_ENUM`, `BEGIN_SET` or `BEGIN_COMPOSITE`. A field added
+  after version 0 has `version()` above 0. The header composite's name is
+  `ir.headerStructure().tokens().get(0).name()` and the schema's byte
+  order `ir.byteOrder()`. (`GenerationUtil.java`, `Token.java` and `Ir.java`,
+  read 2026-09-21.)
+- The generated flyweights: `<Msg>Encoder.BLOCK_LENGTH`, `TEMPLATE_ID` and
+  `SCHEMA_ID` are `int` constants, `MessageHeaderEncoder.ENCODED_LENGTH`
+  the header's size; `encoder.wrapAndApplyHeader(buffer, offset,
+  headerEncoder)` writes the header at the offset and wraps the body after
+  it, and `encodedLength()` is the bytes from the body's offset to the
+  limit, so header plus body is `ENCODED_LENGTH + encodedLength()`;
+  `decoder.wrap(buffer, offset, actingBlockLength, actingVersion)` takes
+  the header's `blockLength()` and `version()`. (`JavaGenerator.java`,
+  read 2026-09-21, and the quotes example's round trip.)
 
 ## javac
 
@@ -212,6 +240,12 @@ alternatives considered.
   `UnsafeApi` without the flag and runs with it, so a user's tests and
   runtime carry it while their javac does not. (Spike experiment,
   2026-09-21.)
+- `DynamicPackageOutputManager.setPackageName` redirects every following
+  `createOutput` to that package, so one output manager serves the
+  flyweights under `<pkg>.sbe` and then the codecs under `<pkg>`;
+  `StringWriterOutputManager.getSources()` keys them
+  `<package>.<Name>`. (`DynamicPackageOutputManager.java` and
+  `StringWriterOutputManager.java`, read 2026-09-21.)
 
 ## Maven 4.0.0-rc-6
 

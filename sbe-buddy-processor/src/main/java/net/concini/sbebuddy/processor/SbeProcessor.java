@@ -25,6 +25,7 @@ import org.jspecify.annotations.Nullable;
 
 import net.concini.sbebuddy.SbeMessage;
 import net.concini.sbebuddy.SbeSchema;
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Generator;
 import net.concini.sbebuddy.generator.Mapping;
 import net.concini.sbebuddy.generator.Problem;
@@ -93,7 +94,7 @@ public final class SbeProcessor extends AbstractProcessor {
 			report(problems, discovered, mapped, schemaPackage);
 			return;
 		}
-		List<Problem> generation = generate(schemaPackage, mapped.schema());
+		List<Problem> generation = generate(schemaPackage, mapped.schema(), discovered.annotated());
 		if (!generation.isEmpty()) {
 			report(generation, discovered, mapped, schemaPackage);
 			return;
@@ -101,11 +102,12 @@ public final class SbeProcessor extends AbstractProcessor {
 		write(schemaPackage, mapped.schema());
 	}
 
-	private List<Problem> generate(PackageElement schemaPackage, Schema schema) {
+	private List<Problem> generate(PackageElement schemaPackage, Schema schema, Annotated annotated) {
 		try {
-			return Generator.generate(schema, new FilerOutputManager(processingEnv.getFiler(), schemaPackage));
+			return Generator
+					.generate(schema, annotated, new FilerOutputManager(processingEnv.getFiler(), schemaPackage));
 		} catch (UncheckedIOException e) {
-			return List.of(new Problem(schema, "could not write a flyweight: " + e.getMessage()));
+			return List.of(new Problem(schema, "could not write generated code: " + e.getMessage()));
 		}
 	}
 

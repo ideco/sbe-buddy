@@ -29,7 +29,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Enums {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.enums;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -157,7 +157,7 @@ final class Enums {
 						annotatedEnumValue("PartiallyFilled", "1"),
 						annotatedEnumValue("Filled", "2")
 				);
-		return annotatedSchema("corpus.enums", 1, 0)
+		return annotatedSchema("corpus.enums", 1, 0).codecs(false)
 				.types(statusCode, side, orderStatus)
 				.messages(
 						annotatedMessage("Enums", 1).components(

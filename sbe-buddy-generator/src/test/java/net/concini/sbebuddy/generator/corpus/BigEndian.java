@@ -18,7 +18,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class BigEndian {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0, byteOrder = BIG_ENDIAN)
+			@SbeSchema(id = 1, version = 0, byteOrder = BIG_ENDIAN, codecs = false)
 			package corpus.bigendian;
 
 			import static net.concini.sbebuddy.ByteOrder.BIG_ENDIAN;
@@ -70,7 +70,7 @@ final class BigEndian {
 	}
 
 	static Annotated annotated() {
-		return annotatedSchema("corpus.bigendian", 1, 0)
+		return annotatedSchema("corpus.bigendian", 1, 0).codecs(false)
 				.byteOrder(BIG_ENDIAN)
 				.messages(
 						annotatedMessage("BigEndian", 1).components(

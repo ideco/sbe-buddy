@@ -167,12 +167,13 @@ Three layers, in the order a mistake meets them.
   grows with every increment, and this is what keeps it readable: the
   generated shape is read in the emitter the way it is read in the output.
 - `<Msg>Codec` and `<Iface>Codec` go to the schema package: `public final`,
-  public no-arg constructor, `@Generated("sbe-buddy")`, owning one header
+  public no-arg constructor, `@Generated("net.concini.sbebuddy")`, owning one header
   encoder and decoder and the message flyweights, plus one instance of each
   binding as a private final field. Fully qualified names, no imports,
-  field code in component order, a comment naming the field above each
-  field's block, real line breaks and indentation; the output is read while
-  debugging and is not formatted afterwards.
+  field code in component order, one line per primitive field and a
+  comment naming the field above a block that needs more, real line breaks
+  and indentation; the output is read while debugging and is not formatted
+  afterwards.
 - Nothing else is generated, and one thing is configurable:
   `@SbeSchema(codecs = false)` turns step 7 off for that schema, and the
   processor then does exactly what the first release did. It is a member
@@ -258,12 +259,13 @@ Reflection is banned in main code and free in tests.
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
 - **The codec's view of the corpus.** A case the codec covers holds the
-  expected source of its codec, `CODEC`, as a text block or a file in the
-  test resources once it outgrows a screen; the emitter's output must
-  equal it exactly, so a change to generated code shows as a diff of Java.
-  A case the codec does not cover yet holds none, and the test asserts the
-  emitter names the construct it lacks, which is the work list the codec
-  increments shrink. No javac.
+  expected source of each of its codecs by qualified name, as a text block
+  or a file in the test resources once it outgrows a screen; the emitter's
+  output must equal it exactly, so a change to generated code shows as a
+  diff of Java. A case the codec does not cover yet holds none and sets
+  `codecs = false` in its source, and the test asserts the emitter names
+  the construct it lacks, which is the work list the codec increments
+  shrink. No javac.
 - **The example, as integration.** Realistic schemas a user would write,
   `com.example.trading` and the primitives-only `com.example.quotes`,
   compiled by the real build with the processor on

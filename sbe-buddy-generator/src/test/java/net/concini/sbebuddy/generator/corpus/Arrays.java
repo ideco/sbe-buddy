@@ -25,7 +25,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Arrays {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.arrays;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -101,7 +101,7 @@ final class Arrays {
 		AnnotatedTypeBuilder samples = annotatedType("Samples", INT32)
 				.length(4)
 				.description("Four readings, oldest first");
-		return annotatedSchema("corpus.arrays", 1, 0)
+		return annotatedSchema("corpus.arrays", 1, 0).codecs(false)
 				.types(rgb, samples)
 				.messages(
 						annotatedMessage("Arrays", 1).components(

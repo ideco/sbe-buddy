@@ -158,9 +158,17 @@ final class PlacementTest {
 				}
 				""";
 
+		// Symbol is an array, which the codec gains in increment 11.
+		String packageInfo = """
+				@SbeSchema(id = 1, version = 0, codecs = false)
+				package placement;
+
+				import net.concini.sbebuddy.SbeSchema;
+				""";
+
 		Javac.Result result = Javac.compile(
 				List.of(
-						Javac.unit("placement/package-info.java", PACKAGE_INFO),
+						Javac.unit("placement/package-info.java", packageInfo),
 						Javac.unit("placement/Source.java", source),
 						Javac.unit("shared/Symbol.java", shared)
 				), new SbeProcessor()

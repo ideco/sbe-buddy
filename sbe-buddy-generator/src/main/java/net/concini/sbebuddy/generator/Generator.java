@@ -64,19 +64,62 @@ public final class Generator {
 	}
 
 	/**
-	 * Steps 3 to 6 of the pipeline: the document, validated against sbe.xsd and
+	 * Steps 3 to 7 of the pipeline: the document, validated against sbe.xsd and
 	 * parsed by sbe-tool, then the IR under the schema package's {@code .sbe}
-	 * namespace and the flyweights through the output, with SbeTool's defaults.
-	 * Whatever sbe-tool reports, warning or error, is a problem naming the schema
-	 * with sbe-tool's text verbatim, and nothing is generated. An output that fails
-	 * to write is an {@link UncheckedIOException}.
+	 * namespace and the flyweights through the output, with SbeTool's defaults,
+	 * then, unless the schema turned them off, the codecs through the same output
+	 * under the schema package. Whatever sbe-tool reports, warning or error, is a
+	 * problem naming the schema with sbe-tool's text verbatim, and nothing is
+	 * generated; a construct the codec lacks is a problem naming its message. An
+	 * output that fails to write is an {@link UncheckedIOException}.
 	 */
-	public static List<Problem> generate(Schema schema, DynamicPackageOutputManager output) {
+	public static List<Problem> generate(Schema schema, Annotated annotated, DynamicPackageOutputManager output) {
+		Parsed parsed = parse(schema);
+		Ir ir = parsed.ir();
+		if (ir == null) {
+			return parsed.problems();
+		}
+		output.setPackageName(ir.applicableNamespace());
+		try {
+			// The buffer types by name, as SbeTool passes them: naming the classes
+			// would load them, and a user's javac must never load an Agrona buffer.
+			new JavaGenerator(
+					ir, "org.agrona.MutableDirectBuffer", "org.agrona.DirectBuffer", false, false, false, output
+			)
+					.generate();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		if (!annotated.codecs()) {
+			return List.of();
+		}
+		output.setPackageName(schema.packageName());
+		return CodecEmitter.emit(ir, annotated, output);
+	}
+
+	/**
+	 * The IR of a schema sbe-tool accepts, for a test that feeds the codec emitter
+	 * directly; one it rejects is an {@link IllegalArgumentException}.
+	 */
+	public static Ir ir(Schema schema) {
+		Parsed parsed = parse(schema);
+		Ir ir = parsed.ir();
+		if (ir == null) {
+			throw new IllegalArgumentException("sbe-tool rejects the schema: " + parsed.problems());
+		}
+		return ir;
+	}
+
+	/** The IR, or the problems that stopped sbe-tool short of it. */
+	private record Parsed(@Nullable Ir ir, List<Problem> problems) {
+	}
+
+	private static Parsed parse(Schema schema) {
 		String document = document(schema);
 		try {
 			XSD.newValidator().validate(new StreamSource(new StringReader(document)));
 		} catch (SAXException e) {
-			return List.of(new Problem(schema, "sbe.xsd: " + e.getMessage()));
+			return new Parsed(null, List.of(new Problem(schema, "sbe.xsd: " + e.getMessage())));
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
@@ -100,21 +143,11 @@ public final class Generator {
 					problems.add(new Problem(schema, line));
 				}
 			}
-			return problems.isEmpty() ? List.of(new Problem(schema, String.valueOf(e.getMessage()))) : problems;
+			return new Parsed(
+					null, problems.isEmpty() ? List.of(new Problem(schema, String.valueOf(e.getMessage()))) : problems
+			);
 		}
-		Ir ir = new IrGenerator().generate(parsed, schema.packageName() + ".sbe");
-		output.setPackageName(ir.applicableNamespace());
-		try {
-			// The buffer types by name, as SbeTool passes them: naming the classes
-			// would load them, and a user's javac must never load an Agrona buffer.
-			new JavaGenerator(
-					ir, "org.agrona.MutableDirectBuffer", "org.agrona.DirectBuffer", false, false, false, output
-			)
-					.generate();
-		} catch (IOException e) {
-			throw new UncheckedIOException(e);
-		}
-		return List.of();
+		return new Parsed(new IrGenerator().generate(parsed, schema.packageName() + ".sbe"), List.of());
 	}
 
 	private static String document(Schema schema) {

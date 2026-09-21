@@ -26,7 +26,8 @@ public record Annotated(
 		List<Message> messages,
 		String semanticVersion,
 		String description,
-		ByteOrder byteOrder
+		ByteOrder byteOrder,
+		boolean codecs
 ) {
 
 	public Annotated {

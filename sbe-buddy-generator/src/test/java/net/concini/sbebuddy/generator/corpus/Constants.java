@@ -32,7 +32,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Constants {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.constants;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -135,7 +135,7 @@ final class Constants {
 				);
 		AnnotatedTypeBuilder currency = annotatedType("Currency", CHAR).length(3).presence(CONSTANT).value("USD");
 		AnnotatedTypeBuilder buySide = annotatedType("BuySide", CHAR).presence(CONSTANT).valueRef("Side.Buy");
-		return annotatedSchema("corpus.constants", 1, 0)
+		return annotatedSchema("corpus.constants", 1, 0).codecs(false)
 				.types(side, currency, buySide)
 				.messages(
 						annotatedMessage("Constants", 1).components(

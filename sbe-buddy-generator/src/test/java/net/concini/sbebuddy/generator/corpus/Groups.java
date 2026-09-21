@@ -35,7 +35,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Groups {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.groups;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -180,7 +180,7 @@ final class Groups {
 						annotatedType("length", UINT16),
 						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
 				);
-		return annotatedSchema("corpus.groups", 1, 0)
+		return annotatedSchema("corpus.groups", 1, 0).codecs(false)
 				.types(smallGroupSizeEncoding, varStringEncoding)
 				.messages(
 						annotatedMessage("Groups", 1).components(

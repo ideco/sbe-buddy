@@ -40,7 +40,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Composites {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.composites;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -205,7 +205,7 @@ final class Composites {
 						.description("When the quote was made")
 						.members(annotatedType("time", UINT64))
 		);
-		return annotatedSchema("corpus.composites", 1, 0)
+		return annotatedSchema("corpus.composites", 1, 0).codecs(false)
 				.types(decimal, quote)
 				.messages(
 						annotatedMessage("Composites", 1).components(

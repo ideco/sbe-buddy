@@ -37,10 +37,9 @@ the point of this increment as much as its output.
   tokens, and names flyweight members through `JavaUtil`, so what it
   calls was generated, by construction; each token's Java face comes from
   `Annotated` by name, the message by its wire name, the component by the
-  field's wire name. Fully qualified names, no imports, a comment line
-  naming the field above each field's block, real line breaks and
-  indentation: the output is read while debugging and is not formatted
-  afterwards. A construct it does not emit yet, a group, var-data, a
+  field's wire name. Fully qualified names, no imports, one line per
+  primitive field, real line breaks and indentation: the output is read
+  while debugging and is not formatted afterwards. A construct it does not emit yet, a group, var-data, a
   composite, an enum, a set, a constant, an optional field, a bound type,
   is a `Problem` naming the message: `no codec for <construct> yet; set
   codecs = false`. Nothing is skipped silently.
@@ -70,13 +69,15 @@ the point of this increment as much as its output.
   An emitter problem is returned like sbe-tool's and generation writes
   nothing more.
 - **The corpus's fifth view.** A case whose messages the codec covers
-  gains `CODEC`, the expected source of its codec as a text block, or a
-  file under `src/test/resources` when it outgrows a screen; a case the
-  codec does not cover yet carries `null`. `CorpusTest` asserts the emitted
-  source equals `CODEC` exactly for the former, and for the latter that
-  the emitter reports a problem naming the message, which is the work
-  list for increments 7 to 15 and shrinks as they land. `Primitives` is
-  the first case with a codec. Emitter tests need no javac.
+  gains `codecs`, the expected source of each codec by its qualified name
+  as a text block, or a file under `src/test/resources` when it outgrows a
+  screen; a case the codec does not cover yet carries an empty map and
+  `codecs = false` in its source, so the processor's tests still compile
+  it. `CorpusTest` asserts the emitted sources equal `codecs` exactly for
+  the former, and for the latter that the emitter reports a problem naming
+  the message, which is the work list for increments 7 to 15 and shrinks
+  as they land. `Primitives` and `Messages` are the cases with a codec.
+  Emitter tests need no javac.
 - **The example.** The trading schema sets `codecs = false` with a comment
   saying which construct waits for which increment, so the flag is shown
   and the module builds. A second package, `com.example.quotes`, is a
@@ -94,8 +95,9 @@ the point of this increment as much as its output.
 
 ## Criteria
 
-- `Primitives`' emitted codec equals its `CODEC` view exactly; every other
-  case reports the construct the codec lacks, naming the message.
+- `Primitives`' and `Messages`' emitted codecs equal their `codecs` view
+  exactly; every other case reports the construct the codec lacks, naming
+  the message.
 - The quotes example round trips through its codec in the real build; the
   trading example builds with codecs off.
 - Every template in the emitter is a text block with named placeholders
