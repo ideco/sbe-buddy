@@ -40,7 +40,7 @@ memory.
 
 | XSD | Java | Members |
 | --- | --- | --- |
-| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` class; default the standard `messageHeader` of four `uint16`, provided by the api) |
+| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` class; default the standard `messageHeader` of four `uint16`, provided by the api); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`) |
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
@@ -115,7 +115,19 @@ is boxed if its face is a primitive. Encoding `null` writes the null value for
 an optional field and is an `IllegalArgumentException` for a required one. A
 group that is present with zero entries is an empty list, not `null`. The
 null value is the type's `nullValue` or the primitive's default, exactly as
-sbe-tool applies it.
+sbe-tool applies it. A field left at the default presence takes its named
+type's, as sbe-tool reads the document.
+
+A field *can be absent* when it is optional, or when its `sinceVersion` is
+above the schema's `baselineVersion` and it is not a constant. A primitive
+component on a field that can be absent is an error, because `null` has
+nowhere to go; a box on a field that never is stays allowed and is a
+warning, since the box may be there for reasons of the user's own, and the
+codec never hands it `null`. Raising the baseline is how a schema retires
+its oldest versions: a required field appended at or below it is a plain
+primitive again, and a message with a header version below the baseline is
+an `IllegalArgumentException` on decode, never read as null values into
+primitives.
 
 ## Unknown values
 
@@ -146,7 +158,9 @@ The unknown value and absence stay distinct: the null value decodes to
 A `presence="constant"` field or type carries no bytes. Its record component
 still exists: decoding fills it with the constant, encoding requires the
 component to equal the constant and throws otherwise. The constant is
-`value` on the `@SbeType`, or `valueRef` (`Enum.CONSTANT`) on the field.
+`value` on the `@SbeType`, or `valueRef` (`Enum.CONSTANT`) on the field. A
+constant is never absent, whatever its `sinceVersion`: its value is in the
+schema, not on the wire.
 
 ## Bindings: the Java side
 
@@ -184,7 +198,8 @@ nor `dimensionType`.
   `sinceVersion`, and `n` is at most the schema version; `deprecated` is at
   least `sinceVersion`. The compiler rejects anything else.
 - Decoding takes acting block length and acting version from the header;
-  encoding always writes the schema's current version.
+  encoding always writes the schema's current version. A header version
+  below `baselineVersion` is refused.
 - `byteOrder` applies to every encoding of the schema.
 
 ## Families

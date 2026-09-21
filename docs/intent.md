@@ -53,8 +53,8 @@ the scope above is complete, and nothing built may preclude them.
    schema is its oracle: the written schema must equal it; it grows with the
    records in the same change and is never edited to make a test pass.
 2. **Nothing is inferred.** Schema id, version, template ids, field ids,
-   unsigned types, named types, `sinceVersion`: all written by hand in
-   annotations. The only default is the same-width signed primitive for a
+   unsigned types, named types, `sinceVersion`, the baseline version a
+   schema still reads: all written by hand in annotations. The only default is the same-width signed primitive for a
    bare Java primitive.
 3. **Annotations mirror `sbe.xsd`.** One annotation per XSD element, one
    member per attribute, same names and defaults, on the node the XSD puts it
@@ -99,7 +99,7 @@ the codec on the smallest case so its mechanics settle before they grow.
 **Simple messages.** Fixed-length blocks, no nesting: every construct of
 the block, one at a time.
 
-- [ ] 7. Codec: absence. Optional presence and `sinceVersion` on fields, boxed components, the acting version read in decode; the first frozen schema version and the cross-version tests against reference flyweights
+- [x] 7. Codec: absence. Optional presence and `sinceVersion` on fields, boxed components, the acting version read in decode; the first frozen schema version and the cross-version tests against reference flyweights
 - [ ] 8. Codec: enums and sets, under the unknown-value contract of `type-mappings.md`
 - [ ] 9. Codec: named types, constants, fixed-length arrays and `char` strings
 - [ ] 10. Codec: bindings. `TypeBinding`, `@Bind`, a `@SbeType` that is its own binding; primitive faces only

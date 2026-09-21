@@ -97,6 +97,31 @@ alternatives considered.
   for a group, and wraps var-data with length zero. Encoders have no
   version guard. (`JavaGenerator.java`, `generateFieldNotPresentCondition`
   and the group and var-data guards, read 2026-09-20.)
+- Every primitive field has static meta methods on both flyweights, typed
+  as the face: `<field>NullValue()`, `<field>MinValue()`,
+  `<field>MaxValue()`, `<field>SinceVersion()`, `<field>Id()`,
+  `<field>EncodingOffset()` and `<field>EncodingLength()`; the message
+  decoder has `actingVersion()`. `JavaUtil.generateLiteral` writes the
+  null value of `float` and `double` as `Float.NaN` and `Double.NaN`,
+  which `==` never matches and `Float.compare` and `Double.compare` match
+  with `0`. (`JavaGenerator.java`, `generatePrimitiveFieldMetaMethod` and
+  `generateFieldSinceVersionMethod`, `JavaUtil.java`, `PrimitiveValue.java`,
+  read 2026-09-21; the quotes example's
+  `anAbsentVwapIsTheNullValueOnTheWire`.)
+- A field without a `presence` attribute takes its type's presence
+  (`Message.java`, `getPresence`). The IR's encoding token of a field
+  carries the presence so resolved and a version of
+  `max(field.sinceVersion, type.sinceVersion)`, while the field token's
+  version is the field's own, which is what the flyweight's guard reads.
+  (`IrGenerator.java`, `add(EncodedDataType, int, Field)` and `add(Field)`,
+  read 2026-09-21.)
+- `SbeTool.main` takes schema files as arguments, reads `sbe.output.dir`,
+  `sbe.target.namespace`, `sbe.validation.stop.on.error` and
+  `sbe.validation.warnings.fatal` from system properties, writes Java
+  through `JavaOutputManager`, which creates the package directories, and
+  calls `System.exit` only for no arguments or an unknown file extension,
+  so it runs inside Maven's JVM. (`SbeTool.java`, read 2026-09-21; the
+  example's build.)
 - The parser checks `sinceVersion <= messageSchema.version` on messages,
   types and valid values (`MessageSchema.java`) but does not check that
   later-version fields follow earlier ones; offsets are computed in
@@ -291,6 +316,17 @@ alternatives considered.
   set, breaks the launcher before Maven starts. CI and a plain workstation
   are unaffected; a container that sets it must pass those flags in
   `MAVEN_OPTS` instead. (Spike experiment, 2026-09-20.)
+
+## exec-maven-plugin 3.6.4 and build-helper-maven-plugin 3.6.2
+
+- The exec plugin's `java` goal runs under Maven 4.0.0-rc-6 in the build's
+  JVM: `SbeTool` with `includePluginDependencies` and sbe-tool as the
+  plugin's dependency, three executions in one phase each with its own
+  `sbe.target.namespace` system property, write three reference packages
+  under `target/generated-test-sources/sbe`; the build-helper plugin's
+  `add-test-source` adds the directory and the compiler plugin compiles
+  it with the tests. Neither reaches the example's compile classpath.
+  (The example's `verify`, JDK 21, 2026-09-21.)
 
 ## Surefire 3.6.0
 

@@ -79,9 +79,11 @@ never imported.
   javac `Element` and, where there is one, `AnnotationMirror`; `Mapping`
   returns its `Schema` together with an identity map from each `Schema`
   node to the `Annotated` node it came from. A `Problem(Object node, String
-  message)` names a node of either model, or an `Element` when only javac
-  can see the mistake, and the processor resolves it in at most two
-  lookups. Records' `equals` is content-based and the identity maps ignore
+  message, Severity severity)` names a node of either model, or an
+  `Element` when only javac can see the mistake, and the processor
+  resolves it in at most two lookups; an `ERROR`, which the two-argument
+  constructor means, stops generation, a `WARNING` is reported and
+  generation goes on. Records' `equals` is content-based and the identity maps ignore
   it, so a test asserts a `Problem` by equality and the processor places it
   by identity.
 
@@ -107,7 +109,10 @@ Three layers, in the order a mistake meets them.
   `primitiveType` together,
   `@SbeGroup` not on a `List` of a record, `@SbeData` not on `String` or
   `byte[]`, a field after a group or a group after data, an id outside
-  `0..65535`, a name outside the XSD's pattern. Rules that compare nodes
+  `0..65535`, a name outside the XSD's pattern, a `baselineVersion` above
+  the schema's version, a primitive component on a field that can be
+  absent, and the one warning, a box on a field that never is
+  (`type-mappings.md`, absence). Rules that compare nodes
   live in `Generator.validate`: duplicate field ids and names in a message
   or group, duplicate message names and ids, two declarations with one
   wire name, `sinceVersion` above the schema version, `deprecated` below
@@ -160,14 +165,38 @@ Three layers, in the order a mistake meets them.
   var-data; decoding is the mirror. `encodedLength` takes its shape from
   the IR and its numbers from the flyweights' constants (`BLOCK_LENGTH`,
   `sbeHeaderSize()`, `sbeBlockLength()`, `ENCODED_LENGTH`), so generated
-  code holds no magic numbers. A construct the emitter does not cover yet
+  code holds no wire number. A construct the emitter does not cover yet
   is a `Problem` naming the message, never a silent skip.
+- Absence, per field, is decided on each side. The encode side follows
+  the component: `encodeField` for a primitive, `encodeOptionalField`
+  writing the flyweight's `<field>NullValue()` for `null`, and
+  `encodeBoxedField` for any other box, which refuses `null` with
+  `IllegalArgumentException` because a required field has no wire form for
+  it. The decode side follows the wire: `decodeField`,
+  `decodeOptionalField` yielding `null` for the null value, whatever the
+  field's version, since below the acting version the getter returns it,
+  and `decodeAddedField` for a required field appended above the
+  baseline, yielding `null` when `decoder.actingVersion()` is below
+  `<field>SinceVersion()`, on the version and never on the null value,
+  which a required field may hold. The null test is `==` for the integer
+  primitives and `Float.compare` or `Double.compare` for the floats,
+  whose null value is `NaN`; the float's box is the one name the emitter
+  decides from the primitive type itself.
+- `@SbeSchema(baselineVersion = n)` is the oldest version the codecs
+  still decode: a required field appended at or below it is never absent
+  and stays a plain primitive, and `decode` refuses a header below it
+  with `IllegalArgumentException`, after the schema and template check,
+  because reading on would put the null value of every field appended up
+  to the baseline into a primitive component. The baseline is the one
+  literal a codec holds; sbe-tool has no constant for it. `decodedLength`
+  stays a length and refuses nothing.
 - The emitter is templates. Every construct it emits is a Java text block
   with named placeholders, beside the method that fills it and named after
   the construct, filled through `Template`: names and values in, a failure
   for a name left unfilled or a value never used, a multi-line value
-  indented to its placeholder's column. What varies is decided in Java and
-  pasted in; the templates hold no conditionals and no loops, and no code
+  indented to its placeholder's column, and a placeholder alone on its
+  line filled empty takes the line with it, so a block left out leaves no
+  blank line. What varies is decided in Java and pasted in; the templates hold no conditionals and no loops, and no code
   fragment is assembled by concatenation. The emitter is the file that
   grows with every increment, and this is what keeps it readable: the
   generated shape is read in the emitter the way it is read in the output.
@@ -191,9 +220,11 @@ Three layers, in the order a mistake meets them.
   shows it, and never in the `processingOver` round; javac's `Filer` cannot
   recreate a file. A package without `@SbeSchema` declares types for a
   schema elsewhere and produces nothing; an `@SbeMessage` in one is the
-  single mistake that names, and so is reported on, the message. A package with any `Problem` gets its errors through
-  `Messager`, each on the element it names with the `AnnotationMirror`
-  where there is one, and no output, whichever step found them. It reads `Class`-typed members from the
+  single mistake that names, and so is reported on, the message. A package
+  with any `Problem` gets each through `Messager` with its severity, on
+  the element it names with the `AnnotationMirror` where there is one;
+  one with an error gets no output, whichever step found it, and one with
+  warnings alone gets its output whole. It reads `Class`-typed members from the
   `AnnotationMirror`, never through an annotation instance (`notes.md`),
   and the annotations are retained at `CLASS`, so a declared type in a
   library jar still resolves and nothing exists at runtime to reflect
@@ -285,8 +316,7 @@ Reflection is banned in main code and free in tests.
   `com.example.trading` and the primitives-only `com.example.quotes`,
   compiled by the real build with the processor on
   `annotationProcessorPaths`, each with its oracle a file in
-  `src/main/sbe`, because `SbeTool` reads it there at `generate-sources`.
-  One test per package asserts the `schema.xml` in the class output
+  `src/main/sbe`. One test per package asserts the `schema.xml` in the class output
   equivalent to the oracle, through `SchemaXmlAssert` from the generator's
   test jar. A package whose constructs the codec covers keeps codecs on
   and round trips a record through its codec at a non-zero offset, with
@@ -297,21 +327,26 @@ Reflection is banned in main code and free in tests.
   From the first release on it compiles the flyweights the processor
   generates and one smoke test encodes and decodes through them; what
   sbe-tool generates is not tested, because the corpus proves the document
-  it gets. With the codecs, when our own code writes bytes, `SbeTool`
-  generates reference flyweights from the oracle into an `xmlref` package
-  and the tests encode with ours and decode with the reference, and the
-  reverse, round tripping at a non-zero offset with `encodedLength` equal
-  to the bytes written; every past schema version then stays as a frozen
-  file (`<name>-v0.xml`, ...) with its own reference package, so
-  cross-version decoding is tested in both directions without old-version
-  records.
+  it gets. Where our own code writes bytes, `SbeTool` generates reference
+  flyweights from the oracle at `generate-test-sources`, test code only,
+  into an `xmlref` package under the schema package, and the tests encode
+  with ours and decode with the reference, and the reverse. Every past
+  schema version stays as a frozen file beside the oracle, `quotes-v0.xml`,
+  `quotes-v1.xml`, the oracle as it was with only its leading comment
+  saying so and never edited again, each with its own reference package,
+  `xmlref.v0`, `xmlref.v1`, so cross-version decoding is tested in both
+  directions without old-version records: a message from an older writer
+  decodes with its later fields `null`, an older reader consumes a newer
+  message whole, and a message below the baseline is refused.
 - **The processor** runs javac in memory through the Compiler API, with
   one helper: sources as strings, `-proc:only`, diagnostics and written
   files collected. The corpus tests above; one negative snippet per rule
   layer, discovery, `Mapping`, `Generator.validate`, sbe-tool and the codec
   emitter, asserting the diagnostic's element and line and that nothing
   was written, which proves placement and the all-or-nothing rule while
-  the rules themselves are tested in the generator; and one snippet
+  the rules themselves are tested in the generator, and one warning
+  snippet asserting the same placement with everything written; and one
+  snippet
   resolving a declared type across a package boundary. Resolution from a
   jar is every corpus case, through the api's `MessageHeader`. One test
   runs javac against real directories: a package of two records compiled
@@ -353,7 +388,12 @@ Reflection is banned in main code and free in tests.
 - Dependencies and plugins are added by the increment that first needs
   them, with their versions in the root pom and nowhere else. The api
   depends on Agrona from the first release, because generated flyweights
-  compile against it and the api is all a user depends on.
+  compile against it and the api is all a user depends on. The example
+  runs `SbeTool` through the exec plugin's `java` goal, in Maven's own
+  JVM with sbe-tool as the plugin's dependency, once per oracle file with
+  its namespace as a system property, and the build-helper plugin adds
+  the output directory as a test source root; nothing of it reaches the
+  example's compile classpath.
 - `reference/simple-binary-encoding` is a git submodule at the sbe-tool
   tag the build depends on. It is read to confirm behaviour and never
   copied from or edited.
