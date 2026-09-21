@@ -11,6 +11,16 @@
 
   <artifactId>sbe-buddy-api</artifactId>
 
+  <!-- The flyweights sbe-tool generates compile against Agrona, and the api is
+       all a user depends on. -->
+  <dependencies>
+    <dependency>
+      <groupId>org.agrona</groupId>
+      <artifactId>agrona</artifactId>
+      <version>${agrona.version}</version>
+    </dependency>
+  </dependencies>
+
   <properties>
     <module.name>net.concini.sbebuddy</module.name>
   </properties>

@@ -1,20 +1,54 @@
 package net.concini.sbebuddy.generator;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.ToIntFunction;
 
+import javax.xml.XMLConstants;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.SchemaFactory;
+
+import org.agrona.generation.DynamicPackageOutputManager;
 import org.jspecify.annotations.Nullable;
+import org.xml.sax.SAXException;
+
+import uk.co.real_logic.sbe.generation.java.JavaGenerator;
+import uk.co.real_logic.sbe.ir.Ir;
+import uk.co.real_logic.sbe.xml.IrGenerator;
+import uk.co.real_logic.sbe.xml.MessageSchema;
+import uk.co.real_logic.sbe.xml.ParserOptions;
+import uk.co.real_logic.sbe.xml.XmlSchemaParser;
 
 /**
  * The rules of ours that compare nodes, which no single node can decide: names
  * and ids that collide, and versions that do not line up with the schema's or
- * with the siblings they follow. Each problem names the {@link Schema} node it
- * was decided from.
+ * with the siblings they follow, each problem naming the {@link Schema} node it
+ * was decided from; and the pipeline from a schema through sbe-tool's own
+ * toolchain to the flyweights, sbe-tool as the backstop behind those rules.
  */
 public final class Generator {
+
+	// Qualified because it collides with our Schema, the subject of this class.
+	private static final javax.xml.validation.Schema XSD;
+
+	static {
+		try {
+			XSD = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI)
+					.newSchema(new StreamSource(Generator.class.getResourceAsStream("/fpl/sbe.xsd")));
+		} catch (SAXException e) {
+			throw new IllegalStateException(e);
+		}
+	}
 
 	private final List<Problem> problems = new ArrayList<>();
 	private final int version;
@@ -27,6 +61,70 @@ public final class Generator {
 		Generator generator = new Generator(schema.version());
 		generator.schema(schema);
 		return List.copyOf(generator.problems);
+	}
+
+	/**
+	 * Steps 3 to 6 of the pipeline: the document, validated against sbe.xsd and
+	 * parsed by sbe-tool, then the IR under the schema package's {@code .sbe}
+	 * namespace and the flyweights through the output, with SbeTool's defaults.
+	 * Whatever sbe-tool reports, warning or error, is a problem naming the schema
+	 * with sbe-tool's text verbatim, and nothing is generated. An output that fails
+	 * to write is an {@link UncheckedIOException}.
+	 */
+	public static List<Problem> generate(Schema schema, DynamicPackageOutputManager output) {
+		String document = document(schema);
+		try {
+			XSD.newValidator().validate(new StreamSource(new StringReader(document)));
+		} catch (SAXException e) {
+			return List.of(new Problem(schema, "sbe.xsd: " + e.getMessage()));
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		ByteArrayOutputStream reported = new ByteArrayOutputStream();
+		ParserOptions options = ParserOptions.builder()
+				.stopOnError(true)
+				.warningsFatal(true)
+				.suppressOutput(false)
+				.errorPrintStream(new PrintStream(reported, true, StandardCharsets.UTF_8))
+				.build();
+		MessageSchema parsed;
+		try {
+			parsed = XmlSchemaParser
+					.parse(new ByteArrayInputStream(document.getBytes(StandardCharsets.UTF_8)), options);
+		} catch (Exception e) {
+			// sbe-tool's parse declares Exception; every line it printed is a rule
+			// it applied, and the exception repeats the first without its prefix.
+			List<Problem> problems = new ArrayList<>();
+			for (String line : reported.toString(StandardCharsets.UTF_8).split("\\R")) {
+				if (!line.isBlank()) {
+					problems.add(new Problem(schema, line));
+				}
+			}
+			return problems.isEmpty() ? List.of(new Problem(schema, String.valueOf(e.getMessage()))) : problems;
+		}
+		Ir ir = new IrGenerator().generate(parsed, schema.packageName() + ".sbe");
+		output.setPackageName(ir.applicableNamespace());
+		try {
+			// The buffer types by name, as SbeTool passes them: naming the classes
+			// would load them, and a user's javac must never load an Agrona buffer.
+			new JavaGenerator(
+					ir, "org.agrona.MutableDirectBuffer", "org.agrona.DirectBuffer", false, false, false, output
+			)
+					.generate();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		return List.of();
+	}
+
+	private static String document(Schema schema) {
+		StringWriter writer = new StringWriter();
+		try {
+			SchemaXml.write(schema, writer);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		return writer.toString();
 	}
 
 	private void schema(Schema schema) {

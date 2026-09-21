@@ -20,7 +20,10 @@ compiles its flyweights and uses them once. Then `v0.1.0`.
   `OutputManager` with `setPackageName`, and Agrona ships
   `StringWriterOutputManager` for tests. Precedence checks are off by
   `PrecedenceChecks.newInstance(new Context())`. Sbe-tool 1.40.2 builds
-  against Agrona 2.6.1. All in `notes.md`.
+  against Agrona 2.6.1. Generation runs in a plain JVM with no flag, so
+  a user's javac needs none; the flyweights at run time do need
+  `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`, which the README
+  says and the test JVMs carry. All in `notes.md`.
 
 ## What gets built
 
@@ -69,8 +72,9 @@ compiles its flyweights and uses them once. Then `v0.1.0`.
   coverage stays in the corpus.
 - **The release.** The root POM's version becomes `0.1.0`; the README
   says what sbe-buddy is, shows the example, names the coordinates and
-  what a build needs, and says what is generated and that codecs are not
-  yet; after the merge, an annotated tag `v0.1.0` on `main`, and a
+  what a build needs, the JVM flag Agrona needs at run time, and says
+  what is generated and that codecs are not yet; after the merge, an
+  annotated tag `v0.1.0` on `main`, and a
   follow-up commit takes the version to `0.2.0-SNAPSHOT`. No repository
   is published to.
 - **The documents.** `notes.md` takes what the increment verifies about
