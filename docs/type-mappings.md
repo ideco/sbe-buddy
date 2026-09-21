@@ -44,7 +44,7 @@ memory.
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch` (`unix`), `timeUnit` (`nanosecond`), `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
-| `data` | `@SbeData` on a `String` or `byte[]` component | `id`, `name`, `type` (a `@SbeComposite` class of the `{length, varData}` shape), `semanticType`, `description`, `sinceVersion`, `deprecated` |
+| `data` | `@SbeData` on a `String` or `byte[]` component | `id`, `name`, `type` (a `@SbeComposite` class of the `{length, varData}` shape), `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 
 A field, group or data component whose `type` and `primitiveType` are both
 absent uses its component type: for an `@SbeEnum`, `@SbeSet` or

@@ -46,14 +46,19 @@ Discovery, the processor and the example are increment 4.
   primitive, `String`, `byte[]`, a `List` of a record, a declared type),
   and references to declarations by identity. A member left at its
   default is the default's value, since that is what javac hands over; a
-  `name` left empty means the Java name.
+  `name` left empty means the Java name. The root also holds the
+  declarations the package makes, in source order: a declared type no
+  message references still belongs in `types`, and nothing else could
+  put it there.
 - `Mapping`, in the generator: `Mapped map(Annotated annotated)`, where
   `Mapped` holds the `Schema`, the `Problem`s, and an identity map from
   each `Schema` node to the `Annotated` node it came from. Wire name from
   `name` or the Java name; a bare primitive component through the default
-  mapping; a reference to the declared type's wire name; every declaration
-  reached, wherever it lives, collected into `types` once, in the order
-  first reached; fields, then groups, then data. The single-element rules
+  mapping; a reference to the declared type's wire name; `types` holding
+  the header, then what the schema declares in its own order, then what a
+  reference reaches elsewhere in the order first reached, each once and
+  every one after the declarations it refers to; fields, then groups, then
+  data. The single-element rules
   of `architecture.md` fire here and return `Problem`s naming the
   `Annotated` node.
 - `Generator.validate(Schema)`: the cross-node rules of `architecture.md`,

@@ -92,6 +92,13 @@ alternatives considered.
   `warningsFatal` makes fatal; so is an enum valid value equal to the
   encoding's null value. (`EncodedDataType.java` and `EnumType.java`, read
   2026-09-20, and the corpus.)
+- `sbe.xsd` types every `name` attribute as `symbolicName_t`, whose pattern
+  is `([A-Z]|[a-z]|_)([0-9]|[A-Z]|[a-z]|_)*`, and a `valueRef` as
+  `qualifiedName_t`, two of those joined by a dot. A `field`'s and a
+  `message`'s `id` is `xs:unsignedShort`, so 0 to 65535, and `offset` is
+  `xs:unsignedInt` with no default, which is why an absent one is not the
+  same as `offset="0"`. (`fpl/sbe.xsd` in the sbe-tool jar, read
+  2026-09-21.)
 - The XSD gives `data` the same attribute groups as `field`, so `presence`,
   `valueRef`, `epoch` and `timeUnit` are declared for it. `parseDataField`
   reads presence, epoch and timeUnit, and `Field.validate` checks a
