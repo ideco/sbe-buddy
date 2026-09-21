@@ -249,10 +249,10 @@ public final class Mapping {
 			return known;
 		}
 		String wireName = switch (declaration) {
-			case Annotated.Type type -> name(type, type.name(), type.javaName());
-			case Annotated.Composite composite -> name(composite, composite.name(), composite.javaName());
-			case Annotated.Enum enumeration -> name(enumeration, enumeration.name(), enumeration.javaName());
-			case Annotated.Set set -> name(set, set.name(), set.javaName());
+			case Annotated.Type type -> wireName(type.name(), type.javaName());
+			case Annotated.Composite composite -> wireName(composite.name(), composite.javaName());
+			case Annotated.Enum enumeration -> wireName(enumeration.name(), enumeration.javaName());
+			case Annotated.Set set -> wireName(set.name(), set.javaName());
 		};
 		wireNames.put(declaration, wireName);
 		Schema.Declaration mapped = switch (declaration) {
@@ -418,13 +418,20 @@ public final class Mapping {
 		problems.add(new Problem(node, message));
 	}
 
-	/** The wire name: what {@code name} says, or the Java name it defaults to. */
+	/**
+	 * The wire name, blaming the node for one the XSD would refuse; a declaration
+	 * is named once, where it is declared, not again at every reference.
+	 */
 	private String name(Object node, String name, String javaName) {
-		String wireName = name.isEmpty() ? javaName : name;
+		String wireName = wireName(name, javaName);
 		if (!SYMBOLIC_NAME.matcher(wireName).matches()) {
 			problem(node, "\"" + wireName + "\" is not a name SBE allows: a letter or _, then letters, digits and _");
 		}
 		return wireName;
+	}
+
+	private static String wireName(String name, String javaName) {
+		return name.isEmpty() ? javaName : name;
 	}
 
 	private int id(Object node, int id) {

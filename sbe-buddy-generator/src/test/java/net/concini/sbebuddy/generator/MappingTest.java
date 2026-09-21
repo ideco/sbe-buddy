@@ -99,6 +99,27 @@ final class MappingTest {
 	}
 
 	@Test
+	void aDeclarationWithABadNameIsBlamedOnceHoweverOftenItIsReferred() {
+		Fixtures.AnnotatedTypeBuilder quantity = annotatedType("Quantity", PrimitiveType.UINT32).name("net qty");
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.types(quantity)
+				.messages(
+						annotatedMessage("M", 1).components(
+								annotatedField("qty", 1, primitive(INT)).type(quantity),
+								annotatedField("shown", 2, primitive(INT)).type(quantity)
+						)
+				)
+				.build();
+
+		assertThat(Mapping.map(annotated).problems()).containsExactly(
+				new Problem(
+						quantity.build(),
+						"\"net qty\" is not a name SBE allows: a letter or _, then letters, digits and _"
+				)
+		);
+	}
+
+	@Test
 	void everySchemaNodeKnowsItsAnnotatedNode() {
 		Fixtures.AnnotatedFieldBuilder field = annotatedField("qty", 1, primitive(INT));
 		Annotated annotated = annotatedSchema("p", 1, 0)

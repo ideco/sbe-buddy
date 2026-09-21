@@ -74,7 +74,7 @@ public record Annotated(
 	}
 
 	/** A {@code List} of a record, which is what a group is written on. */
-	public record ListOfRecord(String elementName) implements JavaType {
+	public record ListOfRecord() implements JavaType {
 	}
 
 	/** Anything else, named for the message that rejects it. */

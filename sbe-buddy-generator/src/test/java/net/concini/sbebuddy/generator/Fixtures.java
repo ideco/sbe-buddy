@@ -918,8 +918,8 @@ public final class Fixtures {
 		return new Annotated.Other(javaName);
 	}
 
-	public static Annotated.JavaType listOfRecord(String elementName) {
-		return new Annotated.ListOfRecord(elementName);
+	public static Annotated.JavaType listOfRecord() {
+		return new Annotated.ListOfRecord();
 	}
 
 	public interface AnnotatedDeclarationBuilder {
@@ -1345,7 +1345,7 @@ public final class Fixtures {
 		private AnnotatedGroupBuilder(String javaName, int id) {
 			this.javaName = javaName;
 			this.id = id;
-			this.javaType = new Annotated.ListOfRecord(javaName);
+			this.javaType = new Annotated.ListOfRecord();
 		}
 
 		public AnnotatedGroupBuilder javaType(Annotated.JavaType javaType) {
