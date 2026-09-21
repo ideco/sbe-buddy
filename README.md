@@ -142,12 +142,14 @@ sbe-buddy currently supports the SBE schema constructs covered by
 The generated XML is checked against hand-written reference schemas and
 then passed through sbe-tool.
 
-What does not exist yet is the higher-level mapping layer between your
-records and the generated flyweights.
+The generated codec, the mapping layer between your records and the
+flyweights, currently covers messages of primitive fields. A schema that
+uses more sets `codecs = false` on `@SbeSchema` and gets the flyweights
+alone.
 
-That is the next part: generated codecs, domain-type bindings and, later,
-typed flyweights for places where records are convenient but raw SBE is
-lower-level than needed.
+That is the next part: the codec for every construct, domain-type
+bindings and, later, typed flyweights for places where records are
+convenient but raw SBE is lower-level than needed.
 
 See [docs/intent.md](docs/intent.md) for the direction of the project.
 

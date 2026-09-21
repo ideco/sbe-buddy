@@ -118,7 +118,8 @@ public final class Discovery {
 				messages,
 				schema.string("semanticVersion"),
 				schema.string("description"),
-				schema.enumeration("byteOrder", ByteOrder.class)
+				schema.enumeration("byteOrder", ByteOrder.class),
+				schema.flag("codecs")
 		);
 		remember(annotated, schemaPackage, schema.mirror);
 		return annotated;
@@ -619,6 +620,10 @@ public final class Discovery {
 
 		String string(String member) {
 			return (String) value(member).getValue();
+		}
+
+		boolean flag(String member) {
+			return (Boolean) value(member).getValue();
 		}
 
 		<E extends Enum<E>> E enumeration(String member, Class<E> type) {

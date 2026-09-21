@@ -1,5 +1,6 @@
 package net.concini.sbebuddy.generator;
 
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
@@ -128,7 +129,7 @@ final class GeneratorTest {
 				.build();
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
-		List<Problem> problems = Generator.generate(schema, output);
+		List<Problem> problems = Generator.generate(schema, annotatedSchema("p", 1, 0).build(), output);
 
 		assertThat(problems).hasSize(1);
 		assertThat(problems.get(0).node()).isSameAs(schema);

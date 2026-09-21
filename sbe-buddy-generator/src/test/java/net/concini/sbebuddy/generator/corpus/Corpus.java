@@ -1,6 +1,7 @@
 package net.concini.sbebuddy.generator.corpus;
 
 import java.util.List;
+import java.util.Map;
 
 import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
@@ -16,44 +17,57 @@ public final class Corpus {
 	public static final List<Case> CASES = List.of(
 			new Case(
 					"Primitives", Primitives.PACKAGE_INFO, Primitives.SOURCE, Primitives.schema(), Primitives.XML,
-					Primitives.annotated()
+					Primitives.annotated(), Map.of("corpus.primitives.PrimitivesCodec", Primitives.CODEC)
 			),
 			new Case(
 					"NamedTypes", NamedTypes.PACKAGE_INFO, NamedTypes.SOURCE, NamedTypes.schema(), NamedTypes.XML,
-					NamedTypes.annotated()
+					NamedTypes.annotated(), Map.of()
 			),
 			new Case(
 					"Constants", Constants.PACKAGE_INFO, Constants.SOURCE, Constants.schema(), Constants.XML,
-					Constants.annotated()
+					Constants.annotated(), Map.of()
 			),
-			new Case("Enums", Enums.PACKAGE_INFO, Enums.SOURCE, Enums.schema(), Enums.XML, Enums.annotated()),
-			new Case("Sets", Sets.PACKAGE_INFO, Sets.SOURCE, Sets.schema(), Sets.XML, Sets.annotated()),
+			new Case("Enums", Enums.PACKAGE_INFO, Enums.SOURCE, Enums.schema(), Enums.XML, Enums.annotated(), Map.of()),
+			new Case("Sets", Sets.PACKAGE_INFO, Sets.SOURCE, Sets.schema(), Sets.XML, Sets.annotated(), Map.of()),
 			new Case(
 					"Composites", Composites.PACKAGE_INFO, Composites.SOURCE, Composites.schema(), Composites.XML,
-					Composites.annotated()
+					Composites.annotated(), Map.of()
 			),
-			new Case("Groups", Groups.PACKAGE_INFO, Groups.SOURCE, Groups.schema(), Groups.XML, Groups.annotated()),
+			new Case(
+					"Groups", Groups.PACKAGE_INFO, Groups.SOURCE, Groups.schema(), Groups.XML, Groups.annotated(),
+					Map.of()
+			),
 			new Case(
 					"VarData", VarData.PACKAGE_INFO, VarData.SOURCE, VarData.schema(), VarData.XML,
-					VarData.annotated()
+					VarData.annotated(), Map.of()
 			),
 			new Case(
 					"Versions", Versions.PACKAGE_INFO, Versions.SOURCE, Versions.schema(), Versions.XML,
-					Versions.annotated()
+					Versions.annotated(), Map.of()
 			),
-			new Case("Header", Header.PACKAGE_INFO, Header.SOURCE, Header.schema(), Header.XML, Header.annotated()),
+			new Case(
+					"Header", Header.PACKAGE_INFO, Header.SOURCE, Header.schema(), Header.XML, Header.annotated(),
+					Map.of()
+			),
 			new Case(
 					"BigEndian", BigEndian.PACKAGE_INFO, BigEndian.SOURCE, BigEndian.schema(), BigEndian.XML,
-					BigEndian.annotated()
+					BigEndian.annotated(), Map.of()
 			),
 			new Case(
 					"Messages", Messages.PACKAGE_INFO, Messages.SOURCE, Messages.schema(), Messages.XML,
-					Messages.annotated()
+					Messages.annotated(),
+					Map.of(
+							"corpus.messages.NewOrderCodec", Messages.NEW_ORDER_CODEC,
+							"corpus.messages.CancelOrderCodec", Messages.CANCEL_ORDER_CODEC
+					)
 			),
-			new Case("Arrays", Arrays.PACKAGE_INFO, Arrays.SOURCE, Arrays.schema(), Arrays.XML, Arrays.annotated()),
+			new Case(
+					"Arrays", Arrays.PACKAGE_INFO, Arrays.SOURCE, Arrays.schema(), Arrays.XML, Arrays.annotated(),
+					Map.of()
+			),
 			new Case(
 					"OptionalFields", OptionalFields.PACKAGE_INFO, OptionalFields.SOURCE, OptionalFields.schema(),
-					OptionalFields.XML, OptionalFields.annotated()
+					OptionalFields.XML, OptionalFields.annotated(), Map.of()
 			)
 	);
 
@@ -62,7 +76,10 @@ public final class Corpus {
 
 	/**
 	 * The source is two compilation units, the {@code package-info.java} carrying
-	 * {@code @SbeSchema} and one unit holding the records.
+	 * {@code @SbeSchema} and one unit holding the records. The codecs are the
+	 * source the emitter must write for each message, by the codec's qualified
+	 * name; empty, with {@code codecs = false} in the source, while the codec lacks
+	 * a construct the case uses.
 	 */
 	public record Case(
 			String name,
@@ -70,7 +87,8 @@ public final class Corpus {
 			String source,
 			Schema schema,
 			String oracle,
-			Annotated annotated
+			Annotated annotated,
+			Map<String, String> codecs
 	) {
 
 		@Override

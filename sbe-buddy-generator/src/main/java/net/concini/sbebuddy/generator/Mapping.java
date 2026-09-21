@@ -4,10 +4,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
+
+import uk.co.real_logic.sbe.generation.java.JavaUtil;
 
 import net.concini.sbebuddy.ByteOrder;
 import net.concini.sbebuddy.Presence;
@@ -127,6 +130,7 @@ public final class Mapping {
 
 	private Schema.Field field(Annotated.Field field) {
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
+		face(field);
 		Schema.Field result = new Schema.Field(
 				name(field, field.name(), field.javaName()),
 				id(field, field.id()),
@@ -237,6 +241,51 @@ public final class Mapping {
 	private String unmappable(Object node, String javaType) {
 		problem(node, javaType + " maps to no SBE type; give type or primitiveType");
 		return "?";
+	}
+
+	/**
+	 * The codec hands the component to the flyweight, whose face for a wire
+	 * primitive {@link JavaUtil} decides: {@code int} for {@code uint16},
+	 * {@code long} for {@code uint32}, and so on. Checked where the wire type is
+	 * known to be one primitive; the default mapping is its own face.
+	 */
+	private void face(Annotated.Field field) {
+		uk.co.real_logic.sbe.PrimitiveType wire = wirePrimitive(field);
+		if (wire == null) {
+			return;
+		}
+		String face = JavaUtil.javaTypeName(wire);
+		String actual = switch (field.javaType()) {
+			case Annotated.Primitive primitive -> primitive.kind().name().toLowerCase(Locale.ROOT);
+			case Annotated.Text text -> "String";
+			case Annotated.Bytes bytes -> "byte[]";
+			case Annotated.Declared declared -> "a declared type";
+			case Annotated.ListOfRecord list -> "List";
+			case Annotated.Other other -> other.javaName();
+		};
+		if (!actual.equals(face)) {
+			problem(field, actual + " is not the face of " + wire.primitiveName() + ", which is " + face);
+		}
+	}
+
+	/**
+	 * The one primitive the field is written as, when that is known: given as
+	 * {@code primitiveType}, or the encoding of a named type of length 1, whether
+	 * given as {@code type} or as the component's own type.
+	 */
+	private static uk.co.real_logic.sbe.@Nullable PrimitiveType wirePrimitive(Annotated.Field field) {
+		if (field.primitiveType() != PrimitiveType.NONE) {
+			return primitive(field.primitiveType());
+		}
+		Annotated.Declaration declaration = field.type();
+		if (declaration == null && field.javaType() instanceof Annotated.Declared declared) {
+			declaration = declared.declaration();
+		}
+		if (declaration instanceof Annotated.Type named && named.length() == 1
+				&& named.primitiveType() != PrimitiveType.NONE) {
+			return primitive(named.primitiveType());
+		}
+		return null;
 	}
 
 	/**

@@ -126,9 +126,8 @@ Three layers, in the order a mistake meets them.
 
 ## Generation
 
-- `Generator.generate(schema, output)` runs steps 3 to 6 and returns the
-  `Problem`s; the codec emitter adds `annotated` to the signature when it
-  arrives. `output` is Agrona's `DynamicPackageOutputManager`, the
+- `Generator.generate(schema, annotated, output)` runs steps 3 to 7 and
+  returns the `Problem`s. `output` is Agrona's `DynamicPackageOutputManager`, the
   interface `JavaGenerator` takes: the processor's is over `Filer`, a
   test's is Agrona's `StringWriterOutputManager`. The resource, step 8, is
   the processor's own, written after the sources.
@@ -156,12 +155,25 @@ Three layers, in the order a mistake meets them.
   var-data; decoding is the mirror. `encodedLength` takes its shape from
   the IR and its numbers from the flyweights' constants (`BLOCK_LENGTH`,
   `sbeHeaderSize()`, `sbeBlockLength()`, `ENCODED_LENGTH`), so generated
-  code holds no magic numbers.
+  code holds no magic numbers. A construct the emitter does not cover yet
+  is a `Problem` naming the message, never a silent skip.
+- The emitter is templates. Every construct it emits is a Java text block
+  with named placeholders, beside the method that fills it and named after
+  the construct, filled through `Template`: names and values in, a failure
+  for a name left unfilled or a value never used, a multi-line value
+  indented to its placeholder's column. What varies is decided in Java and
+  pasted in; the templates hold no conditionals and no loops, and no code
+  fragment is assembled by concatenation. The emitter is the file that
+  grows with every increment, and this is what keeps it readable: the
+  generated shape is read in the emitter the way it is read in the output.
 - `<Msg>Codec` and `<Iface>Codec` go to the schema package: `public final`,
-  public no-arg constructor, `@Generated("sbe-buddy")`, owning one header
+  public no-arg constructor, `@Generated("net.concini.sbebuddy")`, owning one header
   encoder and decoder and the message flyweights, plus one instance of each
-  binding as a private final field. Emitted with a plain `StringBuilder`,
-  fully qualified names, no imports, field code in component order.
+  binding as a private final field. Fully qualified names, no imports,
+  field code in component order, one line per primitive field and a
+  comment naming the field above a block that needs more, real line breaks
+  and indentation; the output is read while debugging and is not formatted
+  afterwards.
 - Nothing else is generated, and one thing is configurable:
   `@SbeSchema(codecs = false)` turns step 7 off for that schema, and the
   processor then does exactly what the first release did. It is a member
@@ -246,13 +258,27 @@ Reflection is banned in main code and free in tests.
   sequence, because offsets follow declaration order and a moved field is
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
-- **The example, as integration.** A realistic schema a user would
-  write, `com.example.trading`, compiled by the real build with the
-  processor on `annotationProcessorPaths`, its oracle a file in
+- **The codec's view of the corpus.** A case the codec covers holds the
+  expected source of each of its codecs by qualified name, as a text block
+  or a file in the test resources once it outgrows a screen; the emitter's
+  output must equal it exactly, so a change to generated code shows as a
+  diff of Java. A case the codec does not cover yet holds none and sets
+  `codecs = false` in its source, and the test asserts the emitter names
+  the construct it lacks, which is the work list the codec increments
+  shrink. No javac.
+- **The example, as integration.** Realistic schemas a user would write,
+  `com.example.trading` and the primitives-only `com.example.quotes`,
+  compiled by the real build with the processor on
+  `annotationProcessorPaths`, each with its oracle a file in
   `src/main/sbe`, because `SbeTool` reads it there at `generate-sources`.
-  One test asserts the `schema.xml` in the class output equivalent to the
-  oracle, through `SchemaXmlAssert` from the generator's test jar. It
-  proves the wiring and shows the product; coverage stays in the corpus.
+  One test per package asserts the `schema.xml` in the class output
+  equivalent to the oracle, through `SchemaXmlAssert` from the generator's
+  test jar. A package whose constructs the codec covers keeps codecs on
+  and round trips a record through its codec at a non-zero offset, with
+  `encodedLength`, `lastDecodedLength` and `decodedLength` equal to the
+  bytes written; one that waits for a later increment sets `codecs =
+  false` and says which increment. It proves the wiring and shows the
+  product; coverage stays in the corpus.
   From the first release on it compiles the flyweights the processor
   generates and one smoke test encodes and decodes through them; what
   sbe-tool generates is not tested, because the corpus proves the document

@@ -24,7 +24,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class OptionalFields {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.optionalfields;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -83,7 +83,7 @@ final class OptionalFields {
 	}
 
 	static Annotated annotated() {
-		return annotatedSchema("corpus.optionalfields", 1, 0)
+		return annotatedSchema("corpus.optionalfields", 1, 0).codecs(false)
 				.messages(
 						annotatedMessage("OptionalFields", 1).components(
 								annotatedField("orderId", 1, primitive(LONG)),

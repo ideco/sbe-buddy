@@ -2,6 +2,7 @@ package net.concini.sbebuddy.generator;
 
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.CHAR;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
@@ -50,6 +51,26 @@ final class MappingTest {
 						field.build(),
 						"char, 16 bits where SBE's char is one byte, maps to no SBE type; give type or primitiveType"
 				)
+		);
+	}
+
+	@Test
+	void aComponentThatIsNotTheFaceOfItsWireTypeIsAProblem() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("quantity", 1, primitive(LONG))
+				.primitiveType(PrimitiveType.UINT16);
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(field.build(), "long is not the face of uint16, which is int")
+		);
+	}
+
+	@Test
+	void aNamedTypeOfLengthOneHasTheFaceOfItsEncoding() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("symbol", 1, text())
+				.type(annotatedType("Initial", PrimitiveType.CHAR));
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(field.build(), "String is not the face of char, which is byte")
 		);
 	}
 
@@ -105,8 +126,8 @@ final class MappingTest {
 				.types(quantity)
 				.messages(
 						annotatedMessage("M", 1).components(
-								annotatedField("qty", 1, primitive(INT)).type(quantity),
-								annotatedField("shown", 2, primitive(INT)).type(quantity)
+								annotatedField("qty", 1, primitive(LONG)).type(quantity),
+								annotatedField("shown", 2, primitive(LONG)).type(quantity)
 						)
 				)
 				.build();

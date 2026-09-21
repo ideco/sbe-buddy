@@ -29,7 +29,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Sets {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.sets;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -157,7 +157,7 @@ final class Sets {
 						annotatedChoice("urgent", 0),
 						annotatedChoice("manual", 7)
 				);
-		return annotatedSchema("corpus.sets", 1, 0)
+		return annotatedSchema("corpus.sets", 1, 0).codecs(false)
 				.types(flagsEncoding, permissions, handling)
 				.messages(
 						annotatedMessage("Sets", 1).components(

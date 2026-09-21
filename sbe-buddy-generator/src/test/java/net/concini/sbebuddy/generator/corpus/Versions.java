@@ -49,7 +49,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Versions {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 3, semanticVersion = "FIX.5.0SP2")
+			@SbeSchema(id = 1, version = 3, semanticVersion = "FIX.5.0SP2", codecs = false)
 			package corpus.versions;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -234,7 +234,7 @@ final class Versions {
 						annotatedType("first", INT32),
 						annotatedRef("second", declared(added)).offset(4).sinceVersion(1).deprecated(3)
 				);
-		return annotatedSchema("corpus.versions", 1, 3)
+		return annotatedSchema("corpus.versions", 1, 3).codecs(false)
 				.semanticVersion("FIX.5.0SP2")
 				.types(varStringEncoding, added, status, flags, pair)
 				.messages(

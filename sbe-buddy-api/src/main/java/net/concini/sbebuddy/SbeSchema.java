@@ -25,4 +25,10 @@ public @interface SbeSchema {
 	ByteOrder byteOrder() default ByteOrder.LITTLE_ENDIAN;
 
 	Class<?> headerType() default MessageHeader.class;
+
+	/**
+	 * Whether a codec is generated per message. Off, the processor writes the
+	 * schema and the flyweights alone. Contributes nothing to the schema.
+	 */
+	boolean codecs() default true;
 }

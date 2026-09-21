@@ -29,7 +29,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class NamedTypes {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.namedtypes;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -141,7 +141,7 @@ final class NamedTypes {
 				.presence(OPTIONAL)
 				.nullValue("4294967294")
 				.description("Absent when the size is not disclosed");
-		return annotatedSchema("corpus.namedtypes", 1, 0)
+		return annotatedSchema("corpus.namedtypes", 1, 0).codecs(false)
 				.types(symbol, price, quantity)
 				.messages(
 						annotatedMessage("NamedTypes", 1).components(

@@ -85,7 +85,7 @@ the scope above is complete, and nothing built may preclude them.
 - [x] 3. The annotations, and the mapping from them to the model; no javac
 - [x] 4. Discovery and the processor; the schema in the jar; the corpus's source view; the example
 - [x] 5. sbe-tool in the pipeline: the backstop and the flyweights. The first release, `v0.1.0`: records in, sbe-tool's flyweights out
-- [ ] 6. Codec: primitives
+- [x] 6. Codec: primitives
 - [ ] 7. Codec: schema evolution
 - [ ] 8. Codec: enums
 - [ ] 9. Codec: named types and bindings

@@ -26,7 +26,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class Header {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0, headerType = ApplicationHeader.class)
+			@SbeSchema(id = 1, version = 0, headerType = ApplicationHeader.class, codecs = false)
 			package corpus.header;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -114,7 +114,7 @@ final class Header {
 						annotatedType("version", UINT16),
 						annotatedType("sequenceNumber", UINT32)
 				);
-		return annotatedSchema("corpus.header", 1, 0)
+		return annotatedSchema("corpus.header", 1, 0).codecs(false)
 				.headerType(applicationHeader)
 				.types(applicationHeader)
 				.messages(

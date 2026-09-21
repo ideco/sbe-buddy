@@ -33,7 +33,7 @@ import net.concini.sbebuddy.generator.Schema;
 final class VarData {
 
 	static final String PACKAGE_INFO = """
-			@SbeSchema(id = 1, version = 0)
+			@SbeSchema(id = 1, version = 0, codecs = false)
 			package corpus.vardata;
 
 			import net.concini.sbebuddy.SbeSchema;
@@ -173,7 +173,7 @@ final class VarData {
 						annotatedType("length", UINT8),
 						annotatedType("varData", UINT8).length(0)
 				);
-		return annotatedSchema("corpus.vardata", 1, 0)
+		return annotatedSchema("corpus.vardata", 1, 0).codecs(false)
 				.types(varStringEncoding, varBlobEncoding, varByteEncoding)
 				.messages(
 						annotatedMessage("VarData", 1).components(
