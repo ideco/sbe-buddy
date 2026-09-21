@@ -300,7 +300,7 @@ JDK 21 is enough. The Maven wrapper handles Maven itself.
 
 ## Documentation
 
-* [Guide](docs/guide/README.md): declaring schemas, one page per SBE construct
+* [Guide](docs/guide/README.md)
 * [Intent](docs/intent.md): direction and scope
 * [Type mappings](docs/type-mappings.md): Java representation of the SBE schema model
 * [Architecture](docs/architecture.md): modules and processor pipeline
