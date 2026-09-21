@@ -34,7 +34,15 @@ public final class Javac {
 	public record Result(List<Diagnostic<? extends JavaFileObject>> diagnostics, Map<String, String> outputs) {
 
 		public List<Diagnostic<? extends JavaFileObject>> errors() {
-			return diagnostics.stream().filter(diagnostic -> diagnostic.getKind() == Diagnostic.Kind.ERROR).toList();
+			return ofKind(Diagnostic.Kind.ERROR);
+		}
+
+		public List<Diagnostic<? extends JavaFileObject>> warnings() {
+			return ofKind(Diagnostic.Kind.WARNING);
+		}
+
+		private List<Diagnostic<? extends JavaFileObject>> ofKind(Diagnostic.Kind kind) {
+			return diagnostics.stream().filter(diagnostic -> diagnostic.getKind() == kind).toList();
 		}
 	}
 

@@ -15,8 +15,9 @@ import net.concini.sbebuddy.generator.SchemaXmlAssert;
  * Where a rule reaches the user. One snippet per layer, discovery, {@code
  * Mapping}, {@code Generator.validate}, sbe-tool as the backstop and the codec
  * emitter, asserting that the error lands on the element carrying the mistake
- * and that nothing was written; the rules themselves are tested in the
- * generator. Beside them, a declared type resolved across a package boundary.
+ * and that nothing was written, and one warning, placed the same way with
+ * everything written; the rules themselves are tested in the generator. Beside
+ * them, a declared type resolved across a package boundary.
  */
 final class PlacementTest {
 
@@ -74,6 +75,37 @@ final class PlacementTest {
 				result, source, "char initial",
 				"char, 16 bits where SBE's char is one byte, maps to no SBE type; give type or primitiveType"
 		);
+	}
+
+	@Test
+	void mappingWarnsOnTheBoxedComponentAndWritesEverything() {
+		// The mirror of the error snippets: a warning is placed the same way and
+		// stops nothing.
+		String source = """
+				package placement;
+
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1) Long orderId
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertThat(result.errors()).isEmpty();
+		assertThat(result.warnings()).hasSize(1);
+		Diagnostic<? extends JavaFileObject> warning = result.warnings().get(0);
+		assertThat(warning.getMessage(null)).isEqualTo("Long is boxed although the field is never absent");
+		assertThat(warning.getLineNumber()).isEqualTo(lineOf(source, "Long orderId"));
+		assertThat(result.outputs()).containsKeys(
+				"placement/schema.xml", "placement/OrderCodec.java", "placement/sbe/OrderEncoder.java"
+		);
+		assertThat(result.outputs().get("placement/OrderCodec.java"))
+				.contains("throw new IllegalArgumentException(\"orderId is required\");");
 	}
 
 	@Test

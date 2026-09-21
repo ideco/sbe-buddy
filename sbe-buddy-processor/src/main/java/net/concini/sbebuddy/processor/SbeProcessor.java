@@ -36,9 +36,10 @@ import net.concini.sbebuddy.generator.SchemaXml;
  * The javac front-end: any annotated element in a round makes its package the
  * unit of work, handled once, in the round that first shows it. A package
  * without {@code @SbeSchema} declares types for a schema elsewhere and produces
- * nothing. Otherwise: discover, map, validate, generate; every problem is an
- * error on the element it names; a package with none gets its flyweights as
- * sources and its {@code schema.xml} in the class output.
+ * nothing. Otherwise: discover, map, validate, generate; every problem is a
+ * diagnostic of its severity on the element it names; a package without an
+ * error gets its flyweights and codecs as sources and its {@code schema.xml} in
+ * the class output.
  */
 @SupportedAnnotationTypes("net.concini.sbebuddy.*")
 public final class SbeProcessor extends AbstractProcessor {
@@ -89,9 +90,12 @@ public final class SbeProcessor extends AbstractProcessor {
 			return;
 		}
 		Mapping.Mapped mapped = Mapping.map(discovered.annotated());
-		List<Problem> problems = mapped.problems().isEmpty() ? Generator.validate(mapped.schema()) : mapped.problems();
-		if (!problems.isEmpty()) {
-			report(problems, discovered, mapped, schemaPackage);
+		List<Problem> problems = new ArrayList<>(mapped.problems());
+		if (problems.stream().noneMatch(Problem::isError)) {
+			problems.addAll(Generator.validate(mapped.schema()));
+		}
+		report(problems, discovered, mapped, schemaPackage);
+		if (problems.stream().anyMatch(Problem::isError)) {
 			return;
 		}
 		List<Problem> generation = generate(schemaPackage, mapped.schema(), discovered.annotated());
@@ -126,7 +130,8 @@ public final class SbeProcessor extends AbstractProcessor {
 	/**
 	 * A problem names an element, an annotated node or a schema node; the node is
 	 * resolved in at most two lookups, and a node that resolves to nothing, which
-	 * cannot happen, lands on the package.
+	 * cannot happen, lands on the package. A warning is reported like an error and
+	 * stops nothing.
 	 */
 	private void report(
 			List<Problem> problems, Discovery.Discovered discovered, Mapping.@Nullable Mapped mapped,
@@ -139,15 +144,20 @@ public final class SbeProcessor extends AbstractProcessor {
 				node = origin == null ? node : origin;
 			}
 			Element element = node instanceof Element direct ? direct : discovered.elements().get(node);
-			error(problem.message(), element == null ? schemaPackage : element, discovered.mirrors().get(node));
+			Diagnostic.Kind kind = problem.isError() ? Diagnostic.Kind.ERROR : Diagnostic.Kind.WARNING;
+			print(kind, problem.message(), element == null ? schemaPackage : element, discovered.mirrors().get(node));
 		}
 	}
 
 	private void error(String message, Element element, @Nullable AnnotationMirror mirror) {
+		print(Diagnostic.Kind.ERROR, message, element, mirror);
+	}
+
+	private void print(Diagnostic.Kind kind, String message, Element element, @Nullable AnnotationMirror mirror) {
 		if (mirror == null) {
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
+			processingEnv.getMessager().printMessage(kind, message, element);
 		} else {
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element, mirror);
+			processingEnv.getMessager().printMessage(kind, message, element, mirror);
 		}
 	}
 
