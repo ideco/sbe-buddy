@@ -40,6 +40,113 @@
 
   <build>
     <plugins>
+      <!-- sbe-tool's own flyweights from the quotes oracle and its frozen
+           versions, test code only: the tests encode with our codec and decode
+           with these, and the reverse, across versions. -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>uk.co.real-logic</groupId>
+            <artifactId>sbe-tool</artifactId>
+            <version>${sbe-tool.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <mainClass>uk.co.real_logic.sbe.SbeTool</mainClass>
+          <includeProjectDependencies>false</includeProjectDependencies>
+          <includePluginDependencies>true</includePluginDependencies>
+          <systemProperties>
+            <systemProperty>
+              <key>sbe.output.dir</key>
+              <value>${reference.flyweights}</value>
+            </systemProperty>
+            <systemProperty>
+              <key>sbe.validation.stop.on.error</key>
+              <value>true</value>
+            </systemProperty>
+            <systemProperty>
+              <key>sbe.validation.warnings.fatal</key>
+              <value>true</value>
+            </systemProperty>
+          </systemProperties>
+        </configuration>
+        <executions>
+          <execution>
+            <id>quotes-reference</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <systemProperties combine.children="append">
+                <systemProperty>
+                  <key>sbe.target.namespace</key>
+                  <value>com.example.quotes.xmlref</value>
+                </systemProperty>
+              </systemProperties>
+              <arguments>
+                <argument>${project.basedir}/src/main/sbe/quotes.xml</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>quotes-v0-reference</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <systemProperties combine.children="append">
+                <systemProperty>
+                  <key>sbe.target.namespace</key>
+                  <value>com.example.quotes.xmlref.v0</value>
+                </systemProperty>
+              </systemProperties>
+              <arguments>
+                <argument>${project.basedir}/src/main/sbe/quotes-v0.xml</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>quotes-v1-reference</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <systemProperties combine.children="append">
+                <systemProperty>
+                  <key>sbe.target.namespace</key>
+                  <value>com.example.quotes.xmlref.v1</value>
+                </systemProperty>
+              </systemProperties>
+              <arguments>
+                <argument>${project.basedir}/src/main/sbe/quotes-v1.xml</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>reference-flyweights</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${reference.flyweights}</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
@@ -58,5 +165,6 @@
 
   <properties>
     <module.name>com.example.trading</module.name>
+    <reference.flyweights>${project.build.directory}/generated-test-sources/sbe</reference.flyweights>
   </properties>
 </project>

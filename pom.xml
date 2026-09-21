@@ -34,6 +34,8 @@
     <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
     <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
     <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
+    <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
+    <build-helper-maven-plugin.version>3.6.2</build-helper-maven-plugin.version>
   </properties>
 
   <!-- The BOM keeps the engine and the launcher on one version. Surefire aligns
@@ -102,6 +104,16 @@
         <plugin>
           <artifactId>maven-install-plugin</artifactId>
           <version>${maven-install-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>exec-maven-plugin</artifactId>
+          <version>${exec-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>build-helper-maven-plugin</artifactId>
+          <version>${build-helper-maven-plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

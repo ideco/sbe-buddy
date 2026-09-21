@@ -1,12 +1,20 @@
 package com.example.quotes;
 
+import static net.concini.sbebuddy.Presence.OPTIONAL;
 import static net.concini.sbebuddy.PrimitiveType.UINT32;
+import static net.concini.sbebuddy.PrimitiveType.UINT64;
+
+import org.jspecify.annotations.Nullable;
 
 import net.concini.sbebuddy.SbeField;
 import net.concini.sbebuddy.SbeMessage;
 
 /**
  * The best bid and offer of one instrument, prices as fixed-point mantissas.
+ * Version 1 appended the sequence number, a plain {@code long} because the
+ * schema's baseline retired version 0 readers; version 2 appended the session's
+ * trade statistics, which a version 1 message lacks, so they are boxed and
+ * {@code null} when absent.
  */
 @SbeMessage(id = 1, description = "The best bid and offer of one instrument")
 public record Quote(
@@ -14,6 +22,9 @@ public record Quote(
 		@SbeField(id = 2) long bid,
 		@SbeField(id = 3) long ask,
 		@SbeField(id = 4, primitiveType = UINT32) long bidSize,
-		@SbeField(id = 5, primitiveType = UINT32) long askSize
+		@SbeField(id = 5, primitiveType = UINT32) long askSize,
+		@SbeField(id = 6, primitiveType = UINT64, sinceVersion = 1, description = "The sequence number of the update") long sequence,
+		@SbeField(id = 7, primitiveType = UINT32, sinceVersion = 2, description = "Trades of the session so far") @Nullable Long tradeCount,
+		@SbeField(id = 8, presence = OPTIONAL, sinceVersion = 2, description = "The volume-weighted average price of the session, absent until the instrument has traded") @Nullable Double vwap
 ) {
 }
