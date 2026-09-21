@@ -69,7 +69,9 @@ The Java representations match SBE’s generated flyweights. `UINT8`, `UINT16` a
 
 The Java representation does not define the valid SBE value range. Reserved null values and any declared bounds still apply.
 
-## Optional fields
+## Absence
+
+A field is absent when it is optional and holds the null value, or when it was introduced above the schema’s `baselineVersion` and the message being decoded predates it. Absence decodes to `null`, so a field that can be absent takes a boxed component.
 
 Declare optional fields with `presence = OPTIONAL` and a boxed component type.
 
@@ -87,16 +89,6 @@ An optional component declared as a Java primitive is a compilation error.
 The reserved value cannot also represent an ordinary value in an optional field: decoding it produces `null`. For the default `float` and `double` encodings, the null value is NaN, so an optional NaN decodes to `null`.
 
 A boxed component on a field that can never be absent is permitted, but produces a compiler warning.
-
-## Fields introduced in later versions
-
-A field can also be absent because the message being decoded predates its introduction.
-
-If a nonconstant field’s `sinceVersion` exceeds the schema’s `baselineVersion`, its Java component must be boxed—even when the field is required. The codec returns `null` when decoding an accepted older message in which the field does not exist.
-
-Encoding writes the current schema version. A required field therefore needs a non-null value when encoding, including one that was absent in a previously decoded message.
-
-For required fields, version absence is determined from the message version, not by comparing the stored value with the encoding’s null value.
 
 ## Named encodings and validation
 

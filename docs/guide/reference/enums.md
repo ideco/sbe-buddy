@@ -68,6 +68,18 @@ By default, the schema uses the Java enum’s simple name and its constants’ n
 
 Reordering Java constants does not change their encoded values.
 
+## Absence
+
+A field is absent when it is optional and holds the null value, or when it was introduced above the schema’s `baselineVersion` and the message being decoded predates it. Absence decodes to `null`.
+
+Enum fields are required by default. To allow `null`, declare the field with `@SbeField(id = 2, presence = Presence.OPTIONAL)`.
+
+| Situation | Codec behaviour |
+|---|---|
+| Encode `null` in an optional field | Writes the encoding’s null value |
+| Decode the null value in an optional field | Returns `null` |
+| Encode `null` in a required field | Throws `IllegalArgumentException` |
+
 ## Unknown values
 
 A reader can encounter a wire value that its enum does not declare, for example when a newer writer adds a constant.
@@ -89,17 +101,6 @@ The fallback does not retain the original wire value. A record containing it the
 
 Every constant must carry either `@SbeEnumValue` or `@UnknownValue`. A constant cannot carry both, and an enum can have at most one fallback.
 
-## Optional and absent fields
-
-Enum fields are required by default. To allow `null`, declare the field with `@SbeField(id = 2, presence = Presence.OPTIONAL)`.
-
-| Situation | Codec behaviour |
-|---|---|
-| Encode `null` in an optional field | Writes the encoding’s null value |
-| Decode the null value in an optional field | Returns `null` |
-| Encode `null` in a required field | Throws `IllegalArgumentException` |
-| Decode a message whose version predates the field’s `sinceVersion` | Returns `null`, provided the message version is accepted by the schema’s baseline |
-
 Absence and unknown values are distinct. An absent field becomes `null`; an unrecognised value in a present field uses the fallback or throws.
 
 ## Schema metadata
@@ -117,8 +118,6 @@ The annotations expose the corresponding SBE attributes:
 | | `name` | Java constant name |
 | | `description` | Unspecified |
 | | `sinceVersion`, `deprecated` | `0` |
-
-For evolution, preserve existing wire values and their meanings. Adding a value leaves the field’s encoding unchanged, but older readers still need an explicit policy for unknown values. `sinceVersion` records when a value was introduced; it does not give older readers a fallback automatically.
 
 ## Direct flyweight access
 
