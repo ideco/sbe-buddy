@@ -8,6 +8,7 @@ import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.text;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 import uk.co.real_logic.sbe.PrimitiveType;
+import uk.co.real_logic.sbe.xml.Presence;
 
 /**
  * The rules decidable from one node, each built as the mistake and asserted as
@@ -71,6 +73,76 @@ final class MappingTest {
 
 		assertThat(problemsOf(field)).containsExactly(
 				new Problem(field.build(), "String is not the face of char, which is byte")
+		);
+	}
+
+	@Test
+	void aPrimitiveOnAFieldThatCanBeAbsentIsAProblem() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("quantity", 1, primitive(INT))
+				.presence(Presence.OPTIONAL);
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(field.build(), "int cannot hold null, but the field can be absent; use Integer")
+		);
+	}
+
+	@Test
+	void aBoxOnAFieldThatIsNeverAbsentIsAWarning() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("quantity", 1, boxed(INT));
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(
+						field.build(), "Integer is boxed although the field is never absent", Problem.Severity.WARNING
+				)
+		);
+	}
+
+	@Test
+	void aFieldAddedAboveTheBaselineCanBeAbsent() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("quantity", 1, primitive(INT)).sinceVersion(2);
+
+		assertThat(problemsOf(field, 2, 1)).containsExactly(
+				new Problem(field.build(), "int cannot hold null, but the field can be absent; use Integer")
+		);
+	}
+
+	@Test
+	void aFieldAddedAtTheBaselineIsNeverAbsent() {
+		Fixtures.AnnotatedFieldBuilder plain = annotatedField("quantity", 1, primitive(INT)).sinceVersion(1);
+		Fixtures.AnnotatedFieldBuilder boxed = annotatedField("price", 2, boxed(LONG)).sinceVersion(1);
+
+		assertThat(problemsOf(plain, 2, 1)).isEmpty();
+		assertThat(problemsOf(boxed, 2, 1)).containsExactly(
+				new Problem(boxed.build(), "Long is boxed although the field is never absent", Problem.Severity.WARNING)
+		);
+	}
+
+	@Test
+	void aFieldTakesItsNamedTypesPresence() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("quantity", 1, primitive(LONG))
+				.type(annotatedType("Quantity", PrimitiveType.UINT32).presence(Presence.OPTIONAL));
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(field.build(), "long cannot hold null, but the field can be absent; use Long")
+		);
+	}
+
+	@Test
+	void aConstantIsNeverAbsent() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("version", 1, primitive(INT))
+				.presence(Presence.CONSTANT)
+				.valueRef("Version.CURRENT")
+				.sinceVersion(2);
+
+		assertThat(problemsOf(field, 2, 0)).isEmpty();
+	}
+
+	@Test
+	void aBaselineAboveTheSchemasVersionIsAProblem() {
+		Annotated annotated = annotatedSchema("p", 1, 1).baselineVersion(2).build();
+
+		assertThat(Mapping.map(annotated).problems()).containsExactly(
+				new Problem(annotated, "a baselineVersion is 0 to the schema's version 1, not 2")
 		);
 	}
 
@@ -153,8 +225,13 @@ final class MappingTest {
 	}
 
 	private static java.util.List<Problem> problemsOf(Fixtures.AnnotatedFieldBuilder field) {
+		return problemsOf(field, 0, 0);
+	}
+
+	private static java.util.List<Problem> problemsOf(Fixtures.AnnotatedFieldBuilder field, int version, int baseline) {
 		return Mapping.map(
-				annotatedSchema("p", 1, 0)
+				annotatedSchema("p", 1, version)
+						.baselineVersion(baseline)
 						.messages(annotatedMessage("M", 1).components(field))
 						.build()
 		).problems();

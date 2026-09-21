@@ -39,6 +39,29 @@ final class TemplateTest {
 	}
 
 	@Test
+	void aPlaceholderAloneOnItsLineFilledEmptyTakesTheLineWithIt() {
+		Template template = Template.of("""
+				void run() {
+					{check}
+					first();
+				}
+				""");
+
+		assertThat(template.fill("check", "")).isEqualTo("""
+				void run() {
+					first();
+				}
+				""");
+	}
+
+	@Test
+	void aPlaceholderBesideOtherTextFilledEmptyLeavesItsLine() {
+		Template template = Template.of("run({arguments});\n");
+
+		assertThat(template.fill("arguments", "")).isEqualTo("run();\n");
+	}
+
+	@Test
 	void aPlaceholderLeftUnfilledIsAMistake() {
 		Template template = Template.of("{codec} implements Codec<{record}>");
 

@@ -119,7 +119,8 @@ public final class Discovery {
 				schema.string("semanticVersion"),
 				schema.string("description"),
 				schema.enumeration("byteOrder", ByteOrder.class),
-				schema.flag("codecs")
+				schema.flag("codecs"),
+				schema.integer("baselineVersion")
 		);
 		remember(annotated, schemaPackage, schema.mirror);
 		return annotated;

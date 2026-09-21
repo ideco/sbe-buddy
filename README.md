@@ -186,8 +186,22 @@ are intended to be reused by one thread rather than shared between threads.
 The codec checks the SBE message header when decoding and uses the acting
 block length and version from the encoded message.
 
+A field that can be absent, because it is `presence = OPTIONAL` or was
+added in a later schema version than the message being decoded, is a boxed
+component and decodes to `null`; encoding `null` writes SBE's null value for
+an optional field and throws for a required one. The schema says which
+versions its codecs still read:
+
+```java
+@SbeSchema(id = 100, version = 2, baselineVersion = 1)
+package com.example.trading;
+```
+
+A required field added at or below the baseline is a plain primitive again,
+and a message older than the baseline is refused on decode.
+
 Codec generation is still incomplete. It currently covers messages made up
-of primitive fields.
+of primitive fields, required or optional, across schema versions.
 
 Schemas using constructs not yet supported by the codec generator can
 disable codecs:

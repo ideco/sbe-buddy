@@ -12,6 +12,7 @@ import java.util.Map;
 import org.agrona.generation.DynamicPackageOutputManager;
 import org.jspecify.annotations.Nullable;
 
+import uk.co.real_logic.sbe.PrimitiveType;
 import uk.co.real_logic.sbe.generation.java.JavaUtil;
 import uk.co.real_logic.sbe.ir.Encoding;
 import uk.co.real_logic.sbe.ir.GenerationUtil;
@@ -67,6 +68,7 @@ public final class CodecEmitter {
 								throw new IllegalArgumentException(
 										"not a {message}: schemaId " + headerDecoder.schemaId() + ", templateId " + headerDecoder.templateId());
 							}
+							{refuseBelowBaseline}
 							decoder.wrap(buffer, offset + {flyweights}.{header}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
 							{record} value = new {record}(
 									{decodeFields}
@@ -89,9 +91,50 @@ public final class CodecEmitter {
 					"""
 	);
 
+	/**
+	 * A message older than the baseline would read the null value of every field
+	 * appended up to it into a primitive component; the baseline is the schema's
+	 * own declaration, which no flyweight constant carries.
+	 */
+	private static final Template REFUSE_BELOW_BASELINE = Template.of("""
+			if (headerDecoder.version() < {baseline}) {
+				throw new IllegalArgumentException(
+						"{message} version " + headerDecoder.version() + " is below the baseline {baseline}");
+			}""");
+
 	private static final Template ENCODE_FIELD = Template.of("encoder.{property}(value.{component}());");
 
+	private static final Template ENCODE_OPTIONAL_FIELD = Template.of(
+			"encoder.{property}(value.{component}() == null ? {flyweights}.{message}Encoder.{property}NullValue() : value.{component}());"
+	);
+
+	/** A boxed component of a required field: null has no wire form. */
+	private static final Template ENCODE_BOXED_FIELD = Template.of("""
+			if (value.{component}() == null) {
+				throw new IllegalArgumentException("{component} is required");
+			}
+			encoder.{property}(value.{component}());""");
+
 	private static final Template DECODE_FIELD = Template.of("decoder.{property}()");
+
+	private static final Template DECODE_OPTIONAL_FIELD = Template.of("{isNull} ? null : decoder.{property}()");
+
+	/**
+	 * Absent below the acting version, decided on the version and never on the null
+	 * value, which a required field may legitimately hold.
+	 */
+	private static final Template DECODE_ADDED_FIELD = Template.of(
+			"decoder.actingVersion() < {flyweights}.{message}Decoder.{property}SinceVersion() ? null : decoder.{property}()"
+	);
+
+	private static final Template IS_NULL = Template.of(
+			"decoder.{property}() == {flyweights}.{message}Decoder.{property}NullValue()"
+	);
+
+	/** The null value of the floats is NaN, which == never matches. */
+	private static final Template IS_NULL_FLOATING = Template.of(
+			"{box}.compare(decoder.{property}(), {flyweights}.{message}Decoder.{property}NullValue()) == 0"
+	);
 
 	private final Ir ir;
 	private final Annotated annotated;
@@ -157,39 +200,97 @@ public final class CodecEmitter {
 		if (!varData.isEmpty()) {
 			return refuse(message, "var-data");
 		}
+		String flyweights = ir.applicableNamespace();
+		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		List<String> encodeFields = new ArrayList<>();
 		List<String> decodeFields = new ArrayList<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
-			String unsupported = unsupported(field, fields.get(i + 1));
+			Token type = fields.get(i + 1);
+			String unsupported = unsupported(type);
 			if (unsupported != null) {
 				return refuse(message, unsupported);
 			}
 			String property = JavaUtil.formatPropertyName(field.name());
-			encodeFields
-					.add(ENCODE_FIELD.fill("property", property, "component", component(message, field).javaName()));
-			decodeFields.add(DECODE_FIELD.fill("property", property));
+			String component = component(message, field).javaName();
+			encodeFields.add(encodeField(message, field, type, flyweights, messageClass, property, component));
+			decodeFields.add(decodeField(field, type, flyweights, messageClass, property));
 		}
-		String record = annotated.packageName() + "." + message.javaName();
+		int baseline = annotated.baselineVersion();
 		return CODEC.fill(
 				"package", annotated.packageName(),
 				"codec", message.javaName() + "Codec",
-				"record", record,
-				"flyweights", ir.applicableNamespace(),
+				"record", annotated.packageName() + "." + message.javaName(),
+				"flyweights", flyweights,
 				"header", JavaUtil.formatClassName(header),
-				"message", JavaUtil.formatClassName(tokens.get(0).name()),
+				"message", messageClass,
 				"encodeFields", String.join("\n", encodeFields),
+				"refuseBelowBaseline", baseline == 0
+						? ""
+						: REFUSE_BELOW_BASELINE.fill("message", messageClass, "baseline", String.valueOf(baseline)),
 				"decodeFields", String.join(",\n", decodeFields)
 		);
 	}
 
 	/**
-	 * What the codec cannot do with the field yet, or null for a plain primitive.
+	 * The encode side is decided from the component: an optional field takes the
+	 * null value for null, any other boxed component refuses it.
 	 */
-	private static @Nullable String unsupported(Token field, Token type) {
-		if (field.version() > 0) {
-			return "a field added in a later version";
+	private String encodeField(
+			Annotated.Message message, Token field, Token type, String flyweights, String messageClass,
+			String property, String component
+	) {
+		if (optional(type)) {
+			return ENCODE_OPTIONAL_FIELD.fill(
+					"property", property, "component", component, "flyweights", flyweights, "message", messageClass
+			);
 		}
+		if (boxed(component(message, field))) {
+			return ENCODE_BOXED_FIELD.fill("property", property, "component", component);
+		}
+		return ENCODE_FIELD.fill("property", property, "component", component);
+	}
+
+	/**
+	 * The decode side is decided from the wire: the null value for an optional
+	 * field, whatever its version, since below the acting version the getter
+	 * returns it; the version for a required field added above the baseline.
+	 */
+	private String decodeField(Token field, Token type, String flyweights, String messageClass, String property) {
+		if (optional(type)) {
+			return DECODE_OPTIONAL_FIELD
+					.fill("isNull", isNull(type, flyweights, messageClass, property), "property", property);
+		}
+		if (field.version() > annotated.baselineVersion()) {
+			return DECODE_ADDED_FIELD.fill("property", property, "flyweights", flyweights, "message", messageClass);
+		}
+		return DECODE_FIELD.fill("property", property);
+	}
+
+	private static String isNull(Token type, String flyweights, String messageClass, String property) {
+		PrimitiveType primitive = type.encoding().primitiveType();
+		if (primitive == PrimitiveType.FLOAT || primitive == PrimitiveType.DOUBLE) {
+			// The box is the one name that neither the IR nor JavaUtil holds.
+			String box = primitive == PrimitiveType.FLOAT ? "Float" : "Double";
+			return IS_NULL_FLOATING
+					.fill("box", box, "property", property, "flyweights", flyweights, "message", messageClass);
+		}
+		return IS_NULL.fill("property", property, "flyweights", flyweights, "message", messageClass);
+	}
+
+	private static boolean optional(Token type) {
+		return type.encoding().presence() == Encoding.Presence.OPTIONAL;
+	}
+
+	private static boolean boxed(Annotated.Field component) {
+		return component.javaType() instanceof Annotated.Primitive primitive && primitive.boxed();
+	}
+
+	/**
+	 * What the codec cannot do with the field's type yet, or null for a primitive,
+	 * required or optional.
+	 */
+	private static @Nullable String unsupported(Token type) {
 		return switch (type.signal()) {
 			case BEGIN_ENUM -> "an enum";
 			case BEGIN_SET -> "a set";
@@ -205,9 +306,6 @@ public final class CodecEmitter {
 		}
 		if (type.encoding().presence() == Encoding.Presence.CONSTANT) {
 			return "a constant";
-		}
-		if (type.encoding().presence() == Encoding.Presence.OPTIONAL) {
-			return "an optional field";
 		}
 		return null;
 	}

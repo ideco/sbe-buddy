@@ -45,17 +45,25 @@ public final class Mapping {
 	private final Map<Object, Object> origins = new IdentityHashMap<>();
 	private final List<Schema.Declaration> types = new ArrayList<>();
 	private final Map<Annotated.Declaration, String> wireNames = new IdentityHashMap<>();
+	private final int baselineVersion;
 
-	private Mapping() {
+	private Mapping(int baselineVersion) {
+		this.baselineVersion = baselineVersion;
 	}
 
 	public static Mapped map(Annotated annotated) {
-		Mapping mapping = new Mapping();
+		Mapping mapping = new Mapping(annotated.baselineVersion());
 		Schema schema = mapping.schema(annotated);
 		return new Mapped(schema, List.copyOf(mapping.problems), Collections.unmodifiableMap(mapping.origins));
 	}
 
 	private Schema schema(Annotated annotated) {
+		if (baselineVersion < 0 || baselineVersion > annotated.version()) {
+			problem(
+					annotated, "a baselineVersion is 0 to the schema's version " + annotated.version() + ", not "
+							+ baselineVersion
+			);
+		}
 		String headerType = declare(annotated.headerType());
 		for (Annotated.Declaration declaration : annotated.types()) {
 			declare(declaration);
@@ -131,6 +139,7 @@ public final class Mapping {
 	private Schema.Field field(Annotated.Field field) {
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
 		face(field);
+		boxing(field);
 		Schema.Field result = new Schema.Field(
 				name(field, field.name(), field.javaName()),
 				id(field, field.id()),
@@ -266,6 +275,60 @@ public final class Mapping {
 		if (!actual.equals(face)) {
 			problem(field, actual + " is not the face of " + wire.primitiveName() + ", which is " + face);
 		}
+	}
+
+	/**
+	 * A field that can be absent decodes to null, so a primitive component must be
+	 * its box; a box on a field that is never absent may be there for reasons of
+	 * the user's own, so it is a warning.
+	 */
+	private void boxing(Annotated.Field field) {
+		if (!(field.javaType() instanceof Annotated.Primitive primitive)) {
+			return;
+		}
+		String box = switch (primitive.kind()) {
+			case BYTE -> "Byte";
+			case SHORT -> "Short";
+			case INT -> "Integer";
+			case LONG -> "Long";
+			case FLOAT -> "Float";
+			case DOUBLE -> "Double";
+			case CHAR, BOOLEAN -> null; // maps to no SBE type; reported already
+		};
+		if (box == null) {
+			return;
+		}
+		String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
+		if (canBeAbsent(field) && !primitive.boxed()) {
+			problem(field, plain + " cannot hold null, but the field can be absent; use " + box);
+		}
+		if (!canBeAbsent(field) && primitive.boxed()) {
+			problems.add(
+					new Problem(
+							field, box + " is boxed although the field is never absent", Problem.Severity.WARNING
+					)
+			);
+		}
+	}
+
+	/**
+	 * Optional, or added above the baseline; a constant carries no bytes and is
+	 * never absent.
+	 */
+	private boolean canBeAbsent(Annotated.Field field) {
+		Presence presence = wirePresence(field);
+		return presence == Presence.OPTIONAL || field.sinceVersion() > baselineVersion && presence != Presence.CONSTANT;
+	}
+
+	/**
+	 * A field left at the default takes its named type's presence, as sbe-tool
+	 * reads the document.
+	 */
+	private static Presence wirePresence(Annotated.Field field) {
+		if (field.presence() == Presence.REQUIRED && field.type() instanceof Annotated.Type named) {
+			return named.presence();
+		}
+		return field.presence();
 	}
 
 	/**
