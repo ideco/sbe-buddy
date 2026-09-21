@@ -10,27 +10,27 @@ memory.
 
 ## Conventions
 
-- One annotation per XSD element, one member per XSD attribute, with the
+* One annotation per XSD element, one member per XSD attribute, with the
   XSD's name and default. The XSD's `name` attribute is a member that
   defaults to the Java simple name (class, enum constant or record
   component), so a Java name can differ from a wire name a migrated XML
   schema already fixed, and the wire name is still written by hand.
-- Where an XSD attribute names either a built-in primitive or a declared
+* Where an XSD attribute names either a built-in primitive or a declared
   type (`type` on field and data, `encodingType` on enum and set,
   `dimensionType` on group), the annotation has two members: `primitiveType`
   (a `PrimitiveType`) for the built-in, and the attribute's own name as a
   `Class<?>` for the declared type. Exactly one is set, except where the
   component's own Java type is the declared type (below).
-- Where the XSD value is element text rather than an attribute (an enum's
+* Where the XSD value is element text rather than an attribute (an enum's
   `validValue`, a set's `choice`, a constant `type`'s value), the member is
   `value`.
-- Numeric attributes that the XSD types as strings (`nullValue`, `minValue`,
+* Numeric attributes that the XSD types as strings (`nullValue`, `minValue`,
   `maxValue`, constant `value`) are `String` members parsed exactly as
   sbe-tool parses them.
-- A schema is a package. Declared types may live in any package; the
+* A schema is a package. Declared types may live in any package; the
   schema references them by class. Flyweights are generated into
   `<package>.sbe`.
-- The generator's model mirrors the same XSD nodes with the same names
+* The generator's model mirrors the same XSD nodes with the same names
   (`Schema.Field` for `field`, one component per attribute, `null` for
   absent), and `SchemaXml` writes one element per node and only the
   attributes that were set. A default is never written, so the XML reads
@@ -147,16 +147,16 @@ because the Java enum has no constant for it. The codec reads the field raw
 and maps the wire value to the constant whose `@SbeEnumValue` carries it,
 never through the flyweight's generated enum.
 
-- By default, decoding an unknown value is an `IllegalArgumentException`
+* By default, decoding an unknown value is an `IllegalArgumentException`
   naming the enum and the value: the message cannot become the record it
   maps to. This is what sbe-tool's own Java flyweights do.
-- An enum may designate one constant as its unknown value with
+* An enum may designate one constant as its unknown value with
   `@UnknownValue` in place of `@SbeEnumValue`. It is the Java side, like
   `@Bind`, and contributes no `validValue` to the schema. Every unknown wire
   value decodes to it, so a reader that opts in keeps working when a writer
   adds values. Encoding it is an `IllegalArgumentException`: it has no wire
   form, and writing the null value in its place would be a silent loss.
-- A set has no unknown value: a bit no `@SbeChoice` names is an
+* A set has no unknown value: a bit no `@SbeChoice` names is an
   `IllegalArgumentException` on decode, because a `Set<E>` cannot carry it.
 
 The unknown value and absence stay distinct: the null value decodes to
@@ -200,16 +200,16 @@ nor `dimensionType`.
 
 ## Layout and evolution
 
-- Fields lay out in component order with sbe-tool's offset rules; `offset`
+* Fields lay out in component order with sbe-tool's offset rules; `offset`
   and `blockLength` override exactly as in XML.
-- Groups after fields, data after groups, in each message and each group.
-- A node with `sinceVersion = n` must follow every sibling with a lower
+* Groups after fields, data after groups, in each message and each group.
+* A node with `sinceVersion = n` must follow every sibling with a lower
   `sinceVersion`, and `n` is at most the schema version; `deprecated` is at
   least `sinceVersion`. The compiler rejects anything else.
-- Decoding takes acting block length and acting version from the header;
+* Decoding takes acting block length and acting version from the header;
   encoding always writes the schema's current version. A header version
   below `baselineVersion` is refused.
-- `byteOrder` applies to every encoding of the schema.
+* `byteOrder` applies to every encoding of the schema.
 
 ## Families
 

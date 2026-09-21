@@ -54,7 +54,7 @@ release: annotated records in, sbe-tool's own flyweights out.
 Two closed grammars, each one file of nested records, used qualified and
 never imported.
 
-- **`Schema`** is `sbe.xsd`: the `messageSchema` record with a nested
+* **`Schema`** is `sbe.xsd`: the `messageSchema` record with a nested
   record per XSD element named after it, `Schema.Type`, `Schema.Composite`,
   `Schema.Ref`, `Schema.Enum`, `Schema.ValidValue`, `Schema.Set`,
   `Schema.Choice`, `Schema.Message`, `Schema.Field`, `Schema.Group`,
@@ -66,7 +66,7 @@ never imported.
   `types` holds and `Member` for what a composite holds, need no `permits`
   because the file is the closed set. Enumerated attributes use sbe-tool's
   `PrimitiveType` and `Presence`, and `java.nio.ByteOrder`.
-- **`Annotated`** is the api's annotations as data: a nested record per
+* **`Annotated`** is the api's annotations as data: a nested record per
   annotation, one component per member with the member's name, plus what
   an annotation cannot carry: the Java name of the thing annotated, its
   Java type as a small sealed descriptor (a primitive, `String`,
@@ -75,7 +75,7 @@ never imported.
   to other declarations by identity rather than by `Class`. It is the Java face: the
   codec emitter reads it beside the IR, related to `Schema` by name, which
   is unique per message.
-- **Both are values.** Neither carries a position. `Discovery` returns its
+* **Both are values.** Neither carries a position. `Discovery` returns its
   `Annotated` together with identity maps from each `Annotated` node to its
   javac `Element` and, where there is one, `AnnotationMirror`; `Mapping`
   returns its `Schema` together with an identity map from each `Schema`
@@ -92,12 +92,12 @@ never imported.
 
 Three layers, in the order a mistake meets them.
 
-- **The type system.** Annotation members are typed as the XSD types them:
+* **The type system.** Annotation members are typed as the XSD types them:
   enumerations are enums, type references are classes, required attributes
   are required members. Two-thirds of sbe-tool's parser rules are name
   resolution over a text format and cannot fire from typed Java; javac
   fails the file first.
-- **Ours, positioned.** The rules SBE has no model for, and the few of
+* **Ours, positioned.** The rules SBE has no model for, and the few of
   sbe-tool's that a user hits often enough to deserve an exact position and
   our wording. Rules only javac can see live in `Discovery` and name the
   `Element`: a schema annotation on something that is not a record, a
@@ -124,7 +124,7 @@ Three layers, in the order a mistake meets them.
   `sinceVersion`, and the append-only rule, a node with `sinceVersion = n`
   following every sibling with a lower one. One unit test each, asserting
   the `Problem` and the node it names.
-- **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
+* **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
   from the sbe-tool jar, then parsed with `stopOnError`, `warningsFatal`
   and an `errorPrintStream` we own. Whatever is reported, warning or
   error, lands on the `@SbeSchema` package element with sbe-tool's text
@@ -136,7 +136,7 @@ Three layers, in the order a mistake meets them.
 
 ## Generation
 
-- `Generator.generate(schema, annotated, output)` runs steps 3 to 7 and
+* `Generator.generate(schema, annotated, output)` runs steps 3 to 7 and
   returns the `Problem`s. Generation is all or nothing: the flyweights and
   the codecs are generated into Agrona's `StringWriterOutputManager` first,
   the problems of every step collected, and only when there is none does
@@ -146,23 +146,23 @@ Three layers, in the order a mistake meets them.
   is never touched for a package with a problem; a test's is a second
   `StringWriterOutputManager`. The resource, step 8, is the processor's
   own, written after the sources.
-- `JavaGenerator` runs with one fixed configuration equal to `SbeTool`'s
+* `JavaGenerator` runs with one fixed configuration equal to `SbeTool`'s
   defaults: `MutableDirectBuffer` and `DirectBuffer`, no group-order
   annotation, no interfaces, no decoding of unknown enum values, no
   types-package override, precedence checks off. No `-A` option and no
   `sbe.*` system property is read. `setPackageName(ir.applicableNamespace())`
   is called before `generate()` (`notes.md`).
-- Flyweights go to `<schema package>.sbe`: it is the namespace handed to
+* Flyweights go to `<schema package>.sbe`: it is the namespace handed to
   `IrGenerator.generate`, which `applicableNamespace()` prefers, while the
   IR's `packageName` and the document's `package` stay the schema package.
-- The schema goes into the jar as `<schema package>/schema.xml`, so a jar
+* The schema goes into the jar as `<schema package>/schema.xml`, so a jar
   of records carries its own schema and sbe-tool's other generators produce
   the other side of the wire from it. The IR itself is built in memory in
   every compilation and is what steps 6 and 7 consume; only its file form,
   `.sbeir`, is not written: `IrEncoder` serializes it with Agrona's
   `UnsafeBuffer`, which would make a user's javac need a JVM flag, and
   `-Dsbe.generate.ir=true` on the resource produces it.
-- The codec emitter walks the IR the way `JavaGenerator` does, with
+* The codec emitter walks the IR the way `JavaGenerator` does, with
   `GenerationUtil.collectFields`, `collectGroups` and `collectVarData`,
   and names flyweight members through `JavaUtil`, so the codec calls what
   was generated, by construction. Each token's Java face comes from
@@ -172,7 +172,7 @@ Three layers, in the order a mistake meets them.
   `sbeHeaderSize()`, `sbeBlockLength()`, `ENCODED_LENGTH`), so generated
   code holds no wire number. A construct the emitter does not cover yet
   is a `Problem` naming the message, never a silent skip.
-- Absence, per field, is decided on each side. The encode side follows
+* Absence, per field, is decided on each side. The encode side follows
   the component: `encodeField` for a primitive, `encodeOptionalField`
   writing the flyweight's `<field>NullValue()` for `null`, and
   `encodeBoxedField` for any other box, which refuses `null` with
@@ -187,7 +187,7 @@ Three layers, in the order a mistake meets them.
   primitives and `Float.compare` or `Double.compare` for the floats,
   whose null value is `NaN`; the float's box is the one name the emitter
   decides from the primitive type itself.
-- `@SbeSchema(baselineVersion = n)` is the oldest version the codecs
+* `@SbeSchema(baselineVersion = n)` is the oldest version the codecs
   still decode: a required field appended at or below it is never absent
   and stays a plain primitive, and `decode` refuses a header below it
   with `IllegalArgumentException`, after the schema and template check,
@@ -195,7 +195,7 @@ Three layers, in the order a mistake meets them.
   to the baseline into a primitive component. The baseline is the one
   literal a codec holds; sbe-tool has no constant for it. `decodedLength`
   stays a length and refuses nothing.
-- A declared type is mapped by one pair of private static methods per
+* A declared type is mapped by one pair of private static methods per
   codec that uses it, after the codec's own methods, in order of first
   use. For an enum, `encode<Enum>` is a `switch` expression over the
   user's constants to the flyweight's, exhaustive, and throws for the
@@ -214,7 +214,7 @@ Three layers, in the order a mistake meets them.
   field, boxed primitive, enum or set. The only literals in generated
   code are the schema's own declarations: the baseline, the valid values'
   text and the choices' bits.
-- The emitter is templates. Every construct it emits is a Java text block
+* The emitter is templates. Every construct it emits is a Java text block
   with named placeholders, beside the method that fills it and named after
   the construct, filled through `Template`: names and values in, a failure
   for a name left unfilled or a value never used, a multi-line value
@@ -226,7 +226,7 @@ Three layers, in the order a mistake meets them.
   fragment is assembled by concatenation. The emitter is the file that
   grows with every increment, and this is what keeps it readable: the
   generated shape is read in the emitter the way it is read in the output.
-- `<Msg>Codec` and `<Iface>Codec` go to the schema package: `public final`,
+* `<Msg>Codec` and `<Iface>Codec` go to the schema package: `public final`,
   public no-arg constructor, `@Generated("net.concini.sbebuddy")`, owning one header
   encoder and decoder and the message flyweights, plus one instance of each
   binding as a private final field. Fully qualified names, no imports,
@@ -234,12 +234,12 @@ Three layers, in the order a mistake meets them.
   comment naming the field above a block that needs more, real line breaks
   and indentation; the output is read while debugging and is not formatted
   afterwards.
-- Nothing else is generated, and one thing is configurable:
+* Nothing else is generated, and one thing is configurable:
   `@SbeSchema(codecs = false)` turns step 7 off for that schema, and the
   processor then does exactly what the first release did. It is a member
   of the annotation, not a processor option, because it belongs beside the
   schema it applies to and contributes nothing to it.
-- The processor is triggered by any annotated element in a round and takes
+* The processor is triggered by any annotated element in a round and takes
   that element's package as the unit of work, so an incremental build that
   recompiles a record without its `package-info.java` still regenerates
   the package. It generates each package once, in the round that first
@@ -270,12 +270,12 @@ public interface Codec<T> {
 }
 ```
 
-- `decode` checks `schemaId` and `templateId` and throws
+* `decode` checks `schemaId` and `templateId` and throws
   `IllegalArgumentException` on a mismatch; a family codec throws on a
   template id outside its `permits` set.
-- Codecs are stateful instances: one per thread, no static methods, no
+* Codecs are stateful instances: one per thread, no static methods, no
   static mutable state, nothing shared. Bindings are stateless.
-- One exception is the codec's own, `IllegalArgumentException`, for what
+* One exception is the codec's own, `IllegalArgumentException`, for what
   it is handed and cannot represent: on encode a value with no wire form,
   `null` in a required field, an array of the wrong length, a string that
   does not fit, an enum's unknown-value constant; on decode a header of
@@ -286,11 +286,11 @@ public interface Codec<T> {
   a state generated code cannot reach is an `IllegalStateException`, a bug
   of ours. No checked exceptions, no error codes, no logging anywhere; the
   processor speaks through `Messager`, the runtime through exceptions.
-- Enum fields are read raw, `<field>Raw()`, and mapped to the domain
+* Enum fields are read raw, `<field>Raw()`, and mapped to the domain
   constant by its `@SbeEnumValue`; the flyweight's generated enum type,
   whose `get` throws on a value it does not know, is not on the codec's
   path, which is why sbe-tool's unknown-enum option stays at its default.
-- `Codec<T>` is implemented only by generated code, so it may grow; a new
+* `Codec<T>` is implemented only by generated code, so it may grow; a new
   member gets a `default` if hand-written implementations ever exist.
 
 ## Testing
@@ -298,7 +298,7 @@ public interface Codec<T> {
 The corpus does the work at every layer; javac appears only where it must.
 Reflection is banned in main code and free in tests.
 
-- **The corpus, in the generator.** Each case is one class holding four
+* **The corpus, in the generator.** Each case is one class holding four
   views of one schema: the Java source as text blocks, `PACKAGE_INFO` and
   `SOURCE`; `annotated()` and `schema()`, built through the `Fixtures` DSL
   so the case reads like the oracle; and the hand-written oracle `XML`. In
@@ -320,9 +320,9 @@ Reflection is banned in main code and free in tests.
   and sbe-tool ignores, so completeness is a test, not a claim. One case
   per XSD feature and one per shape worth taking from sbe-tool's own test
   schemas, written fresh and never copied. No javac.
-- **The rules** are unit tests over `Annotated` or `Schema` inputs: build
+* **The rules** are unit tests over `Annotated` or `Schema` inputs: build
   the mistake, assert the `Problem` and the node it names.
-- **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
+* **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
   generator's tests: whitespace and comments ignored; both documents
   parsed with `sbe.xsd` attached, so the XSD's defaults are filled and an
   absent attribute equals its default; `type`, `composite`, `enum`, `set`
@@ -330,7 +330,7 @@ Reflection is banned in main code and free in tests.
   sequence, because offsets follow declaration order and a moved field is
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
-- **The codec's view of the corpus.** A case the codec covers holds the
+* **The codec's view of the corpus.** A case the codec covers holds the
   expected source of each of its codecs by qualified name, as a text block
   or a file in the test resources once it outgrows a screen; the emitter's
   output must equal it exactly, so a change to generated code shows as a
@@ -338,7 +338,7 @@ Reflection is banned in main code and free in tests.
   `codecs = false` in its source, and the test asserts the emitter names
   the construct it lacks, which is the work list the codec increments
   shrink. No javac.
-- **The example, as integration.** Realistic schemas a user would write,
+* **The example, as integration.** Realistic schemas a user would write,
   `com.example.trading` and the primitives-only `com.example.quotes`,
   compiled by the real build with the processor on
   `annotationProcessorPaths`, each with its oracle a file in
@@ -364,7 +364,7 @@ Reflection is banned in main code and free in tests.
   directions without old-version records: a message from an older writer
   decodes with its later fields `null`, an older reader consumes a newer
   message whole, and a message below the baseline is refused.
-- **The processor** runs javac in memory through the Compiler API, with
+* **The processor** runs javac in memory through the Compiler API, with
   one helper: sources as strings, `-proc:only`, diagnostics and written
   files collected. The corpus tests above; one negative snippet per rule
   layer, discovery, `Mapping`, `Generator.validate`, sbe-tool and the codec
@@ -380,38 +380,38 @@ Reflection is banned in main code and free in tests.
   on the classpath, asserting the same `schema.xml`, flyweights and codecs
   come out and compile, which is the incremental build the package-as-unit
   rule promises.
-- Test libraries: JUnit, AssertJ, XMLUnit with its AssertJ module. No
+* Test libraries: JUnit, AssertJ, XMLUnit with its AssertJ module. No
   test-kit module until a second consumer exists.
 
 ## Build
 
-- Java 21 is the compiler target, so the library and the processor run on
+* Java 21 is the compiler target, so the library and the processor run on
   every JDK from 21 up. Maven through the wrapper. `./mvnw verify` is the
   gate; `./mvnw spotless:apply` before every commit.
-- Maven 4 with `4.1.0` POMs, pinned by the wrapper at `4.0.0-rc-6`: the root
+* Maven 4 with `4.1.0` POMs, pinned by the wrapper at `4.0.0-rc-6`: the root
   POM carries `root="true"`, a subproject declares neither its own version
   nor its parent's, and a dependency inside the reactor omits its version.
   Maven installs a `4.0.0` consumer POM beside each artifact, so none of this
   reaches a consumer. The wrapper is generated `only-script`, so `./mvnw`
   execs the distribution's own `bin/mvn`; the classic wrapper parses
   `.mvn/jvm.config` itself and would reject the comment in it.
-- javac runs with its defaults: no `-Xlint`, no `-Werror`. Generated code
+* javac runs with its defaults: no `-Xlint`, no `-Werror`. Generated code
   is compiled by the same javac and cannot be fixed, and lint categories
   change with each JDK.
-- Formatting: Spotless with the Eclipse JDT formatter and a profile that
+* Formatting: Spotless with the Eclipse JDT formatter and a profile that
   keeps hand-written line breaks and puts a closing parenthesis on its own
   line when the arguments wrap; otherwise Eclipse's defaults (tabs, 120
   columns). Spotless also removes unused imports and orders them.
-- Nullness: JSpecify annotations, `@NullMarked` on every hand-written main
+* Nullness: JSpecify annotations, `@NullMarked` on every hand-written main
   package, checked by NullAway at error level. NullAway runs as an Error
   Prone plugin with every other Error Prone check disabled and generated
   sources excluded by path; the compiler-internals exports it needs live
   in `.mvn/jvm.config`. JSpecify is `optional` in the api so users do not
   inherit it. Test code is not checked.
-- Test JVMs carry `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`,
+* Test JVMs carry `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`,
   which Agrona needs in any JVM that loads a buffer class. Users' javac
   needs no flag, because the processor never touches an Agrona buffer.
-- Dependencies and plugins are added by the increment that first needs
+* Dependencies and plugins are added by the increment that first needs
   them, with their versions in the root pom and nowhere else. The api
   depends on Agrona from the first release, because generated flyweights
   compile against it and the api is all a user depends on. The example
@@ -420,10 +420,10 @@ Reflection is banned in main code and free in tests.
   its namespace as a system property, and the build-helper plugin adds
   the output directory as a test source root; nothing of it reaches the
   example's compile classpath.
-- `reference/simple-binary-encoding` is a git submodule at the sbe-tool
+* `reference/simple-binary-encoding` is a git submodule at the sbe-tool
   tag the build depends on. It is read to confirm behaviour and never
   copied from or edited.
-- CI is one GitHub Actions job running `./mvnw -B -ntp verify` on a
+* CI is one GitHub Actions job running `./mvnw -B -ntp verify` on a
   matrix of JDK 21 and JDK 25, both compiling with `--release 21`: the
   oldest JDK the library runs on and the newest, because javac, annotation
   processing and Error Prone move between compiler versions. `main` takes
