@@ -1,5 +1,8 @@
 # sbe-buddy
 
+> [!IMPORTANT]
+> **Zen garden disclaimer:** This is my private playground for SBE ideas and, just as importantly, for experimenting with agentic coding workflows. Expect things to change as I learn. Stability, compatibility, and a polished roadmap are not the point.
+
 Code-first Simple Binary Encoding for Java.
 
 Define an SBE schema as annotated Java:
