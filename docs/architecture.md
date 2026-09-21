@@ -166,7 +166,9 @@ Three layers, in the order a mistake meets them.
   recompiles a record without its `package-info.java` still regenerates
   the package. It generates each package once, in the round that first
   shows it, and never in the `processingOver` round; javac's `Filer` cannot
-  recreate a file. A package with any `Problem` gets its errors through
+  recreate a file. A package without `@SbeSchema` declares types for a
+  schema elsewhere and produces nothing; an `@SbeMessage` in one is the
+  single mistake that names, and so is reported on, the message. A package with any `Problem` gets its errors through
   `Messager`, each on the element it names with the `AnnotationMirror`
   where there is one, and no output. It reads `Class`-typed members from the
   `AnnotationMirror`, never through an annotation instance (`notes.md`),
