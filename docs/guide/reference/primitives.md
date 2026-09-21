@@ -109,5 +109,3 @@ Attributes such as `semanticType`, `epoch` and `timeUnit` describe the field in 
 ## Coverage
 
 This page describes scalar primitive fields. Fixed-length arrays, strings and constants have additional mapping rules and separate codec support.
-
-See [coverage](../../coverage.md) for current support, including named encodings, byte order and combinations with other message features.

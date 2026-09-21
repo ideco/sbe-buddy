@@ -34,8 +34,3 @@ One page per SBE construct: what to declare, the schema it produces, and how the
 
 - Records and flyweights — what each layer is for, and when to reach past the codec
 - Schema evolution — versions, the baseline, and what absence means
-
-## Beyond the guide
-
-- [Coverage](../coverage.md) — what the schema and the codec support today
-- [Type mappings](../type-mappings.md) — the normative Java form of every schema node
