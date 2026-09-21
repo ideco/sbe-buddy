@@ -1,20 +1,10 @@
 # Guide
 
-How to describe an SBE schema as annotated Java, and what the generated schema, flyweights and codecs do with it.
-
-The guide is split by what you came for: a first message end to end, one page per SBE construct, a recipe for a particular task, and the reasoning behind a design decision. Each reference page stands on its own, so the one for the construct you are writing is the one to open.
-
-For what sbe-buddy is, why it exists and how to put it on the compile path, see the [project README](../../README.md). For the Java form of every node of `sbe.xsd`, stated normatively, see [type mappings](../type-mappings.md); the guide follows it.
-
-Entries below without a link are not written yet.
-
 ## Getting started
 
 - Getting started — a first message, end to end
 
 ## Reference
-
-One page per SBE construct: what to declare, the schema it produces, and how the codec behaves.
 
 - Schemas — schema and message declarations
 - [Primitives](reference/primitives.md) — scalar primitive fields, their Java types and absence
