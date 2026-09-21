@@ -11,7 +11,26 @@ alternatives considered.
   types-package override. The caller must call
   `setPackageName(ir.applicableNamespace())` before `generate()`, or every
   file is named `null.<Class>` although its `package` line is right.
-  (Spike experiment, 2026-09; re-check when increment 3 relies on it.)
+  (Spike experiment, 2026-09; re-check when increment 5 relies on it.)
+- `JavaGenerator`'s output manager is Agrona's
+  `org.agrona.generation.DynamicPackageOutputManager`: `OutputManager`,
+  `Writer createOutput(String name)`, plus `setPackageName(String)`.
+  Agrona ships `StringWriterOutputManager` implementing it. The seven-
+  argument public constructor takes the IR, the two buffer class names,
+  the three booleans for group-order annotation, interfaces and unknown
+  enum values, and the output manager; it fixes types-package support to
+  false and precedence checks to `PrecedenceChecks.newInstance(new
+  Context())`, whose `shouldGeneratePrecedenceChecks` defaults to false.
+  (`JavaGenerator.java`, `PrecedenceChecks.java` and the Agrona 2.6.1
+  jar, read 2026-09-21.)
+- `IrGenerator.generate(MessageSchema schema, String namespace)` sets the
+  IR's `namespaceName`; `Ir.applicableNamespace()` returns it when set and
+  `packageName` otherwise, and `JavaGenerator` names every package from
+  `applicableNamespace()`. The one-argument `generate` passes null. This
+  is what `sbe.target.namespace` sets in `SbeTool`. (`IrGenerator.java`,
+  `Ir.java`, `SbeTool.java`, read 2026-09-21.)
+- sbe-tool 1.40.2 builds against Agrona 2.6.1 (`gradle/libs.versions.toml`
+  in the submodule, read 2026-09-21).
 - `JavaGenerator.generate()` opens `MessageHeaderEncoder` and
   `MessageHeaderDecoder` twice, once from `Ir.types()` and once as the
   header stub, with identical content. An output manager over `Filer` must
