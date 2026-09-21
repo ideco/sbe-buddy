@@ -21,6 +21,8 @@ public @interface SbeData {
 
 	String name() default "";
 
+	int offset() default 0;
+
 	String semanticType() default "";
 
 	String description() default "";

@@ -910,6 +910,7 @@ public final class Fixtures {
 		private final String packageName;
 		private final int id;
 		private final int version;
+		private final List<Annotated.Declaration> types = new ArrayList<>();
 		private final List<Annotated.Message> messages = new ArrayList<>();
 		private Annotated.Composite headerType = MESSAGE_HEADER;
 		private String semanticVersion = "";
@@ -920,6 +921,13 @@ public final class Fixtures {
 			this.packageName = packageName;
 			this.id = id;
 			this.version = version;
+		}
+
+		public AnnotatedSchemaBuilder types(AnnotatedDeclarationBuilder... builders) {
+			for (AnnotatedDeclarationBuilder builder : builders) {
+				types.add(builder.build());
+			}
+			return this;
 		}
 
 		public AnnotatedSchemaBuilder messages(AnnotatedMessageBuilder... builders) {
@@ -951,7 +959,7 @@ public final class Fixtures {
 
 		public Annotated build() {
 			return new Annotated(
-					packageName, id, version, headerType, messages, semanticVersion, description,
+					packageName, id, version, headerType, types, messages, semanticVersion, description,
 					apiByteOrder(byteOrder)
 			);
 		}
@@ -1295,6 +1303,7 @@ public final class Fixtures {
 		private final String javaName;
 		private final int id;
 		private final List<Annotated.Component> components = new ArrayList<>();
+		private Annotated.JavaType javaType;
 		private Annotated.Composite dimensionType = GROUP_SIZE_ENCODING;
 		private String name = "";
 		private int blockLength;
@@ -1307,6 +1316,12 @@ public final class Fixtures {
 		private AnnotatedGroupBuilder(String javaName, int id) {
 			this.javaName = javaName;
 			this.id = id;
+			this.javaType = new Annotated.ListOfRecord(javaName);
+		}
+
+		public AnnotatedGroupBuilder javaType(Annotated.JavaType javaType) {
+			this.javaType = javaType;
+			return this;
 		}
 
 		public AnnotatedGroupBuilder components(AnnotatedComponentBuilder... builders) {
@@ -1355,8 +1370,8 @@ public final class Fixtures {
 		public Annotated.Group build() {
 			if (built == null) {
 				built = new Annotated.Group(
-						javaName, id, components, dimensionType, name, blockLength, semanticType,
-						description, sinceVersion, deprecated
+						javaName, javaType, id, components, dimensionType, name, blockLength,
+						semanticType, description, sinceVersion, deprecated
 				);
 			}
 			return built;
@@ -1370,6 +1385,7 @@ public final class Fixtures {
 		private final Annotated.JavaType javaType;
 		private final Annotated.Composite type;
 		private String name = "";
+		private int offset;
 		private String semanticType = "";
 		private String description = "";
 		private int sinceVersion;
@@ -1385,6 +1401,11 @@ public final class Fixtures {
 
 		public AnnotatedDataBuilder name(String name) {
 			this.name = name;
+			return this;
+		}
+
+		public AnnotatedDataBuilder offset(int offset) {
+			this.offset = offset;
 			return this;
 		}
 
@@ -1412,7 +1433,7 @@ public final class Fixtures {
 		public Annotated.Data build() {
 			if (built == null) {
 				built = new Annotated.Data(
-						javaName, javaType, id, type, name, semanticType, description,
+						javaName, javaType, id, type, name, offset, semanticType, description,
 						sinceVersion, deprecated
 				);
 			}

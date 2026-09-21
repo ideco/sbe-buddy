@@ -16,10 +16,11 @@ import net.concini.sbebuddy.PrimitiveType;
  * The function from {@link Annotated} to {@link Schema} that type-mappings.md
  * specifies: a wire name defaults to the Java name, a member left at the XSD's
  * default maps to absent, a Java primitive takes the default mapping, and a
- * reference resolves to the declared type's wire name and pulls its declaration
- * into {@code types} once, in the order first reached, a declaration referred
- * to before the one referring to it. The rules decidable from one node fire
- * here; a schema mapped with problems is not for use.
+ * reference resolves to the declared type's wire name. {@code types} holds the
+ * header, then what the schema declares in its own order, then what a reference
+ * reaches elsewhere in the order first reached, each once and every one after
+ * the declarations it refers to. The rules decidable from one node fire here; a
+ * schema mapped with problems is not for use.
  */
 public final class Mapping {
 
@@ -46,6 +47,9 @@ public final class Mapping {
 
 	private Schema schema(Annotated annotated) {
 		String headerType = declare(annotated.headerType());
+		for (Annotated.Declaration declaration : annotated.types()) {
+			declare(declaration);
+		}
 		List<Schema.Message> messages = new ArrayList<>();
 		for (Annotated.Message message : annotated.messages()) {
 			messages.add(message(message));
@@ -164,7 +168,7 @@ public final class Mapping {
 				declare(data.type()),
 				null,
 				null,
-				null,
+				absentIfZero(data.offset()),
 				null,
 				null,
 				absentIfEmpty(data.semanticType()),
@@ -198,6 +202,7 @@ public final class Mapping {
 			case Annotated.Primitive primitive -> defaultMapping(node, primitive.kind());
 			case Annotated.Text text -> unmappable(node, "String");
 			case Annotated.Bytes bytes -> unmappable(node, "byte[]");
+			case Annotated.ListOfRecord list -> unmappable(node, "List");
 			case Annotated.Other other -> unmappable(node, other.javaName());
 		};
 	}

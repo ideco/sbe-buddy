@@ -22,6 +22,7 @@ public record Annotated(
 		int id,
 		int version,
 		Composite headerType,
+		List<Declaration> types,
 		List<Message> messages,
 		String semanticVersion,
 		String description,
@@ -29,6 +30,7 @@ public record Annotated(
 ) {
 
 	public Annotated {
+		types = List.copyOf(types);
 		messages = List.copyOf(messages);
 	}
 
@@ -69,6 +71,10 @@ public record Annotated(
 
 	/** A declared type. */
 	public record Declared(Declaration declaration) implements JavaType {
+	}
+
+	/** A {@code List} of a record, which is what a group is written on. */
+	public record ListOfRecord(String elementName) implements JavaType {
 	}
 
 	/** Anything else, named for the message that rejects it. */
@@ -229,6 +235,7 @@ public record Annotated(
 	/** {@code @SbeGroup}, with the components of the list's record. */
 	public record Group(
 			String javaName,
+			JavaType javaType,
 			int id,
 			List<Component> components,
 			Composite dimensionType,
@@ -252,6 +259,7 @@ public record Annotated(
 			int id,
 			Composite type,
 			String name,
+			int offset,
 			String semanticType,
 			String description,
 			int sinceVersion,
