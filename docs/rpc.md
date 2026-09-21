@@ -13,7 +13,7 @@ Checked whenever `Codec<T>` or the generated artifacts change:
 2. Reading `schemaId` and `templateId` from a buffer without decoding, so a
    dispatcher can route. A static header peek in the api is enough.
 3. Dispatch by template id over a family: a sealed interface's codec that
-   decodes to the interface type. Increment 11.
+   decodes to the interface type. Increment 16.
 4. Codecs that are instances with no static state, so a session can own one
    per thread. Already so.
 5. Per-message codecs that stay usable standing alone, so a generated service

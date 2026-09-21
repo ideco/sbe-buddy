@@ -163,8 +163,13 @@ supplies one. Absence passes through as `null` without calling the binding.
 
 Built-ins in the api: the standard `MessageHeader` and `GroupSizeEncoding`
 composites; `VarStringEncoding` (UTF-8), `VarAsciiEncoding`,
-`VarDataEncoding` for `@SbeData`; `Cents` (`BigDecimal` scale 2 over
-`int64`); `UuidWire` `{int64 msb, int64 lsb}` with `Uuid` binding `UUID`.
+`VarDataEncoding` for `@SbeData`; `UuidWire` `{int64 msb, int64 lsb}` with
+`Uuid` binding `UUID`; and for `Instant`, `LocalDate` and `LocalTime` the
+SBE specification's standard time encodings, `UTCTimestamp`, `LocalMktDate`
+and `UTCTimeOnly`, each a wire type with its `timeUnit` explicit and a
+binding beside it. Nothing else: a fixed-scale `BigDecimal` such as `Cents`
+in the example below, or an `OffsetDateTime` over a `TZTimestamp` composite,
+is a binding a user writes.
 They carry SBE's conventional wire names through `name`, `messageHeader`,
 `groupSizeEncoding`, `varStringEncoding`, `varAsciiEncoding` and
 `varDataEncoding`, so a schema that uses them writes neither `headerType`
@@ -225,4 +230,10 @@ enum Side { @SbeEnumValue("0") BUY, @SbeEnumValue("1") SELL }
 
 @SbeType(primitiveType = CHAR, length = 8, characterEncoding = "US-ASCII")
 final class Symbol {}
+
+@SbeType(primitiveType = INT64)
+final class Cents implements TypeBinding<BigDecimal, Long> {
+    public Long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
+    public BigDecimal fromWire(Long wire) { return BigDecimal.valueOf(wire, 2); }
+}
 ```
