@@ -20,6 +20,18 @@
       <groupId>net.concini</groupId>
       <artifactId>sbe-buddy-generator</artifactId>
     </dependency>
+    <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-generator</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.xmlunit</groupId>
+      <artifactId>xmlunit-assertj3</artifactId>
+      <version>${xmlunit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <properties>

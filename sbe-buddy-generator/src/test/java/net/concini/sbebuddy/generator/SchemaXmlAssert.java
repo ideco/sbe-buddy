@@ -53,14 +53,19 @@ public final class SchemaXmlAssert {
 		}
 	}
 
-	private final Schema schema;
+	private final String xml;
 
-	private SchemaXmlAssert(Schema schema) {
-		this.schema = schema;
+	private SchemaXmlAssert(String xml) {
+		this.xml = xml;
 	}
 
 	public static SchemaXmlAssert assertThat(Schema schema) {
-		return new SchemaXmlAssert(schema);
+		return new SchemaXmlAssert(text(schema));
+	}
+
+	/** The XML as written, by the processor or anything else. */
+	public static SchemaXmlAssert assertThat(String xml) {
+		return new SchemaXmlAssert(xml);
 	}
 
 	/**
@@ -69,7 +74,7 @@ public final class SchemaXmlAssert {
 	 */
 	public void matches(String oracle) {
 		acceptedBySbeTool(oracle);
-		XmlAssert.assertThat(parse(text(schema)))
+		XmlAssert.assertThat(parse(xml))
 				.and(parse(oracle))
 				.ignoreWhitespace()
 				.ignoreComments()

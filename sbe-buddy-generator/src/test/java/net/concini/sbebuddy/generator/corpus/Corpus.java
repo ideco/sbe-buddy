@@ -2,17 +2,24 @@ package net.concini.sbebuddy.generator.corpus;
 
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
+
 import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
  * The corpus: every case pairs a hand-built schema with the hand-written oracle
- * it must write, and the annotated twin that must map to that schema.
+ * it must write, the annotated twin that must map to that schema, and the Java
+ * source that must discover to that twin. Public because the processor's tests
+ * read it from the generator's test jar.
  */
-final class Corpus {
+public final class Corpus {
 
-	static final List<Case> CASES = List.of(
-			new Case("Primitives", Primitives.schema(), Primitives.XML, Primitives.annotated()),
+	public static final List<Case> CASES = List.of(
+			new Case(
+					"Primitives", Primitives.PACKAGE_INFO, Primitives.SOURCE, Primitives.schema(), Primitives.XML,
+					Primitives.annotated()
+			),
 			new Case("NamedTypes", NamedTypes.schema(), NamedTypes.XML, NamedTypes.annotated()),
 			new Case("Constants", Constants.schema(), Constants.XML, Constants.annotated()),
 			new Case("Enums", Enums.schema(), Enums.XML, Enums.annotated()),
@@ -31,7 +38,23 @@ final class Corpus {
 	private Corpus() {
 	}
 
-	record Case(String name, Schema schema, String oracle, Annotated annotated) {
+	/**
+	 * The source is two compilation units, the {@code package-info.java} carrying
+	 * {@code @SbeSchema} and one unit holding the records; null while a case has no
+	 * source yet.
+	 */
+	public record Case(
+			String name,
+			@Nullable String packageInfo,
+			@Nullable String source,
+			Schema schema,
+			String oracle,
+			Annotated annotated
+	) {
+
+		Case(String name, Schema schema, String oracle, Annotated annotated) {
+			this(name, null, null, schema, oracle, annotated);
+		}
 
 		@Override
 		public String toString() {

@@ -119,6 +119,23 @@ alternatives considered.
   `TypeMirror`; the same member read from the `AnnotationMirror`'s element
   values is a `ClassType`. Discovery reads every `Class` member from the
   mirror. (Spike experiment, javac 21, 2026-09-20.)
+- A type loaded from a class file, from a jar or a classes directory,
+  exposes its `CLASS`-retained annotations through `getAnnotationMirrors()`
+  on the type and on each `RecordComponentElement`, with the components in
+  declaration order; `MessageHeader` from the api jar reads as
+  `@SbeComposite(name="messageHeader")` over four `@SbeType(primitiveType=
+  UINT16)` components. (Spike experiment, javac 21, 2026-09-21.)
+- `AnnotationMirror.getElementValues()` holds only the members written
+  explicitly; `Elements.getElementValuesWithDefaults` fills the rest.
+  Discovery reads every member through the latter, so a member left at its
+  default is the default's value. (`javax.lang.model` Javadoc, and the
+  spike above.)
+- `PackageElement.getEnclosedElements()` returns the package's types in the
+  order javac entered them: compilation units in the order given, and
+  declaration order within a unit; `TypeElement.getEnclosedElements()`
+  returns record components in declaration order, and
+  `ElementFilter.recordComponentsIn` keeps it. (Spike experiment, javac
+  21, 2026-09-21.)
 - From JDK 23 javac performs no annotation processing unless `-processor`,
   `--processor-path` or `--processor-module-path` is set, or `-proc` is
   `only` or `full`; discovery from the compile classpath is gone. Reaching

@@ -13,19 +13,14 @@ integration proof: a realistic schema compiled by the real build, its
 resource checked against a file oracle. sbe-tool in the pipeline, the
 flyweights and the first release are increment 5.
 
-## Before it starts, in its own pull request
+## Settled before it started
 
-- A spike, recorded in `notes.md`: javac exposes `CLASS`-retained
-  annotations on the record components of a type loaded from a class file,
-  through `Element.getAnnotationMirrors()` on the component. Discovery
-  needs it for the api's `MessageHeader` and for a user's declared types in
-  a library jar. If it does not hold, `MessageHeader` and the other
-  built-ins move to `RUNTIME` retention or discovery reads them from the
-  `Record` attribute another way, and that decision is made before the
-  increment, not inside it.
-- The generator publishes its tests as a test jar, and `Corpus`, `Case`
-  and the corpus cases become public, so the processor's tests can read
-  `Corpus.CASES`.
+- The spike, in `notes.md`: javac exposes `CLASS`-retained annotations on
+  the record components of a type loaded from a class file, so the api's
+  `MessageHeader` and a user's declared types in a library jar discover
+  like source. Every member is read with its defaults filled.
+- The generator publishes its tests as a test jar, and `Corpus` and
+  `Case` are public, so the processor's tests read `Corpus.CASES`.
 
 ## What gets built
 
@@ -38,7 +33,7 @@ flyweights and the first release are increment 5.
   nothing more. `Corpus.Case` carries both. A case then reads top to
   bottom as source, annotated, schema, XML.
 - **`Discovery`, in the processor.** `Discovered discover(PackageElement
-  schemaPackage, Elements elements, Types types)`, where `Discovered` holds
+  schemaPackage, Elements elements)`, where `Discovered` holds
   the `Annotated`, the `Problem`s, and identity maps from each `Annotated`
   node to its `Element` and, where there is one, its `AnnotationMirror`.
   The package annotation from the `PackageElement`; the declarations the
