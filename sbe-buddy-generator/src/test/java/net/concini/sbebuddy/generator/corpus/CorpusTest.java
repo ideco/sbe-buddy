@@ -7,6 +7,7 @@ import java.util.List;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import net.concini.sbebuddy.generator.Generator;
 import net.concini.sbebuddy.generator.Mapping;
 import net.concini.sbebuddy.generator.SchemaXmlAssert;
 
@@ -29,5 +30,11 @@ final class CorpusTest {
 
 		assertThat(mapped.problems()).isEmpty();
 		assertThat(mapped.schema()).isEqualTo(aCase.schema());
+	}
+
+	@ParameterizedTest
+	@MethodSource("cases")
+	void breaksNoRuleThatComparesNodes(Corpus.Case aCase) {
+		assertThat(Generator.validate(aCase.schema())).isEmpty();
 	}
 }
