@@ -1,13 +1,19 @@
 package net.concini.sbebuddy.generator;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.group;
+import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static uk.co.real_logic.sbe.PrimitiveType.INT64;
@@ -19,7 +25,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The rules that compare nodes, each built as the mistake and asserted as the
- * problem and the node it names.
+ * problem and the node it names; and the pipeline's all-or-nothing rule, that a
+ * problem found at any step leaves the output untouched.
  */
 final class GeneratorTest {
 
@@ -135,5 +142,55 @@ final class GeneratorTest {
 		assertThat(problems.get(0).node()).isSameAs(schema);
 		assertThat(problems.get(0).message()).contains("nosuch");
 		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aConstructTheCodecLacksLeavesTheOutputUntouched() {
+		// sbe-tool accepts the schema and generates its flyweights; the codec has no
+		// group yet, so the flyweights must not reach the output either.
+		Schema schema = messageSchema("p", 1, 0)
+				.types(messageHeader(), groupSizeEncoding())
+				.messages(
+						message("M", 1)
+								.fields(field("qty", 1, "int32"))
+								.groups(group("legs", 2).fields(field("legId", 1, "int32")))
+				)
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.messages(
+						annotatedMessage("M", 1).components(
+								annotatedField("qty", 1, primitive(INT)),
+								annotatedGroup("legs", 2).components(annotatedField("legId", 1, primitive(INT)))
+						)
+				)
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).containsExactly(
+				new Problem(annotated.messages().get(0), "no codec for a group yet; set codecs = false on @SbeSchema")
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aSchemaWithoutAProblemReachesTheOutputWhole() {
+		Schema schema = messageSchema("p", 1, 0)
+				.types(messageHeader())
+				.messages(message("M", 1).fields(field("qty", 1, "int32")))
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.messages(annotatedMessage("M", 1).components(annotatedField("qty", 1, primitive(INT))))
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).isEmpty();
+		assertThat(output.getSources().keySet()).containsExactlyInAnyOrder(
+				"p.sbe.package-info", "p.sbe.MessageHeaderEncoder", "p.sbe.MessageHeaderDecoder", "p.sbe.MEncoder",
+				"p.sbe.MDecoder", "p.sbe.MetaAttribute", "p.MCodec"
+		);
 	}
 }

@@ -127,10 +127,15 @@ Three layers, in the order a mistake meets them.
 ## Generation
 
 - `Generator.generate(schema, annotated, output)` runs steps 3 to 7 and
-  returns the `Problem`s. `output` is Agrona's `DynamicPackageOutputManager`, the
-  interface `JavaGenerator` takes: the processor's is over `Filer`, a
-  test's is Agrona's `StringWriterOutputManager`. The resource, step 8, is
-  the processor's own, written after the sources.
+  returns the `Problem`s. Generation is all or nothing: the flyweights and
+  the codecs are generated into Agrona's `StringWriterOutputManager` first,
+  the problems of every step collected, and only when there is none does
+  each source go through `output`, once per qualified name. `output` is
+  Agrona's `DynamicPackageOutputManager`, the interface `JavaGenerator`
+  takes: the processor's is over `Filer`, which cannot recreate a file and
+  is never touched for a package with a problem; a test's is a second
+  `StringWriterOutputManager`. The resource, step 8, is the processor's
+  own, written after the sources.
 - `JavaGenerator` runs with one fixed configuration equal to `SbeTool`'s
   defaults: `MutableDirectBuffer` and `DirectBuffer`, no group-order
   annotation, no interfaces, no decoding of unknown enum values, no
@@ -188,7 +193,7 @@ Three layers, in the order a mistake meets them.
   schema elsewhere and produces nothing; an `@SbeMessage` in one is the
   single mistake that names, and so is reported on, the message. A package with any `Problem` gets its errors through
   `Messager`, each on the element it names with the `AnnotationMirror`
-  where there is one, and no output. It reads `Class`-typed members from the
+  where there is one, and no output, whichever step found them. It reads `Class`-typed members from the
   `AnnotationMirror`, never through an annotation instance (`notes.md`),
   and the annotations are retained at `CLASS`, so a declared type in a
   library jar still resolves and nothing exists at runtime to reflect
@@ -213,11 +218,21 @@ public interface Codec<T> {
   template id outside its `permits` set.
 - Codecs are stateful instances: one per thread, no static methods, no
   static mutable state, nothing shared. Bindings are stateless.
-- Runtime errors are `IllegalArgumentException` (header mismatch, unknown or
-  null enum value, `null` in a required field, an array of the wrong length,
-  a string that does not fit). No checked exceptions, no error codes, no
-  logging anywhere; the processor speaks through `Messager`, the runtime
-  through exceptions.
+- One exception is the codec's own, `IllegalArgumentException`, for what
+  it is handed and cannot represent: on encode a value with no wire form,
+  `null` in a required field, an array of the wrong length, a string that
+  does not fit, an enum's unknown-value constant; on decode a header of
+  another schema or template, or a wire value the schema does not know
+  (`type-mappings.md`, unknown values). Everything else passes through
+  unwrapped and is never caught: a buffer too small is Agrona's
+  `IndexOutOfBoundsException`, a binding's exception is the binding's, and
+  a state generated code cannot reach is an `IllegalStateException`, a bug
+  of ours. No checked exceptions, no error codes, no logging anywhere; the
+  processor speaks through `Messager`, the runtime through exceptions.
+- Enum fields are read raw, `<field>Raw()`, and mapped to the domain
+  constant by its `@SbeEnumValue`; the flyweight's generated enum type,
+  whose `get` throws on a value it does not know, is not on the codec's
+  path, which is why sbe-tool's unknown-enum option stays at its default.
 - `Codec<T>` is implemented only by generated code, so it may grow; a new
   member gets a `default` if hand-written implementations ever exist.
 
@@ -293,11 +308,17 @@ Reflection is banned in main code and free in tests.
 - **The processor** runs javac in memory through the Compiler API, with
   one helper: sources as strings, `-proc:only`, diagnostics and written
   files collected. The corpus tests above; one negative snippet per rule
-  layer, discovery, `Mapping` and `Generator.validate`, asserting the
-  diagnostic's element and line, which proves placement while the rules
-  themselves are tested in the generator; and one snippet resolving a
-  declared type across a package boundary. Resolution from a jar is every
-  corpus case, through the api's `MessageHeader`.
+  layer, discovery, `Mapping`, `Generator.validate`, sbe-tool and the codec
+  emitter, asserting the diagnostic's element and line and that nothing
+  was written, which proves placement and the all-or-nothing rule while
+  the rules themselves are tested in the generator; and one snippet
+  resolving a declared type across a package boundary. Resolution from a
+  jar is every corpus case, through the api's `MessageHeader`. One test
+  runs javac against real directories: a package of two records compiled
+  whole, then one record alone with the first compilation's class output
+  on the classpath, asserting the same `schema.xml`, flyweights and codecs
+  come out and compile, which is the incremental build the package-as-unit
+  rule promises.
 - Test libraries: JUnit, AssertJ, XMLUnit with its AssertJ module. No
   test-kit module until a second consumer exists.
 
@@ -336,5 +357,8 @@ Reflection is banned in main code and free in tests.
 - `reference/simple-binary-encoding` is a git submodule at the sbe-tool
   tag the build depends on. It is read to confirm behaviour and never
   copied from or edited.
-- CI is one GitHub Actions job running `./mvnw -B -ntp verify`. `main`
-  takes pull requests only.
+- CI is one GitHub Actions job running `./mvnw -B -ntp verify` on a
+  matrix of JDK 21 and JDK 25, both compiling with `--release 21`: the
+  oldest JDK the library runs on and the newest, because javac, annotation
+  processing and Error Prone move between compiler versions. `main` takes
+  pull requests only.

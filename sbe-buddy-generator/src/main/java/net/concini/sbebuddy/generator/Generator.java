@@ -7,10 +7,12 @@ import java.io.PrintStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.ToIntFunction;
 
@@ -19,6 +21,7 @@ import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.SchemaFactory;
 
 import org.agrona.generation.DynamicPackageOutputManager;
+import org.agrona.generation.StringWriterOutputManager;
 import org.jspecify.annotations.Nullable;
 import org.xml.sax.SAXException;
 
@@ -66,12 +69,13 @@ public final class Generator {
 	/**
 	 * Steps 3 to 7 of the pipeline: the document, validated against sbe.xsd and
 	 * parsed by sbe-tool, then the IR under the schema package's {@code .sbe}
-	 * namespace and the flyweights through the output, with SbeTool's defaults,
-	 * then, unless the schema turned them off, the codecs through the same output
-	 * under the schema package. Whatever sbe-tool reports, warning or error, is a
-	 * problem naming the schema with sbe-tool's text verbatim, and nothing is
-	 * generated; a construct the codec lacks is a problem naming its message. An
-	 * output that fails to write is an {@link UncheckedIOException}.
+	 * namespace and the flyweights with SbeTool's defaults, then, unless the schema
+	 * turned them off, the codecs under the schema package. Generation is all or
+	 * nothing: every source is built in memory first and reaches the output only
+	 * when there is no problem. Whatever sbe-tool reports, warning or error, is a
+	 * problem naming the schema with sbe-tool's text verbatim; a construct the
+	 * codec lacks is a problem naming its message. An output that fails to write is
+	 * an {@link UncheckedIOException}.
 	 */
 	public static List<Problem> generate(Schema schema, Annotated annotated, DynamicPackageOutputManager output) {
 		Parsed parsed = parse(schema);
@@ -79,22 +83,36 @@ public final class Generator {
 		if (ir == null) {
 			return parsed.problems();
 		}
-		output.setPackageName(ir.applicableNamespace());
+		StringWriterOutputManager staged = new StringWriterOutputManager();
+		staged.setPackageName(ir.applicableNamespace());
 		try {
 			// The buffer types by name, as SbeTool passes them: naming the classes
 			// would load them, and a user's javac must never load an Agrona buffer.
 			new JavaGenerator(
-					ir, "org.agrona.MutableDirectBuffer", "org.agrona.DirectBuffer", false, false, false, output
+					ir, "org.agrona.MutableDirectBuffer", "org.agrona.DirectBuffer", false, false, false, staged
 			)
 					.generate();
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-		if (!annotated.codecs()) {
-			return List.of();
+		if (annotated.codecs()) {
+			List<Problem> problems = CodecEmitter.emit(ir, annotated, staged);
+			if (!problems.isEmpty()) {
+				return problems;
+			}
 		}
-		output.setPackageName(schema.packageName());
-		return CodecEmitter.emit(ir, annotated, output);
+		for (Map.Entry<String, CharSequence> source : staged.getSources().entrySet()) {
+			// Keyed by qualified class name; the header flyweight, which sbe-tool opens
+			// twice with one content, is one entry here and so one file there.
+			int dot = source.getKey().lastIndexOf('.');
+			output.setPackageName(source.getKey().substring(0, dot));
+			try (Writer writer = output.createOutput(source.getKey().substring(dot + 1))) {
+				writer.write(source.getValue().toString());
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		}
+		return List.of();
 	}
 
 	/**

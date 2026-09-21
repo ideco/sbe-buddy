@@ -5,9 +5,17 @@ on:
   push:
     branches: [main]
 
+# The library and the processor target Java 21 and run on every JDK from 21
+# up, so the same build runs on the oldest and on the newest JDK: javac,
+# annotation processing and Error Prone all move between compiler versions.
 jobs:
   build:
+    name: build (JDK ${{ matrix.java }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['21', '25']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,6 +23,6 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: ${{ matrix.java }}
           cache: maven
       - run: ./mvnw -B -ntp verify

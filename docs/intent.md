@@ -87,7 +87,7 @@ the scope above is complete, and nothing built may preclude them.
 - [x] 5. sbe-tool in the pipeline: the backstop and the flyweights. The first release, `v0.1.0`: records in, sbe-tool's flyweights out
 - [x] 6. Codec: primitives
 - [ ] 7. Codec: schema evolution
-- [ ] 8. Codec: enums
+- [ ] 8. Codec: enums, under the unknown-value contract of `type-mappings.md`
 - [ ] 9. Codec: named types and bindings
 - [ ] 10. Codec: composites
 - [ ] 11. Codec: fixed-length arrays
