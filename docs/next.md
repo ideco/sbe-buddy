@@ -1,115 +1,101 @@
-# Increment 4: discovery, the processor, and the schema in the jar
+# Increment 5: sbe-tool in the pipeline, and the first release
 
 ## Goal
 
-Annotated records compile into their schema. The processor gains
-discovery, javac elements to `Annotated`, and around it the few lines that
-make it an annotation processor: the package as the unit of work, every
-`Problem` placed on the element that carries the mistake, and `schema.xml`
-written into the jar. The corpus gains a fourth view, the Java source, so
-one corpus proves source to `Annotated` to `Schema` to XML, and the
-processor is tested over it without Maven. The example module becomes the
-integration proof: a realistic schema compiled by the real build, its
-resource checked against a file oracle. sbe-tool in the pipeline, the
-flyweights and the first release are increment 5.
+Records in, sbe-tool's flyweights out. The generator gains
+`Generator.generate`, which hands the document to sbe-tool's own toolchain
+and writes the flyweights it produces; the processor calls it and puts the
+sources through the `Filer`; the api depends on Agrona so a user's compile
+classpath carries what the flyweights need. Sbe-tool is the backstop, not
+the subject: the corpus already proves the document is the one a person
+would write, so nothing here tests what sbe-tool makes of it. The example
+compiles its flyweights and uses them once. Then `v0.1.0`.
 
 ## Settled before it started
 
-- The spike, in `notes.md`: javac exposes `CLASS`-retained annotations on
-  the record components of a type loaded from a class file, so the api's
-  `MessageHeader` and a user's declared types in a library jar discover
-  like source. Every member is read with its defaults filled.
-- The generator publishes its tests as a test jar, and `Corpus` and
-  `Case` are public, so the processor's tests read `Corpus.CASES`.
+- `IrGenerator.generate(schema, namespace)` sets the IR's `namespaceName`,
+  which `applicableNamespace()` prefers over the package, so the
+  flyweights go to `<schema package>.sbe` while the document keeps its
+  package. `JavaGenerator` takes Agrona's `DynamicPackageOutputManager`,
+  `OutputManager` with `setPackageName`, and Agrona ships
+  `StringWriterOutputManager` for tests. Precedence checks are off by
+  `PrecedenceChecks.newInstance(new Context())`. Sbe-tool 1.40.2 builds
+  against Agrona 2.6.1. All in `notes.md`.
 
 ## What gets built
 
-- **The corpus's fourth view.** Each case gains two text blocks,
-  `PACKAGE_INFO` and `SOURCE`: the `package-info.java` carrying
-  `@SbeSchema`, and one compilation unit holding the case's records,
-  package-private and several to a file, nested where a user would nest.
-  The package is the one the twin names (`corpus.primitives`), the Java
-  names are the twin's, the annotations say what the twin holds and
-  nothing more. `Corpus.Case` carries both. A case then reads top to
-  bottom as source, annotated, schema, XML.
-- **`Discovery`, in the processor.** `Discovered discover(PackageElement
-  schemaPackage, Elements elements)`, where `Discovered` holds
-  the `Annotated`, the `Problem`s, and identity maps from each `Annotated`
-  node to its `Element` and, where there is one, its `AnnotationMirror`.
-  The package annotation from the `PackageElement`; the declarations the
-  package makes from its enclosed types in source order, nested types
-  included; the messages likewise; each `Class`-typed member from the
-  `AnnotationMirror`, resolved to the `TypeElement` and from there to the
-  declaration it names, across packages and from jars, each declaration
-  one instance however often it is reached. The Java type descriptor from
-  the component's `TypeMirror`: a primitive or its box, `String`,
-  `byte[]`, `List<E>` with `E` a record, a type carrying a declaration
-  annotation, or `Other` with its name. Rules that only javac can see fire
-  here and name the `Element`: a schema annotation on something that is
-  not a record, `@SbeField`, `@SbeGroup` or `@SbeData` on a component
-  outside a message or group record, `@SbeEnumValue` on anything but an
-  enum constant, `@SbeChoice` outside a set, a `Class` member naming a
-  type that carries no declaration annotation, and a `List<E>` whose `E`
-  is not a record.
-- **The processor.** `SbeProcessor`, registered through
-  `META-INF/services`, supporting `net.concini.sbebuddy.*` and the latest
-  source version. Triggered by any annotated element in a round, it takes
-  that element's package as the unit of work and handles each package once,
-  in the round that first shows it, never in the `processingOver` round.
-  Per package: discover, map, validate; every `Problem` becomes a
-  `Messager` error on the element it names, resolved through the identity
-  maps in at most two lookups, with the `AnnotationMirror` where there is
-  one; a package with any problem gets its errors and no output. Otherwise
-  `schema.xml` goes through `Filer.createResource` into `CLASS_OUTPUT`
-  under the package, written by `SchemaXml`. Nothing else is generated
-  yet; the pipeline stops at step 3 and step 8.
-- **The processor's tests.** One in-memory compilation helper over the
-  Compiler API: sources as strings, the test classpath so the api is
-  visible, `-proc:only`, diagnostics and written files collected. Over the
-  corpus, two parameterized tests: a capturing processor hands the package
-  element to `Discovery` and the discovered `Annotated` equals the case's
-  `annotated()` by record equality with no problems and no diagnostics;
-  the real processor runs and the `schema.xml` it wrote is equivalent to
-  the case's oracle through `SchemaXmlAssert`. Beside them: one negative
-  snippet per layer, a discovery rule, a `Mapping` rule and a
-  `Generator.validate` rule, asserting the diagnostic's kind, element and
-  line, which proves placement, since the rules themselves are tested in
-  the generator; and one snippet resolving a declared type across a
-  package boundary in the same compilation. Resolution from a jar is
-  every corpus case, through the api's `MessageHeader`.
-- **The example module.** One realistic schema, `com.example.trading`,
-  said in annotated records a user would write: an order with an enum, a
-  composite, a group and var-data, and a second message. The processor
-  reaches it through `annotationProcessorPaths` only. Its oracle is
-  `src/main/sbe/trading.xml`, where `SbeTool` will read it in the next
-  increment, and one test asserts the `schema.xml` in the class output
-  equivalent to it through `SchemaXmlAssert` from the generator's test
-  jar. The example is the integration proof and the thing a user reads;
+- **`Generator.generate(Schema schema, DynamicPackageOutputManager
+  output)`**, returning the `Problem`s, in the generator. Steps 3 to 6 of
+  the pipeline: `SchemaXml` writes the document; it is validated against
+  `sbe.xsd` from the sbe-tool jar through `javax.xml.validation` with an
+  error handler that fails; `XmlSchemaParser.parse` runs with
+  `stopOnError`, `warningsFatal` and an `errorPrintStream` of ours; then
+  `IrGenerator` with the namespace `<schema package>.sbe`, and
+  `JavaGenerator` with `SbeTool`'s defaults, `MutableDirectBuffer` and
+  `DirectBuffer`, no group-order annotation, no interfaces, no decoding of
+  unknown enum values, no types-package support, precedence checks off,
+  after `setPackageName(ir.applicableNamespace())` on the output. Every
+  line sbe-tool reports, warning or error, becomes a `Problem` naming the
+  `Schema` with sbe-tool's text verbatim, and nothing is generated; the
+  corpus proves our documents raise none, so one that appears is ours to
+  fix. The parameter is Agrona's interface, not one of ours: two
+  implementations exist, the processor's and Agrona's own for tests, and
+  a third would still fit. `Annotated` joins the signature with the codec
+  emitter, not before.
+- **The processor** calls it after `Generator.validate`, over a
+  `DynamicPackageOutputManager` backed by `Filer.createSourceFile`, with
+  the package element as the originating element, and a second open of
+  the same name handed a writer that discards, as `notes.md` says the
+  header flyweight needs. Problems land on the package element through
+  the origins, like every other schema-level problem. The resource is
+  written after the flyweights, so a package with any problem still gets
+  nothing.
+- **Agrona on the api**, compile scope, at the version sbe-tool builds
+  against, with the version in the root POM. The generator already reaches
+  it through sbe-tool.
+- **The tests, ours only.** In the generator, one test builds a `Schema`
+  our rules accept and sbe-tool rejects, a field whose `type` names no
+  declaration, and asserts a `Problem` naming the schema with sbe-tool's
+  text in it. In the processor, one placement snippet does the same from
+  source, a mistake our rules let through such as two enum constants with
+  one value, and asserts the diagnostic lands on the package element.
+  The in-memory helper keeps `-proc:only`; compiling generated flyweights
+  per corpus case would only test sbe-tool. No IR comparison, no
+  reference flyweights, no `xmlref`.
+- **The example.** The build compiles the flyweights the processor
+  generates into `com.example.trading.sbe`, and one smoke test encodes an
+  order through `NewOrderEncoder` and reads it back through the decoder.
+  `SchemaResourceTest` stays. That is the product seen working once;
   coverage stays in the corpus.
-- **The documents.** `notes.md` takes every javac fact the increment
-  relies on, with the spike or file it came from.
+- **The release.** The root POM's version becomes `0.1.0`; the README
+  says what sbe-buddy is, shows the example, names the coordinates and
+  what a build needs, and says what is generated and that codecs are not
+  yet; after the merge, an annotated tag `v0.1.0` on `main`, and a
+  follow-up commit takes the version to `0.2.0-SNAPSHOT`. No repository
+  is published to.
+- **The documents.** `notes.md` takes what the increment verifies about
+  `JavaGenerator` inside javac; `architecture.md` and `intent.md` follow.
 
 ## Criteria
 
-- Every corpus case's source discovers to its `annotated()` by equality,
-  and compiles through the real processor to a `schema.xml` equivalent to
-  its oracle.
-- Every rule of ours reaches the user as a javac error on the element
-  that carries the mistake; the three placement snippets prove one per
-  layer.
-- `./mvnw verify` builds the example through the processor and its
-  resource matches its oracle; the example's compile classpath holds the
-  api and nothing of the generator, sbe-tool or the processor.
+- `./mvnw verify` builds the example through the processor, compiles its
+  flyweights and passes its smoke test; the example's compile classpath
+  holds the api and Agrona and nothing else.
+- Plain `javac` with no JVM flag and only the api and Agrona on the
+  compile classpath compiles the example and writes its flyweights and
+  its `schema.xml`; `JavaGenerator` loads no Agrona buffer class inside
+  javac, and `notes.md` says so.
 - Nothing in the generator's main sources names `javax.lang.model` or
-  `javax.annotation.processing`; nothing in the processor loads an Agrona
-  class, so a user's javac needs no JVM flag.
-- `./mvnw verify` is green on a fresh clone, and the CI job passes on this
-  pull request.
+  `javax.annotation.processing`.
+- Every corpus oracle still parses through sbe-tool with no error and no
+  warning, which is what makes the backstop silent for every document we
+  write.
+- `./mvnw verify` is green on a fresh clone, the CI job passes on this
+  pull request, and `v0.1.0` is tagged on `main` after it merges.
 
 ## Out of scope
 
-sbe-tool in the pipeline: `XmlSchemaParser` as backstop, `IrGenerator`,
-`JavaGenerator`, the flyweights, `Generator.generate` and `Output`. The
-first release. `@SbeSchema(codecs = false)`, `Codec`, `TypeBinding`,
-`@Bind`, the built-in bindings, message families, Agrona. Reference
-flyweights and frozen schema versions in the example.
+`Codec`, `TypeBinding`, `@Bind`, the built-in bindings, the codec emitter
+and `@SbeSchema(codecs = false)`. Reference flyweights, frozen schema
+versions, IR comparison, the `.sbeir` file. Message families. Publishing
+to Maven Central or anywhere else.

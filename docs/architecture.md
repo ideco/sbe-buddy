@@ -115,26 +115,32 @@ Three layers, in the order a mistake meets them.
   following every sibling with a lower one. One unit test each, asserting
   the `Problem` and the node it names.
 - **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
-  from the sbe-tool jar, then parsed with `stopOnError` and an
-  `errorPrintStream` we own. Whatever is reported lands on the
-  `@SbeSchema` package element with sbe-tool's text verbatim, which
-  already names the node (`at <message name="Order"> <field name="qty">`).
-  Warnings become javac warnings. A rule that turns out to matter to users
-  graduates to the layer above; nothing parses sbe-tool's strings.
+  from the sbe-tool jar, then parsed with `stopOnError`, `warningsFatal`
+  and an `errorPrintStream` we own. Whatever is reported, warning or
+  error, lands on the `@SbeSchema` package element with sbe-tool's text
+  verbatim, which already names the node (`at <message name="Order">
+  <field name="qty">`); the corpus proves our documents raise nothing, so
+  anything that appears is a mistake of ours. A rule that turns out to
+  matter to users graduates to the layer above; nothing parses sbe-tool's
+  strings.
 
 ## Generation
 
-- `Generator.generate(schema, annotated, output)` runs steps 3 to 8.
-  `Output` is where sources and the resource go: the processor's is over
-  `Filer`, a test's over a map.
+- `Generator.generate(schema, output)` runs steps 3 to 6 and returns the
+  `Problem`s; the codec emitter adds `annotated` to the signature when it
+  arrives. `output` is Agrona's `DynamicPackageOutputManager`, the
+  interface `JavaGenerator` takes: the processor's is over `Filer`, a
+  test's is Agrona's `StringWriterOutputManager`. The resource, step 8, is
+  the processor's own, written after the sources.
 - `JavaGenerator` runs with one fixed configuration equal to `SbeTool`'s
   defaults: `MutableDirectBuffer` and `DirectBuffer`, no group-order
   annotation, no interfaces, no decoding of unknown enum values, no
   types-package override, precedence checks off. No `-A` option and no
   `sbe.*` system property is read. `setPackageName(ir.applicableNamespace())`
   is called before `generate()` (`notes.md`).
-- Flyweights go to `<schema package>.sbe`; IR `packageName` is that
-  package, `namespaceName` is `null`.
+- Flyweights go to `<schema package>.sbe`: it is the namespace handed to
+  `IrGenerator.generate`, which `applicableNamespace()` prefers, while the
+  IR's `packageName` and the document's `package` stay the schema package.
 - The schema goes into the jar as `<schema package>/schema.xml`, so a jar
   of records carries its own schema and sbe-tool's other generators produce
   the other side of the wire from it. The IR itself is built in memory in
@@ -247,13 +253,17 @@ Reflection is banned in main code and free in tests.
   One test asserts the `schema.xml` in the class output equivalent to the
   oracle, through `SchemaXmlAssert` from the generator's test jar. It
   proves the wiring and shows the product; coverage stays in the corpus.
-  From the first release on, `SbeTool` generates reference flyweights from
-  the oracle into an `xmlref` package and the tests encode with ours and
-  decode with the reference, and the reverse; with codecs, they also round
-  trip at a non-zero offset with `encodedLength` equal to the bytes
-  written. Every past schema version stays as a frozen file
-  (`<name>-v0.xml`, ...) with its own reference package, so cross-version
-  decoding is tested in both directions without old-version records.
+  From the first release on it compiles the flyweights the processor
+  generates and one smoke test encodes and decodes through them; what
+  sbe-tool generates is not tested, because the corpus proves the document
+  it gets. With the codecs, when our own code writes bytes, `SbeTool`
+  generates reference flyweights from the oracle into an `xmlref` package
+  and the tests encode with ours and decode with the reference, and the
+  reverse, round tripping at a non-zero offset with `encodedLength` equal
+  to the bytes written; every past schema version then stays as a frozen
+  file (`<name>-v0.xml`, ...) with its own reference package, so
+  cross-version decoding is tested in both directions without old-version
+  records.
 - **The processor** runs javac in memory through the Compiler API, with
   one helper: sources as strings, `-proc:only`, diagnostics and written
   files collected. The corpus tests above; one negative snippet per rule
