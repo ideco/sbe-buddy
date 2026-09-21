@@ -43,9 +43,11 @@ alternatives considered.
   every line with the prefix. (Spike experiment, 2026-09-21.)
 - `JavaGenerator.generate()` opens `MessageHeaderEncoder` and
   `MessageHeaderDecoder` twice, once from `Ir.types()` and once as the
-  header stub, with identical content. An output manager over `Filer` must
-  treat the second open as a no-op, because `Filer` cannot recreate a file.
-  (Spike experiment, 2026-09.)
+  header stub, with identical content. The generator stages every source in
+  a `StringWriterOutputManager`, where the second open replaces the first
+  with the same text, and hands each qualified name to the `Filer` once,
+  because `Filer` cannot recreate a file. (Spike experiment, 2026-09, and
+  `GeneratorTest`.)
 - `XmlSchemaParser` with `stopOnError`, `warningsFatal` and
   `suppressOutput` throws `IllegalArgumentException` from a schema warning
   and prints nothing. (Spike experiment, 2026-09.)
@@ -153,6 +155,16 @@ alternatives considered.
   `ir.headerStructure().tokens().get(0).name()` and the schema's byte
   order `ir.byteOrder()`. (`GenerationUtil.java`, `Token.java` and `Ir.java`,
   read 2026-09-21.)
+- An enum field's decoder has two getters: `<field>Raw()` returns the
+  encoding's primitive, and `<field>()` passes it to the generated enum's
+  static `get`, which returns `NULL_VAL` for the null value and otherwise
+  throws `IllegalArgumentException("Unknown value: " + value)`; only with
+  `shouldDecodeUnknownEnumValues` does the enum gain `SBE_UNKNOWN`, whose
+  `value()` is the null value, and `get` return it instead. The C++
+  generator does the same under the same option; C# and Go cast the raw
+  value into their enum types. (`JavaGenerator.java`, `generateEnumLookupMethod`,
+  `generateEnumValues` and the enum field getters, and `CppGenerator.java`,
+  read 2026-09-21.)
 - The generated flyweights: `<Msg>Encoder.BLOCK_LENGTH`, `TEMPLATE_ID` and
   `SCHEMA_ID` are `int` constants, `MessageHeaderEncoder.ENCODED_LENGTH`
   the header's size; `encoder.wrapAndApplyHeader(buffer, offset,
@@ -215,6 +227,14 @@ alternatives considered.
   every flyweight under `com.example.trading.sbe` into `-s` and
   `schema.xml` into `-d`; generation inside javac loads no Agrona buffer
   class. (Run by hand against the increment 5 build, 2026-09-21.)
+- `Filer.createSourceFile` for a type that exists on the classpath only as
+  a class file, from an earlier compilation, succeeds; javac warns only
+  under `-Xlint:processing`. And `PackageElement.getEnclosedElements()`
+  lists the package's types from the classpath beside the ones in the
+  sources being compiled, with their `CLASS`-retained annotations. So
+  recompiling one record against the previous build's class output
+  rediscovers the whole package and regenerates every file of it, over the
+  old classes. (`IncrementalCompilationTest`, javac 21 and 25, 2026-09-21.)
 - From JDK 23 javac performs no annotation processing unless `-processor`,
   `--processor-path` or `--processor-module-path` is set, or `-proc` is
   `only` or `full`; discovery from the compile classpath is gone. Reaching
@@ -222,6 +242,15 @@ alternatives considered.
   sets `--processor-path` and is unaffected.
   (`maven-compiler-plugin:4.0.0-beta-5` plugin descriptor, `proc` and
   `annotationProcessorPaths`, read 2026-09-20.)
+
+## JDK 25
+
+- The whole build, `./mvnw verify` with `maven.compiler.release` 21, Error
+  Prone 2.50.0 with NullAway 0.14.1, the processor's in-memory javac tests
+  and the example's annotation processing, runs green on OpenJDK 25.0.4
+  exactly as on 21, with the same `.mvn/jvm.config` exports and the same
+  surefire `--add-opens`. (Run by hand on Ubuntu's `openjdk-25-jdk-headless`
+  beside the JDK 21 run, 2026-09-21; CI repeats it on Temurin 25.)
 
 ## Error Prone 2.50.0
 
@@ -240,12 +269,13 @@ alternatives considered.
   `UnsafeApi` without the flag and runs with it, so a user's tests and
   runtime carry it while their javac does not. (Spike experiment,
   2026-09-21.)
-- `DynamicPackageOutputManager.setPackageName` redirects every following
-  `createOutput` to that package, so one output manager serves the
-  flyweights under `<pkg>.sbe` and then the codecs under `<pkg>`;
-  `StringWriterOutputManager.getSources()` keys them
-  `<package>.<Name>`. (`DynamicPackageOutputManager.java` and
-  `StringWriterOutputManager.java`, read 2026-09-21.)
+- `StringWriterOutputManager.getSources()` keys sources `<package>.<Name>`
+  with the package current at `createOutput`. Its writer resets the package
+  to the first one ever set when it closes: after `setPackageName("p")` on
+  a manager first given `p.sbe`, the first codec lands in `p` and the
+  second in `p.sbe`. So the package is set before every file, never once
+  for a run. (javap of the 2.6.1 jar, and `IncrementalCompilationTest`,
+  which caught it, 2026-09-21.)
 
 ## Maven 4.0.0-rc-6
 
