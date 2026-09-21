@@ -3,6 +3,7 @@ package net.concini.sbebuddy.processor;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -46,7 +47,7 @@ import net.concini.sbebuddy.generator.Problem;
 
 /**
  * javac elements to {@link Annotated}: the {@code @SbeSchema} package, the
- * declarations it makes in source order, its messages, and every declaration a
+ * declarations it makes by name, its messages by id, and every declaration a
  * member reaches, one instance however often. Every member is read from the
  * {@link AnnotationMirror} with its defaults filled, so a {@code Class} member
  * is a {@link TypeMirror} and never a class. Rules only javac can see fire here
@@ -105,10 +106,28 @@ public final class Discovery {
 
 	private Annotated schema(PackageElement schemaPackage) {
 		Members schema = members(schemaPackage, SbeSchema.class);
-		List<Annotated.Declaration> declared = new ArrayList<>();
-		List<Annotated.Message> messages = new ArrayList<>();
+		List<TypeElement> declarationTypes = new ArrayList<>();
+		List<TypeElement> messageTypes = new ArrayList<>();
 		for (TypeElement type : ElementFilter.typesIn(schemaPackage.getEnclosedElements())) {
-			walk(type, declared, messages);
+			walk(type, declarationTypes, messageTypes);
+		}
+		// javac enters a package's types in an order an incremental build does not
+		// keep, so the schema takes its own: messages by id, declarations by name.
+		declarationTypes.sort(Comparator.comparing(Discovery::qualifiedName));
+		messageTypes.sort(
+				Comparator.comparingInt((TypeElement type) -> members(type, SbeMessage.class).integer("id"))
+						.thenComparing(Discovery::qualifiedName)
+		);
+		List<Annotated.Declaration> declared = new ArrayList<>();
+		for (TypeElement type : declarationTypes) {
+			Annotated.Declaration declaration = declaration(type);
+			if (declaration != null) {
+				declared.add(declaration);
+			}
+		}
+		List<Annotated.Message> messages = new ArrayList<>();
+		for (TypeElement type : messageTypes) {
+			messages.add(message(type));
 		}
 		Annotated annotated = new Annotated(
 				schemaPackage.getQualifiedName().toString(),
@@ -128,24 +147,25 @@ public final class Discovery {
 	}
 
 	/**
-	 * A message or a declaration where it stands, then the types nested in it,
-	 * except inside a composite, whose nested types are its inline members.
+	 * A message or a declaration, then the types nested in it, except inside a
+	 * composite, whose nested types are its inline members.
 	 */
-	private void walk(TypeElement type, List<Annotated.Declaration> declared, List<Annotated.Message> messages) {
+	private static void walk(TypeElement type, List<TypeElement> declarations, List<TypeElement> messages) {
 		if (has(type, SbeMessage.class)) {
-			messages.add(message(type));
+			messages.add(type);
 		} else if (isDeclaration(type)) {
-			Annotated.Declaration declaration = declaration(type);
-			if (declaration != null) {
-				declared.add(declaration);
-			}
+			declarations.add(type);
 		}
 		if (has(type, SbeComposite.class)) {
 			return;
 		}
 		for (TypeElement nested : ElementFilter.typesIn(type.getEnclosedElements())) {
-			walk(nested, declared, messages);
+			walk(nested, declarations, messages);
 		}
+	}
+
+	private static String qualifiedName(TypeElement type) {
+		return type.getQualifiedName().toString();
 	}
 
 	// ---- declarations

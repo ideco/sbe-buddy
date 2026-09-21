@@ -84,9 +84,9 @@ final class NamedTypes {
 			            <type name="schemaId" primitiveType="uint16"/>
 			            <type name="version" primitiveType="uint16"/>
 			        </composite>
-			        <type name="Symbol" primitiveType="char" length="6" characterEncoding="ASCII" semanticType="String" description="An instrument symbol"/>
 			        <type name="Price" primitiveType="int64" minValue="0" maxValue="9223372036854775806" semanticType="Price"/>
 			        <type name="Quantity" primitiveType="uint32" presence="optional" nullValue="4294967294" description="Absent when the size is not disclosed"/>
+			        <type name="Symbol" primitiveType="char" length="6" characterEncoding="ASCII" semanticType="String" description="An instrument symbol"/>
 			    </types>
 			    <sbe:message name="NamedTypes" id="1">
 			        <field name="symbol" id="1" type="Symbol"/>
@@ -103,11 +103,6 @@ final class NamedTypes {
 		return messageSchema("corpus.namedtypes", 1, 0)
 				.types(
 						messageHeader(),
-						type("Symbol", CHAR)
-								.length(6)
-								.characterEncoding("ASCII")
-								.semanticType("String")
-								.description("An instrument symbol"),
 						type("Price", INT64)
 								.minValue("0")
 								.maxValue("9223372036854775806")
@@ -115,7 +110,12 @@ final class NamedTypes {
 						type("Quantity", UINT32)
 								.presence(OPTIONAL)
 								.nullValue("4294967294")
-								.description("Absent when the size is not disclosed")
+								.description("Absent when the size is not disclosed"),
+						type("Symbol", CHAR)
+								.length(6)
+								.characterEncoding("ASCII")
+								.semanticType("String")
+								.description("An instrument symbol")
 				)
 				.messages(
 						message("NamedTypes", 1).fields(
@@ -142,7 +142,7 @@ final class NamedTypes {
 				.nullValue("4294967294")
 				.description("Absent when the size is not disclosed");
 		return annotatedSchema("corpus.namedtypes", 1, 0).codecs(false)
-				.types(symbol, price, quantity)
+				.types(price, quantity, symbol)
 				.messages(
 						annotatedMessage("NamedTypes", 1).components(
 								annotatedField("symbol", 1, text()).type(symbol),

@@ -265,6 +265,16 @@ alternatives considered.
   returns record components in declaration order, and
   `ElementFilter.recordComponentsIn` keeps it. (Spike experiment, javac
   21, 2026-09-21.)
+* In an incremental build that order is not source order: the types being
+  compiled come first, the package's others follow as javac lists them from
+  the class output, in the file system's order. Recompiling `Trade.java`
+  alone against classes holding `Quote` gave `Trade, Quote` on macOS and
+  `Quote, Trade` on Linux, so Discovery sorts the package's top level
+  itself. (`IncrementalCompilationTest`, JDK 25, 2026-09-21.)
+* sbe-tool reads `types` with an XPath per kind into a map by name and
+  messages into a map by id (`XmlSchemaParser.findTypes`,
+  `findMessages`), so the order of the declarations and of the messages in
+  the XML carries no meaning. (Read 2026-09-21.)
 * `RoundEnvironment.getElementsAnnotatedWith` returns only elements of the
   types being compiled; a type read from a jar is never in a round, however
   many of our annotations it carries. So the packages a round offers are

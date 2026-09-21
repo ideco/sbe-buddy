@@ -95,14 +95,14 @@ final class Sets {
 			            <type name="version" primitiveType="uint16"/>
 			        </composite>
 			        <type name="FlagsEncoding" primitiveType="uint8"/>
+			        <set name="Handling" encodingType="FlagsEncoding">
+			            <choice name="urgent">0</choice>
+			            <choice name="manual">7</choice>
+			        </set>
 			        <set name="Permissions" encodingType="uint16" semanticType="MultipleCharValue" description="What the account may do">
 			            <choice name="canTrade" description="May submit orders">0</choice>
 			            <choice name="canQuote" description="May submit quotes">1</choice>
 			            <choice name="canCancel">2</choice>
-			        </set>
-			        <set name="Handling" encodingType="FlagsEncoding">
-			            <choice name="urgent">0</choice>
-			            <choice name="manual">7</choice>
 			        </set>
 			    </types>
 			    <sbe:message name="Sets" id="1">
@@ -234,6 +234,10 @@ final class Sets {
 				.types(
 						messageHeader(),
 						type("FlagsEncoding", UINT8),
+						set("Handling", "FlagsEncoding").choices(
+								choice("urgent", 0),
+								choice("manual", 7)
+						),
 						set("Permissions", "uint16")
 								.semanticType("MultipleCharValue")
 								.description("What the account may do")
@@ -241,11 +245,7 @@ final class Sets {
 										choice("canTrade", 0).description("May submit orders"),
 										choice("canQuote", 1).description("May submit quotes"),
 										choice("canCancel", 2)
-								),
-						set("Handling", "FlagsEncoding").choices(
-								choice("urgent", 0),
-								choice("manual", 7)
-						)
+								)
 				)
 				.messages(
 						message("Sets", 1).fields(
@@ -276,7 +276,7 @@ final class Sets {
 						annotatedChoice("manual", 7)
 				);
 		return annotatedSchema("corpus.sets", 1, 0)
-				.types(flagsEncoding, permissions, handling)
+				.types(flagsEncoding, handling, permissions)
 				.messages(
 						annotatedMessage("Sets", 1).components(
 								annotatedField("permissions", 1, setOf(permissions)),

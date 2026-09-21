@@ -87,12 +87,12 @@ final class Constants {
 			            <type name="schemaId" primitiveType="uint16"/>
 			            <type name="version" primitiveType="uint16"/>
 			        </composite>
+			        <type name="BuySide" primitiveType="char" presence="constant" valueRef="Side.Buy"/>
+			        <type name="Currency" primitiveType="char" length="3" presence="constant">USD</type>
 			        <enum name="Side" encodingType="char">
 			            <validValue name="Buy">B</validValue>
 			            <validValue name="Sell">S</validValue>
 			        </enum>
-			        <type name="Currency" primitiveType="char" length="3" presence="constant">USD</type>
-			        <type name="BuySide" primitiveType="char" presence="constant" valueRef="Side.Buy"/>
 			    </types>
 			    <sbe:message name="Constants" id="1">
 			        <field name="currency" id="1" type="Currency"/>
@@ -109,12 +109,12 @@ final class Constants {
 		return messageSchema("corpus.constants", 1, 0)
 				.types(
 						messageHeader(),
+						type("BuySide", CHAR).presence(CONSTANT).valueRef("Side.Buy"),
+						type("Currency", CHAR).length(3).presence(CONSTANT).value("USD"),
 						enumeration("Side", "char").validValues(
 								validValue("Buy", "B"),
 								validValue("Sell", "S")
-						),
-						type("Currency", CHAR).length(3).presence(CONSTANT).value("USD"),
-						type("BuySide", CHAR).presence(CONSTANT).valueRef("Side.Buy")
+						)
 				)
 				.messages(
 						message("Constants", 1).fields(
@@ -137,7 +137,7 @@ final class Constants {
 		AnnotatedTypeBuilder currency = annotatedType("Currency", CHAR).length(3).presence(CONSTANT).value("USD");
 		AnnotatedTypeBuilder buySide = annotatedType("BuySide", CHAR).presence(CONSTANT).valueRef("Side.Buy");
 		return annotatedSchema("corpus.constants", 1, 0).codecs(false)
-				.types(side, currency, buySide)
+				.types(buySide, currency, side)
 				.messages(
 						annotatedMessage("Constants", 1).components(
 								annotatedField("currency", 1, text()).type(currency),
