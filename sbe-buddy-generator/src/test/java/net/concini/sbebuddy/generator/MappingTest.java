@@ -3,13 +3,18 @@ package net.concini.sbebuddy.generator;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.CHAR;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.SHORT;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnum;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.boxed;
+import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static net.concini.sbebuddy.generator.Fixtures.setOf;
 import static net.concini.sbebuddy.generator.Fixtures.text;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -135,6 +140,37 @@ final class MappingTest {
 				.sinceVersion(2);
 
 		assertThat(problemsOf(field, 2, 0)).isEmpty();
+	}
+
+	@Test
+	void anEnumFieldsComponentIsTheEnum() {
+		Fixtures.AnnotatedEnumBuilder side = annotatedEnum("Side").primitiveType(PrimitiveType.UINT8);
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("side", 1, primitive(SHORT)).type(side);
+
+		assertThat(problemsOf(field)).containsExactly(new Problem(field.build(), "Side is an enum; use Side"));
+	}
+
+	@Test
+	void aSetFieldsComponentIsASetOfTheEnum() {
+		Fixtures.AnnotatedSetBuilder flags = annotatedSet("Flags").primitiveType(PrimitiveType.UINT8);
+		Fixtures.AnnotatedFieldBuilder bare = annotatedField("flags", 1, declared(flags));
+		Fixtures.AnnotatedFieldBuilder other = annotatedField(
+				"flags", 1, setOf(annotatedSet("Other").primitiveType(PrimitiveType.UINT8))
+		)
+				.type(flags);
+
+		assertThat(problemsOf(bare)).containsExactly(new Problem(bare.build(), "Flags is a set; use Set<Flags>"));
+		assertThat(problemsOf(other)).containsExactly(new Problem(other.build(), "Flags is a set; use Set<Flags>"));
+	}
+
+	@Test
+	void aSetFieldCannotBeOptional() {
+		Fixtures.AnnotatedSetBuilder flags = annotatedSet("Flags").primitiveType(PrimitiveType.UINT8);
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("flags", 1, setOf(flags)).presence(Presence.OPTIONAL);
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(field.build(), "a set has no null value; a set field cannot be optional")
+		);
 	}
 
 	@Test

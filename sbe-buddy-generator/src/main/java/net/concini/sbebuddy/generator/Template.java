@@ -11,10 +11,12 @@ import java.util.regex.Pattern;
  * A text block with named placeholders, {@code {name}}, and nothing else: no
  * conditionals, no loops; what varies is decided in Java and pasted in. A value
  * that spans lines is indented to its placeholder's column, so a body pasted
- * into a class lands at the right depth, and a placeholder alone on its line
- * filled with an empty value takes the line with it, so a block left out leaves
- * no blank line behind. A name left unfilled or a value never used fails,
- * because a gap in generated code is a bug nobody sees until it compiles.
+ * into a class lands at the right depth; a blank line of it stays blank, and
+ * for a placeholder alone on its line that goes for the first line too, so a
+ * value may open with a blank line, and an empty value takes the line with it,
+ * so a block left out leaves no blank line behind. A name left unfilled or a
+ * value never used fails, because a gap in generated code is a bug nobody sees
+ * until it compiles.
  */
 public final class Template {
 
@@ -52,13 +54,17 @@ public final class Template {
 				throw new IllegalArgumentException("{" + name + "} is not filled");
 			}
 			unused.remove(name);
-			if (value.isEmpty() && aloneOnItsLine(placeholder.start(), placeholder.end())) {
+			if (aloneOnItsLine(placeholder.start(), placeholder.end())) {
 				filled.append(text, copied, lineStart(placeholder.start()));
-				copied = Math.min(placeholder.end() + 1, text.length());
-				continue;
+				if (value.isEmpty()) {
+					copied = Math.min(placeholder.end() + 1, text.length());
+					continue;
+				}
+				filled.append(indented(value, text.substring(lineStart(placeholder.start()), placeholder.start())));
+			} else {
+				filled.append(text, copied, placeholder.start());
+				filled.append(value);
 			}
-			filled.append(text, copied, placeholder.start());
-			filled.append(value.replace("\n", "\n" + indentationBefore(placeholder.start())));
 			copied = placeholder.end();
 		}
 		filled.append(text, copied, text.length());
@@ -69,12 +75,21 @@ public final class Template {
 	}
 
 	/**
-	 * The whitespace before the placeholder on its line, when nothing else precedes
-	 * it.
+	 * Every line of the value at the placeholder's indentation, blank ones left
+	 * blank.
 	 */
-	private String indentationBefore(int position) {
-		String before = text.substring(lineStart(position), position);
-		return before.isBlank() ? before : "";
+	private static String indented(String value, String indentation) {
+		StringBuilder result = new StringBuilder();
+		String[] lines = value.split("\n", -1);
+		for (int i = 0; i < lines.length; i++) {
+			if (i > 0) {
+				result.append('\n');
+			}
+			if (!lines[i].isEmpty()) {
+				result.append(indentation).append(lines[i]);
+			}
+		}
+		return result.toString();
 	}
 
 	private boolean aloneOnItsLine(int start, int end) {

@@ -79,6 +79,10 @@ public record Annotated(
 	public record ListOfRecord() implements JavaType {
 	}
 
+	/** A {@code Set} of an {@code @SbeSet} enum, which is a set's face. */
+	public record SetOf(Declaration declaration) implements JavaType {
+	}
+
 	/** Anything else, named for the message that rejects it. */
 	public record Other(String javaName) implements JavaType {
 	}
@@ -136,10 +140,16 @@ public record Annotated(
 	) implements Member {
 	}
 
-	/** {@code @SbeEnum}; {@code encodingType} is null when unset. */
+	/**
+	 * {@code @SbeEnum}; {@code qualifiedName} is the enum's name as code names it;
+	 * {@code unknownValue} is the Java name of the constant carrying
+	 * {@code @UnknownValue}, or null; {@code encodingType} is null when unset.
+	 */
 	public record Enum(
 			String javaName,
+			String qualifiedName,
 			List<ValidValue> values,
+			@Nullable String unknownValue,
 			@Nullable Declaration encodingType,
 			PrimitiveType primitiveType,
 			String name,
@@ -166,9 +176,13 @@ public record Annotated(
 	) {
 	}
 
-	/** {@code @SbeSet}; {@code encodingType} is null when unset. */
+	/**
+	 * {@code @SbeSet}; {@code qualifiedName} is the enum's name as code names it;
+	 * {@code encodingType} is null when unset.
+	 */
 	public record Set(
 			String javaName,
+			String qualifiedName,
 			List<Choice> choices,
 			@Nullable Declaration encodingType,
 			PrimitiveType primitiveType,

@@ -55,6 +55,24 @@ final class TemplateTest {
 	}
 
 	@Test
+	void aBlankLineInAValueStaysBlank() {
+		Template template = Template.of("""
+				class C {
+					{members}
+				}
+				""");
+
+		assertThat(template.fill("members", "\nint a;\n\nint b;")).isEqualTo("""
+				class C {
+
+					int a;
+
+					int b;
+				}
+				""");
+	}
+
+	@Test
 	void aPlaceholderBesideOtherTextFilledEmptyLeavesItsLine() {
 		Template template = Template.of("run({arguments});\n");
 

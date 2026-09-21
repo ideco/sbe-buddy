@@ -218,11 +218,13 @@ final class Versions {
 				);
 		AnnotatedTypeBuilder added = annotatedType("Added", INT32).sinceVersion(1).deprecated(3);
 		AnnotatedEnumBuilder status = annotatedEnum("Status")
+				.qualifiedName("corpus.versions.Status")
 				.primitiveType(UINT8)
 				.sinceVersion(1)
 				.deprecated(3)
 				.values(annotatedEnumValue("New", "1").sinceVersion(1).deprecated(3));
 		AnnotatedSetBuilder flags = annotatedSet("Flags")
+				.qualifiedName("corpus.versions.Flags")
 				.primitiveType(UINT8)
 				.sinceVersion(1)
 				.deprecated(3)
