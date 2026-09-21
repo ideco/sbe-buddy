@@ -42,39 +42,56 @@ directions. Primitives still; every other construct keeps its refusal.
 - **The boxing rule, in `Mapping`.** A field can be absent when its
   `presence` is `OPTIONAL`, or its `sinceVersion` is above the
   `baselineVersion` and its `presence` is not `CONSTANT`. A component
-  whose Java type is a primitive or its box is boxed exactly when the
-  field can be absent: `Integer` on a field that is never absent is a
-  `Problem`, `use int`, and `int` on one that can be is a `Problem`, `use
-  Integer`. Decidable from one node once `Mapping` holds the baseline,
-  blamed on the field, tested in both directions and at the baseline
-  itself like the other rules. The face rule stays as it is and looks
-  through the box, so `Long` on an optional `uint16` still says `long is
-  not the face of uint16, which is int`. `type-mappings.md` says the same
-  in its absence section, and that a constant is never absent.
+  whose Java type is a primitive must then be its box: `int` on a field
+  that can be absent is a `Problem`, `use Integer`, because `null` has
+  nowhere to go. The other way round is a warning, not an error:
+  `Integer` on a field that is never absent is a `Problem` of severity
+  `WARNING`, `Integer is boxed although the field is never absent`,
+  because a box may be there for reasons of the user's own; the codec
+  never hands it `null`, and refuses `null` from it on encode like any
+  required field. Decidable from one node once `Mapping` holds the
+  baseline, blamed on the field, tested in both directions and at the
+  baseline itself like the other rules. The face rule stays as it is and
+  looks through the box, so `Long` on an optional `uint16` still says
+  `long is not the face of uint16, which is int`. `type-mappings.md` says
+  the same in its absence section, and that a constant is never absent.
+- **`Problem` gains a severity**, `ERROR` and `WARNING`, and the
+  two-argument constructor means `ERROR`, so nothing that exists changes;
+  this is the first warning and there is no other machinery for it. The
+  processor reports each `Problem` through `Messager` with its kind, on
+  the element it names as before, and generation is all or nothing over
+  the errors alone: a package whose only problems are warnings gets its
+  output whole. In the generator `Mapping.Mapped.problems()` carries
+  both, and the corpus stays clean of either.
 - **The codec emitter, absence.** The refusals for an optional field and
-  for a field added in a later version go; a field is one of three shapes,
-  decided in Java from the IR, the type token's presence and the field
-  token's version against the baseline, and each shape is a template
-  beside the plain one:
-  - *plain*, as increment 6 left it, which a required field appended at
-    or below the baseline is too;
-  - *optional*, whatever its version: `encodeOptionalField` writes the
-    flyweight's `<field>NullValue()` for `null` and the value otherwise,
-    one line; `decodeOptionalField` yields `null` when the wire holds the
-    null value and the value otherwise, one expression in the constructor
-    call. The null test is its own template, `isNull`, `==` against
-    `<field>NullValue()` for the integer primitives and `char`, and
-    `isNullFloating`, `Float.compare` or `Double.compare` against it
-    `== 0`, because `NaN` is the null value of the floats and equals
-    nothing. Below the acting version the getter returns the null value
-    (`notes.md`), so an optional field added later needs no version test;
-  - *added*, required with `sinceVersion` above the baseline:
-    `encodeAddedField` throws `IllegalArgumentException("<component> is
-    required")` for `null` before the plain call, the one block a
-    primitive field needs; `decodeAddedField` yields `null` when
-    `decoder.actingVersion()` is below `<field>SinceVersion()` and the
-    value otherwise, on the version and never on the null value, which a
-    required field may legitimately hold.
+  for a field added in a later version go. Each side of a field is
+  decided in Java, the encode side from the component's Java type in
+  `Annotated` and the type token's presence, the decode side from the type
+  token's presence and the field token's version against the baseline,
+  and each choice is a template beside the plain one:
+  - encoding: `encodeField`, the plain call, for a primitive component;
+    `encodeOptionalField` for an optional field, writing the flyweight's
+    `<field>NullValue()` for `null` and the value otherwise, one line;
+    `encodeBoxedField` for a boxed component of a required field, whether
+    added above the baseline or merely boxed, throwing
+    `IllegalArgumentException("<component> is required")` for `null`
+    before the plain call, the one block a primitive field needs;
+  - decoding: `decodeField`, the plain call, for a field that is never
+    absent, which the constructor boxes by itself where the component is;
+    `decodeOptionalField` for an optional field, whatever its version,
+    yielding `null` when the wire holds the null value and the value
+    otherwise, one expression in the constructor call; `decodeAddedField`
+    for a required field with `sinceVersion` above the baseline, yielding
+    `null` when `decoder.actingVersion()` is below `<field>SinceVersion()`
+    and the value otherwise, on the version and never on the null value,
+    which a required field may legitimately hold.
+
+  The null test is its own template, `isNull`, `==` against
+  `<field>NullValue()` for the integer primitives and `char`, and
+  `isNullFloating`, `Float.compare` or `Double.compare` against it `== 0`,
+  because `NaN` is the null value of the floats and equals nothing. Below
+  the acting version the getter returns the null value (`notes.md`), so an
+  optional field added later needs no version test.
 
   **The baseline in `decode`.** After the schema and template check, a
   header whose `version` is below the baseline is an
@@ -98,8 +115,9 @@ directions. Primitives still; every other construct keeps its refusal.
   current schema's and the one read is the header's, which is what makes
   an older message shorter and a newer one longer without a line of ours.
   The box of a float, `Float` or `Double`, is the one thing the emitter
-  decides from the primitive type itself; the emitter trusts the boxing
-  rule for the rest.
+  decides from the primitive type itself; whether a component is boxed it
+  reads from `Annotated`, and the boxing rule guarantees a box wherever
+  absence needs one.
 - **The corpus.** `OptionalFields` turns codecs on and carries its codec:
   the optional shape at a baseline of 0, with no version check. A new
   case, `AddedFields`, is a message at `version = 2` with
@@ -150,10 +168,12 @@ directions. Primitives still; every other construct keeps its refusal.
     `QuoteCodec` with `IllegalArgumentException` naming version 0 and the
     baseline.
   `com.example.trading` stays as it is.
-- **The documents.** `architecture.md`'s generation section describes the
-  three shapes, the null test and the baseline refusal, its testing
-  section the reference packages and the frozen files as they now exist,
-  and its build section the two plugins; `type-mappings.md` gains
+- **The documents.** `architecture.md`'s models and rules sections take
+  `Problem`'s severity and the first warning, its generation section
+  describes the templates of each side, the null test and the baseline
+  refusal and that warnings stop nothing, its testing section the
+  reference packages and the frozen files as they now exist, and its
+  build section the two plugins; `type-mappings.md` gains
   `baselineVersion` in the `messageSchema` row, sharpens absence to the
   boxing rule, and says a constant is never absent; `notes.md` takes the
   facts above and whatever the build teaches about running `SbeTool`
@@ -173,8 +193,11 @@ directions. Primitives still; every other construct keeps its refusal.
   version 0 message, all in the real build; each frozen oracle is
   byte-for-byte the oracle it replaced below its comment.
 - The boxing rule has a test in each direction and one at the baseline
-  that build the mistake and assert the `Problem` and the node; a
-  `baselineVersion` above `version` has one too.
+  that build the mistake and assert the `Problem`, its severity and the
+  node; a `baselineVersion` above `version` has one too. In the
+  processor, one snippet with a box on a never-absent field asserts a
+  warning on that component and every output written, the mirror of the
+  error snippets that assert nothing was.
 - Every new template is a text block filled through `Template`; the
   emitter's only decisions outside the IR and `Annotated` are the float's
   box and whether to paste the baseline check; the baseline is the only
