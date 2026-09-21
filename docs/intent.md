@@ -96,3 +96,48 @@ the scope above is complete, and nothing built may preclude them.
 - [ ] 14. Codec: sets, constants, optional presence
 - [ ] 15. Codec: byte order and header types
 - [ ] 16. Message families
+
+## Where next
+
+Not a plan, just the direction in mind right now; the increment list above
+is the fine print.
+
+```
+simple messages
+    ↓
+composites
+    ↓
+groups / var-data
+    ↓
+evolution
+    ↓
+common JDK type mappings
+    ↓
+a real FIX/SBE example
+    ↓
+tidy up the public API
+```
+
+- Finish the simple codec model: enums, named primitive types, optional
+  fields, constants, `sinceVersion`.
+- Composites, and with them nested structured values.
+- Groups and var-data, so the encoded length becomes variable and
+  `encodedLength` has to earn its keep.
+- Check that schema evolution still behaves through the generated domain
+  codecs, not only through the flyweights.
+- Once the SBE feature set is broad enough, useful mappings for common JDK
+  types: `UUID`, `Instant`, `OffsetDateTime`, `Duration`, `LocalDate`,
+  `LocalTime`. Built on the normal SBE model, no special cases; the wire
+  representation stays explicit, above all for timestamps and their
+  precision; SBE's semantic types and time units where they fit. Something
+  like `BigDecimal` as cents is a better example of a custom binding than a
+  built-in default.
+- Then prove the whole thing against a real, non-trivial SBE schema. A
+  small FIX order-entry subset would be ideal, `NewOrderSingle` and
+  `ExecutionReport` say, with the hand-written schema as the oracle and
+  structural and wire compatibility checked, not XML formatting.
+- Once that works, clean up whatever feels awkward in the annotation and
+  codec API.
+
+RPC, Aeron integration, service generation and the like stay out of this
+for now (`rpc.md`).
