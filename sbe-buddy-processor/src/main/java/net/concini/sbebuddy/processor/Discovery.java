@@ -40,6 +40,7 @@ import net.concini.sbebuddy.SbeRef;
 import net.concini.sbebuddy.SbeSchema;
 import net.concini.sbebuddy.SbeSet;
 import net.concini.sbebuddy.SbeType;
+import net.concini.sbebuddy.UnknownValue;
 import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Problem;
 
@@ -308,7 +309,18 @@ public final class Discovery {
 			problem(at, "@SbeEnum goes on a Java enum");
 		}
 		List<Annotated.ValidValue> values = new ArrayList<>();
+		String unknownValue = null;
 		for (VariableElement constant : constantsOf(type)) {
+			if (has(constant, UnknownValue.class)) {
+				if (has(constant, SbeEnumValue.class)) {
+					problem(constant, "a constant carries @SbeEnumValue or @UnknownValue, not both");
+				} else if (unknownValue != null) {
+					problem(constant, "an enum designates one unknown value, and " + unknownValue + " already is");
+				} else {
+					unknownValue = constant.getSimpleName().toString();
+				}
+				continue;
+			}
 			if (!has(constant, SbeEnumValue.class)) {
 				problem(constant, "a constant of an @SbeEnum carries @SbeEnumValue");
 				continue;
@@ -328,7 +340,9 @@ public final class Discovery {
 		TypeElement encodingType = enumeration.type("encodingType");
 		Annotated.Enum result = new Annotated.Enum(
 				javaName,
+				type.getQualifiedName().toString(),
 				values,
+				unknownValue,
 				encodingType == null ? null : reference(at, encodingType),
 				enumeration.enumeration("primitiveType", PrimitiveType.class),
 				enumeration.string("name"),
@@ -349,6 +363,9 @@ public final class Discovery {
 		}
 		List<Annotated.Choice> choices = new ArrayList<>();
 		for (VariableElement constant : constantsOf(type)) {
+			if (has(constant, UnknownValue.class)) {
+				problem(constant, "@UnknownValue goes on a constant of an @SbeEnum; a set has no unknown value");
+			}
 			if (!has(constant, SbeChoice.class)) {
 				problem(constant, "a constant of an @SbeSet carries @SbeChoice");
 				continue;
@@ -368,6 +385,7 @@ public final class Discovery {
 		TypeElement encodingType = set.type("encodingType");
 		Annotated.Set result = new Annotated.Set(
 				javaName,
+				type.getQualifiedName().toString(),
 				choices,
 				encodingType == null ? null : reference(at, encodingType),
 				set.enumeration("primitiveType", PrimitiveType.class),
@@ -562,6 +580,13 @@ public final class Discovery {
 		if (listEntryRecord(type) != null) {
 			return new Annotated.ListOfRecord();
 		}
+		TypeElement setEntry = setEntry(type);
+		if (setEntry != null && has(setEntry, SbeSet.class)) {
+			Annotated.Declaration set = declaration(setEntry);
+			if (set != null) {
+				return new Annotated.SetOf(set);
+			}
+		}
 		if (isDeclaration(element)) {
 			Annotated.Declaration declaration = declaration(element);
 			if (declaration != null) {
@@ -569,6 +594,18 @@ public final class Discovery {
 			}
 		}
 		return new Annotated.Other(type.toString());
+	}
+
+	/** The {@code E} of a {@code Set<E>}, or null for any other type. */
+	private static @Nullable TypeElement setEntry(TypeMirror type) {
+		if (!(type instanceof DeclaredType declared)) {
+			return null;
+		}
+		TypeElement element = (TypeElement) declared.asElement();
+		if (!element.getQualifiedName().contentEquals("java.util.Set") || declared.getTypeArguments().size() != 1) {
+			return null;
+		}
+		return declaredTypeOf(declared.getTypeArguments().get(0));
 	}
 
 	/** The record {@code E} of a {@code List<E>}, or null for any other type. */
