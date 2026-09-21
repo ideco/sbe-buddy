@@ -66,6 +66,39 @@ final class MappingTest {
 	}
 
 	@Test
+	void aGroupOnAnythingButAListOfARecordIsAProblem() {
+		Fixtures.AnnotatedGroupBuilder legs = annotatedGroup("legs", 1).javaType(text());
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.messages(annotatedMessage("M", 1).components(legs))
+				.build();
+
+		assertThat(Mapping.map(annotated).problems()).containsExactly(
+				new Problem(legs.build(), "a group must be a List of a record")
+		);
+	}
+
+	@Test
+	void anIdAboveTheXsdsUnsignedShortIsAProblem() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("qty", 65536, primitive(INT));
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(field.build(), "an id is 0 to 65535, not 65536")
+		);
+	}
+
+	@Test
+	void aNameOutsideTheXsdsPatternIsAProblem() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("qty", 1, primitive(INT)).name("net qty");
+
+		assertThat(problemsOf(field)).containsExactly(
+				new Problem(
+						field.build(),
+						"\"net qty\" is not a name SBE allows: a letter or _, then letters, digits and _"
+				)
+		);
+	}
+
+	@Test
 	void everySchemaNodeKnowsItsAnnotatedNode() {
 		Fixtures.AnnotatedFieldBuilder field = annotatedField("qty", 1, primitive(INT));
 		Annotated annotated = annotatedSchema("p", 1, 0)

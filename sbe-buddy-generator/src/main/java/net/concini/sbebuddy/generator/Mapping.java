@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
 
@@ -30,6 +31,12 @@ public final class Mapping {
 	 */
 	public record Mapped(Schema schema, List<Problem> problems, Map<Object, Object> origins) {
 	}
+
+	// sbe.xsd's symbolicName_t, which every name attribute is typed as.
+	private static final Pattern SYMBOLIC_NAME = Pattern.compile("[A-Za-z_][0-9A-Za-z_]*");
+
+	// sbe.xsd types a message's and a field's id as xs:unsignedShort.
+	private static final int MAX_ID = 65535;
 
 	private final List<Problem> problems = new ArrayList<>();
 	private final Map<Object, Object> origins = new IdentityHashMap<>();
@@ -72,8 +79,8 @@ public final class Mapping {
 	private Schema.Message message(Annotated.Message message) {
 		Body body = body(message.components());
 		Schema.Message result = new Schema.Message(
-				name(message.name(), message.javaName()),
-				message.id(),
+				name(message, message.name(), message.javaName()),
+				id(message, message.id()),
 				body.fields(),
 				body.groups(),
 				body.data(),
@@ -121,8 +128,8 @@ public final class Mapping {
 	private Schema.Field field(Annotated.Field field) {
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
 		Schema.Field result = new Schema.Field(
-				name(field.name(), field.javaName()),
-				field.id(),
+				name(field, field.name(), field.javaName()),
+				id(field, field.id()),
 				type,
 				presence(field.presence()),
 				absentIfEmpty(field.valueRef()),
@@ -139,11 +146,14 @@ public final class Mapping {
 	}
 
 	private Schema.Group group(Annotated.Group group) {
+		if (!(group.javaType() instanceof Annotated.ListOfRecord)) {
+			problem(group, "a group must be a List of a record");
+		}
 		String dimensionType = declare(group.dimensionType());
 		Body body = body(group.components());
 		Schema.Group result = new Schema.Group(
-				name(group.name(), group.javaName()),
-				group.id(),
+				name(group, group.name(), group.javaName()),
+				id(group, group.id()),
 				body.fields(),
 				body.groups(),
 				body.data(),
@@ -163,8 +173,8 @@ public final class Mapping {
 			problem(data, "data must be a String or a byte[]");
 		}
 		Schema.Data result = new Schema.Data(
-				name(data.name(), data.javaName()),
-				data.id(),
+				name(data, data.name(), data.javaName()),
+				id(data, data.id()),
 				declare(data.type()),
 				null,
 				null,
@@ -239,10 +249,10 @@ public final class Mapping {
 			return known;
 		}
 		String wireName = switch (declaration) {
-			case Annotated.Type type -> name(type.name(), type.javaName());
-			case Annotated.Composite composite -> name(composite.name(), composite.javaName());
-			case Annotated.Enum enumeration -> name(enumeration.name(), enumeration.javaName());
-			case Annotated.Set set -> name(set.name(), set.javaName());
+			case Annotated.Type type -> name(type, type.name(), type.javaName());
+			case Annotated.Composite composite -> name(composite, composite.name(), composite.javaName());
+			case Annotated.Enum enumeration -> name(enumeration, enumeration.name(), enumeration.javaName());
+			case Annotated.Set set -> name(set, set.name(), set.javaName());
 		};
 		wireNames.put(declaration, wireName);
 		Schema.Declaration mapped = switch (declaration) {
@@ -260,7 +270,7 @@ public final class Mapping {
 			problem(type, "a type needs a primitiveType");
 		}
 		Schema.Type result = new Schema.Type(
-				name(type.name(), type.javaName()),
+				name(type, type.name(), type.javaName()),
 				primitive(type.primitiveType()),
 				absentIfEmpty(type.value()),
 				absentIfDefault(type.length(), 1),
@@ -292,7 +302,7 @@ public final class Mapping {
 			});
 		}
 		Schema.Composite result = new Schema.Composite(
-				name(composite.name(), composite.javaName()),
+				name(composite, composite.name(), composite.javaName()),
 				members,
 				absentIfZero(composite.offset()),
 				absentIfEmpty(composite.semanticType()),
@@ -317,7 +327,7 @@ public final class Mapping {
 			type = declare(target);
 		}
 		Schema.Ref result = new Schema.Ref(
-				name(ref.name(), ref.javaName()),
+				name(ref, ref.name(), ref.javaName()),
 				type,
 				absentIfZero(ref.offset()),
 				absentIfZero(ref.sinceVersion()),
@@ -332,7 +342,7 @@ public final class Mapping {
 		List<Schema.ValidValue> values = new ArrayList<>();
 		for (Annotated.ValidValue value : enumeration.values()) {
 			Schema.ValidValue mapped = new Schema.ValidValue(
-					name(value.name(), value.javaName()),
+					name(value, value.name(), value.javaName()),
 					value.value(),
 					absentIfEmpty(value.description()),
 					absentIfZero(value.sinceVersion()),
@@ -342,7 +352,7 @@ public final class Mapping {
 			values.add(mapped);
 		}
 		Schema.Enum result = new Schema.Enum(
-				name(enumeration.name(), enumeration.javaName()),
+				name(enumeration, enumeration.name(), enumeration.javaName()),
 				encodingType,
 				values,
 				absentIfZero(enumeration.offset()),
@@ -360,7 +370,7 @@ public final class Mapping {
 		List<Schema.Choice> choices = new ArrayList<>();
 		for (Annotated.Choice choice : set.choices()) {
 			Schema.Choice mapped = new Schema.Choice(
-					name(choice.name(), choice.javaName()),
+					name(choice, choice.name(), choice.javaName()),
 					choice.value(),
 					absentIfEmpty(choice.description()),
 					absentIfZero(choice.sinceVersion()),
@@ -370,7 +380,7 @@ public final class Mapping {
 			choices.add(mapped);
 		}
 		Schema.Set result = new Schema.Set(
-				name(set.name(), set.javaName()),
+				name(set, set.name(), set.javaName()),
 				encodingType,
 				choices,
 				absentIfZero(set.offset()),
@@ -408,8 +418,20 @@ public final class Mapping {
 		problems.add(new Problem(node, message));
 	}
 
-	private static String name(String name, String javaName) {
-		return name.isEmpty() ? javaName : name;
+	/** The wire name: what {@code name} says, or the Java name it defaults to. */
+	private String name(Object node, String name, String javaName) {
+		String wireName = name.isEmpty() ? javaName : name;
+		if (!SYMBOLIC_NAME.matcher(wireName).matches()) {
+			problem(node, "\"" + wireName + "\" is not a name SBE allows: a letter or _, then letters, digits and _");
+		}
+		return wireName;
+	}
+
+	private int id(Object node, int id) {
+		if (id < 0 || id > MAX_ID) {
+			problem(node, "an id is 0 to " + MAX_ID + ", not " + id);
+		}
+		return id;
 	}
 
 	private static @Nullable String absentIfEmpty(String value) {
