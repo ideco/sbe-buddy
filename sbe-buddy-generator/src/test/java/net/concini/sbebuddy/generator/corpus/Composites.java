@@ -39,6 +39,77 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Composites {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.composites;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.composites;
+
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+			import static net.concini.sbebuddy.PrimitiveType.INT64;
+			import static net.concini.sbebuddy.PrimitiveType.INT8;
+			import static net.concini.sbebuddy.PrimitiveType.UINT64;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import net.concini.sbebuddy.SbeChoice;
+			import net.concini.sbebuddy.SbeComposite;
+			import net.concini.sbebuddy.SbeEnum;
+			import net.concini.sbebuddy.SbeEnumValue;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeRef;
+			import net.concini.sbebuddy.SbeSet;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeComposite(semanticType = "Price", description = "A price as mantissa and exponent")
+			record Decimal(
+					@SbeType(primitiveType = INT64) long mantissa,
+					@SbeType(primitiveType = INT8, offset = 8) byte exponent
+			) {
+			}
+
+			@SbeComposite
+			record Quote(
+					@SbeRef Decimal bid,
+					@SbeRef(offset = 9) Decimal ask,
+					Side side,
+					Flags flags,
+					Stamp stamp
+			) {
+
+				@SbeEnum(primitiveType = CHAR, offset = 18)
+				enum Side {
+
+					@SbeEnumValue("B")
+					Buy,
+
+					@SbeEnumValue("S")
+					Sell
+				}
+
+				@SbeSet(primitiveType = UINT8, offset = 19)
+				enum Flags {
+
+					@SbeChoice(0)
+					firm
+				}
+
+				@SbeComposite(offset = 20, description = "When the quote was made")
+				record Stamp(@SbeType(primitiveType = UINT64) long time) {
+				}
+			}
+
+			@SbeMessage(id = 1)
+			record Composites(
+					@SbeField(id = 1) Quote quote
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.composites" id="1" version="0">

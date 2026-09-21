@@ -28,6 +28,60 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Enums {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.enums;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.enums;
+
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import net.concini.sbebuddy.SbeEnum;
+			import net.concini.sbebuddy.SbeEnumValue;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeType(primitiveType = UINT8)
+			final class StatusCode {
+			}
+
+			@SbeEnum(primitiveType = CHAR, semanticType = "Side", description = "Which side of the market an order takes")
+			enum Side {
+
+				@SbeEnumValue(value = "B", description = "The order buys")
+				Buy,
+
+				@SbeEnumValue(value = "S", description = "The order sells")
+				Sell
+			}
+
+			@SbeEnum(encodingType = StatusCode.class)
+			enum OrderStatus {
+
+				@SbeEnumValue("0")
+				New,
+
+				@SbeEnumValue("1")
+				PartiallyFilled,
+
+				@SbeEnumValue("2")
+				Filled
+			}
+
+			@SbeMessage(id = 1)
+			record Enums(
+					@SbeField(id = 1) Side side,
+					@SbeField(id = 2) OrderStatus status
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.enums" id="1" version="0">

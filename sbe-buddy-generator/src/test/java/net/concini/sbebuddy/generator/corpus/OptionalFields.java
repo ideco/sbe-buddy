@@ -23,6 +23,30 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class OptionalFields {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.optionalfields;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.optionalfields;
+
+			import static net.concini.sbebuddy.Presence.OPTIONAL;
+
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+
+			@SbeMessage(id = 1)
+			record OptionalFields(
+					@SbeField(id = 1) long orderId,
+					@SbeField(id = 2, presence = OPTIONAL) Integer quantity,
+					@SbeField(id = 3, presence = OPTIONAL, description = "Absent for a market order") Double price
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.optionalfields" id="1" version="0">

@@ -20,6 +20,39 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Messages {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0, description = "What a message and its fields may say about themselves")
+			package corpus.messages;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.messages;
+
+			import static net.concini.sbebuddy.PrimitiveType.UINT64;
+
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+
+			@SbeMessage(id = 1, blockLength = 32, semanticType = "D", description = "A new single order")
+			record NewOrder(
+					@SbeField(id = 1, description = "The identifier the sender gave the order") long orderId,
+					@SbeField(
+							id = 2, primitiveType = UINT64, epoch = "unix", timeUnit = "nanosecond",
+							semanticType = "UTCTimestamp", description = "When the order was sent"
+					) long sentAt,
+					@SbeField(id = 3, offset = 16, semanticType = "Price") long price
+			) {
+			}
+
+			@SbeMessage(id = 2, semanticType = "F")
+			record CancelOrder(
+					@SbeField(id = 1) long orderId
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.messages" id="1" version="0" description="What a message and its fields may say about themselves">

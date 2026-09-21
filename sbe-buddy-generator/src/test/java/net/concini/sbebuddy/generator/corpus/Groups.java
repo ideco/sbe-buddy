@@ -34,6 +34,66 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Groups {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.groups;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.groups;
+
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+			import static net.concini.sbebuddy.PrimitiveType.UINT16;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import java.util.List;
+
+			import net.concini.sbebuddy.SbeComposite;
+			import net.concini.sbebuddy.SbeData;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeGroup;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeComposite(name = "smallGroupSizeEncoding")
+			record SmallGroupSizeEncoding(
+					@SbeType(primitiveType = UINT8) short blockLength,
+					@SbeType(primitiveType = UINT8) short numInGroup
+			) {
+			}
+
+			@SbeComposite(name = "varStringEncoding")
+			record VarStringEncoding(
+					@SbeType(primitiveType = UINT16) int length,
+					@SbeType(primitiveType = CHAR, length = 0, characterEncoding = "UTF-8") String varData
+			) {
+			}
+
+			@SbeMessage(id = 1)
+			record Groups(
+					@SbeField(id = 1) long orderId,
+					@SbeGroup(
+							id = 10, blockLength = 8, semanticType = "NoLegs",
+							description = "The legs of a multi-leg order"
+					) List<Leg> legs
+			) {
+
+				record Leg(
+						@SbeField(id = 11) int legId,
+						@SbeGroup(id = 12, dimensionType = SmallGroupSizeEncoding.class) List<Allocation> allocations,
+						@SbeData(id = 14, type = VarStringEncoding.class) String legNote
+				) {
+
+					record Allocation(
+							@SbeField(id = 13) int account
+					) {
+					}
+				}
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.groups" id="1" version="0">

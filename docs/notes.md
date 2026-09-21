@@ -119,6 +119,39 @@ alternatives considered.
   `TypeMirror`; the same member read from the `AnnotationMirror`'s element
   values is a `ClassType`. Discovery reads every `Class` member from the
   mirror. (Spike experiment, javac 21, 2026-09-20.)
+- A type loaded from a class file, from a jar or a classes directory,
+  exposes its `CLASS`-retained annotations through `getAnnotationMirrors()`
+  on the type and on each `RecordComponentElement`, with the components in
+  declaration order; `MessageHeader` from the api jar reads as
+  `@SbeComposite(name="messageHeader")` over four `@SbeType(primitiveType=
+  UINT16)` components. (Spike experiment, javac 21, 2026-09-21.)
+- `AnnotationMirror.getElementValues()` holds only the members written
+  explicitly; `Elements.getElementValuesWithDefaults` fills the rest.
+  Discovery reads every member through the latter, so a member left at its
+  default is the default's value. (`javax.lang.model` Javadoc, and the
+  spike above.)
+- `PackageElement.getEnclosedElements()` returns the package's types in the
+  order javac entered them: compilation units in the order given, and
+  declaration order within a unit; `TypeElement.getEnclosedElements()`
+  returns record components in declaration order, and
+  `ElementFilter.recordComponentsIn` keeps it. (Spike experiment, javac
+  21, 2026-09-21.)
+- `RoundEnvironment.getElementsAnnotatedWith` returns only elements of the
+  types being compiled; a type read from a jar is never in a round, however
+  many of our annotations it carries. So the packages a round offers are
+  the compilation's own, and the api's package never becomes a unit of
+  work although `MessageHeader` carries `@SbeComposite`. (Every corpus
+  case, which resolves `MessageHeader` from the api jar and compiles
+  without a diagnostic.)
+- `Messager.printMessage(kind, message, element, mirror)` positions the
+  diagnostic on the annotation rather than on the element's own
+  declaration. (`PlacementTest`, on a message whose `@SbeMessage` is
+  written on the line above the record.)
+- `Filer.createResource(CLASS_OUTPUT, "a.b", "schema.xml", origin)` writes
+  `a/b/schema.xml` under the class output directory, so the resource ships
+  in the jar beside the package's classes and is on the test classpath of
+  the module that declared it. (`javax.annotation.processing` Javadoc, and
+  the example's `SchemaResourceTest`.)
 - From JDK 23 javac performs no annotation processing unless `-processor`,
   `--processor-path` or `--processor-module-path` is set, or `-proc` is
   `only` or `full`; discovery from the compile classpath is gone. Reaching

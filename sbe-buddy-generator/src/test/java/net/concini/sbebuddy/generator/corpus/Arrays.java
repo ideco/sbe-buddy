@@ -24,6 +24,39 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Arrays {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.arrays;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.arrays;
+
+			import static net.concini.sbebuddy.PrimitiveType.INT32;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeType(primitiveType = UINT8, length = 3)
+			final class Rgb {
+			}
+
+			@SbeType(primitiveType = INT32, length = 4, description = "Four readings, oldest first")
+			final class Samples {
+			}
+
+			@SbeMessage(id = 1)
+			record Arrays(
+					@SbeField(id = 1, type = Rgb.class) byte[] colour,
+					@SbeField(id = 2, type = Samples.class) int[] samples
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.arrays" id="1" version="0">

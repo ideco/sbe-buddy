@@ -31,6 +31,52 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Constants {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.constants;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.constants;
+
+			import static net.concini.sbebuddy.Presence.CONSTANT;
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+
+			import net.concini.sbebuddy.SbeEnum;
+			import net.concini.sbebuddy.SbeEnumValue;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeEnum(primitiveType = CHAR)
+			enum Side {
+
+				@SbeEnumValue("B")
+				Buy,
+
+				@SbeEnumValue("S")
+				Sell
+			}
+
+			@SbeType(primitiveType = CHAR, length = 3, presence = CONSTANT, value = "USD")
+			final class Currency {
+			}
+
+			@SbeType(primitiveType = CHAR, presence = CONSTANT, valueRef = "Side.Buy")
+			final class BuySide {
+			}
+
+			@SbeMessage(id = 1)
+			record Constants(
+					@SbeField(id = 1, type = Currency.class) String currency,
+					@SbeField(id = 2, type = BuySide.class) byte buySide,
+					@SbeField(id = 3, presence = CONSTANT, valueRef = "Side.Sell") Side side
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.constants" id="1" version="0">
