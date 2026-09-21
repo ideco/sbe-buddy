@@ -31,6 +31,16 @@ alternatives considered.
   `Ir.java`, `SbeTool.java`, read 2026-09-21.)
 - sbe-tool 1.40.2 builds against Agrona 2.6.1 (`gradle/libs.versions.toml`
   in the submodule, read 2026-09-21).
+- `XmlSchemaParser.parse`, `IrGenerator` and `JavaGenerator` over a
+  `StringWriterOutputManager` run to completion in a plain JVM with no
+  `--add-opens`, so generation loads no Agrona buffer class;
+  `getSources()` is keyed by the fully qualified class name. (Spike
+  experiment, JDK 21, 2026-09-21.)
+- A duplicate `validValue` is a warning, `validValue already exists for
+  value: 66`; with `warningsFatal` the parse ends in an
+  `IllegalArgumentException` whose message is the first line reported
+  without its `WARNING: ` prefix, while the `errorPrintStream` carries
+  every line with the prefix. (Spike experiment, 2026-09-21.)
 - `JavaGenerator.generate()` opens `MessageHeaderEncoder` and
   `MessageHeaderDecoder` twice, once from `Ir.types()` and once as the
   header stub, with identical content. An output manager over `Filer` must
@@ -171,6 +181,12 @@ alternatives considered.
   in the jar beside the package's classes and is on the test classpath of
   the module that declared it. (`javax.annotation.processing` Javadoc, and
   the example's `SchemaResourceTest`.)
+- Plain `javac` on JDK 21 with no JVM flag, the api, Agrona and JSpecify on
+  the compile classpath and the processor, the generator, the api,
+  sbe-tool and Agrona on the processor path compiles the example, writes
+  every flyweight under `com.example.trading.sbe` into `-s` and
+  `schema.xml` into `-d`; generation inside javac loads no Agrona buffer
+  class. (Run by hand against the increment 5 build, 2026-09-21.)
 - From JDK 23 javac performs no annotation processing unless `-processor`,
   `--processor-path` or `--processor-module-path` is set, or `-proc` is
   `only` or `full`; discovery from the compile classpath is gone. Reaching
@@ -191,7 +207,11 @@ alternatives considered.
   `jdk.internal.misc.Unsafe` directly, so any JVM that loads an Agrona
   buffer class needs `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`.
   javac needs it only if the processor touches a buffer. (Sources jar,
-  read 2026-09-20.)
+  read 2026-09-20.) Confirmed on JDK 21: the generated flyweights' first
+  `wrap` of an `UnsafeBuffer` fails with `IllegalAccessError` from
+  `UnsafeApi` without the flag and runs with it, so a user's tests and
+  runtime carry it while their javac does not. (Spike experiment,
+  2026-09-21.)
 
 ## Maven 4.0.0-rc-6
 

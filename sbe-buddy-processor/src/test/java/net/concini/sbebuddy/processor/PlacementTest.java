@@ -13,9 +13,10 @@ import net.concini.sbebuddy.generator.SchemaXmlAssert;
 
 /**
  * Where a rule reaches the user. One snippet per layer, discovery, {@code
- * Mapping} and {@code Generator.validate}, asserting that the error lands on
- * the element carrying the mistake; the rules themselves are tested in the
- * generator. Beside them, a declared type resolved across a package boundary.
+ * Mapping}, {@code Generator.validate} and sbe-tool as the backstop, asserting
+ * that the error lands on the element carrying the mistake; the rules
+ * themselves are tested in the generator. Beside them, a declared type resolved
+ * across a package boundary.
  */
 final class PlacementTest {
 
@@ -94,6 +95,39 @@ final class PlacementTest {
 		Javac.Result result = compile(source);
 
 		assertOnlyError(result, source, "long accountId", "two members have id 1");
+	}
+
+	@Test
+	void sbeToolNamesTheSchemaPackage() {
+		// Two constants with one value: no rule of ours, and sbe-tool's warning.
+		String source = """
+				package placement;
+
+				import static net.concini.sbebuddy.PrimitiveType.CHAR;
+
+				import net.concini.sbebuddy.SbeEnum;
+				import net.concini.sbebuddy.SbeEnumValue;
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+
+				@SbeEnum(primitiveType = CHAR)
+				enum Side {
+					@SbeEnumValue("B") BUY, @SbeEnumValue("B") SELL
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1) Side side
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(
+				result, PACKAGE_INFO, "@SbeSchema(id = 1, version = 0)",
+				"WARNING: at <types><enum name=\"Side\"> validValue already exists for value: 66"
+		);
 	}
 
 	@Test

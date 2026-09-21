@@ -5,6 +5,7 @@ import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.group;
 import static net.concini.sbebuddy.generator.Fixtures.message;
+import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,6 +13,7 @@ import static uk.co.real_logic.sbe.PrimitiveType.INT64;
 
 import java.util.List;
 
+import org.agrona.generation.StringWriterOutputManager;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -114,5 +116,23 @@ final class GeneratorTest {
 
 	private static List<Problem> validate(Fixtures.SchemaBuilder schema) {
 		return Generator.validate(schema.build());
+	}
+
+	@Test
+	void whatSbeToolRejectsIsAProblemNamingTheSchema() {
+		// A type no declaration carries: our rules cannot see it from a Schema built
+		// by hand, and sbe-tool's parser refuses it.
+		Schema schema = messageSchema("p", 1, 0)
+				.types(messageHeader())
+				.messages(message("M", 1).fields(field("x", 1, "nosuch")))
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, output);
+
+		assertThat(problems).hasSize(1);
+		assertThat(problems.get(0).node()).isSameAs(schema);
+		assertThat(problems.get(0).message()).contains("nosuch");
+		assertThat(output.getSources()).isEmpty();
 	}
 }

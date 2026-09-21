@@ -1,6 +1,7 @@
 package net.concini.sbebuddy.processor;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,9 +35,9 @@ import net.concini.sbebuddy.generator.SchemaXml;
  * The javac front-end: any annotated element in a round makes its package the
  * unit of work, handled once, in the round that first shows it. A package
  * without {@code @SbeSchema} declares types for a schema elsewhere and produces
- * nothing. Otherwise: discover, map, validate; every problem is an error on the
- * element it names; a package with none gets its {@code schema.xml} in the
- * class output.
+ * nothing. Otherwise: discover, map, validate, generate; every problem is an
+ * error on the element it names; a package with none gets its flyweights as
+ * sources and its {@code schema.xml} in the class output.
  */
 @SupportedAnnotationTypes("net.concini.sbebuddy.*")
 public final class SbeProcessor extends AbstractProcessor {
@@ -92,7 +93,20 @@ public final class SbeProcessor extends AbstractProcessor {
 			report(problems, discovered, mapped, schemaPackage);
 			return;
 		}
+		List<Problem> generation = generate(schemaPackage, mapped.schema());
+		if (!generation.isEmpty()) {
+			report(generation, discovered, mapped, schemaPackage);
+			return;
+		}
 		write(schemaPackage, mapped.schema());
+	}
+
+	private List<Problem> generate(PackageElement schemaPackage, Schema schema) {
+		try {
+			return Generator.generate(schema, new FilerOutputManager(processingEnv.getFiler(), schemaPackage));
+		} catch (UncheckedIOException e) {
+			return List.of(new Problem(schema, "could not write a flyweight: " + e.getMessage()));
+		}
 	}
 
 	/** Every {@code @SbeMessage} the elements hold, however deeply nested. */

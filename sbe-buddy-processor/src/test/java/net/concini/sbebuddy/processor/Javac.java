@@ -83,7 +83,11 @@ public final class Javac {
 		};
 	}
 
-	/** Every file javac or the processor writes lands in the map, as text. */
+	/**
+	 * Every file javac or the processor writes lands in the map, as text, and a
+	 * generated source is readable again, because javac parses it in the next
+	 * round.
+	 */
 	private static final class InMemoryOutput extends ForwardingJavaFileManager<StandardJavaFileManager> {
 
 		private final Map<String, String> outputs;
@@ -111,6 +115,7 @@ public final class Javac {
 		private final class Written extends SimpleJavaFileObject {
 
 			private final String path;
+			private String content = "";
 
 			Written(String path, Kind kind) {
 				super(URI.create("memory:///" + path), kind);
@@ -123,9 +128,15 @@ public final class Javac {
 
 					@Override
 					public void close() {
-						outputs.put(path, toString(StandardCharsets.UTF_8));
+						content = toString(StandardCharsets.UTF_8);
+						outputs.put(path, content);
 					}
 				};
+			}
+
+			@Override
+			public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+				return content;
 			}
 		}
 	}

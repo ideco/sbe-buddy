@@ -181,8 +181,8 @@ Three layers, in the order a mistake meets them.
   and the annotations are retained at `CLASS`, so a declared type in a
   library jar still resolves and nothing exists at runtime to reflect
   over. It loads no Agrona buffer class, so a user's javac needs no JVM
-  flag; that `JavaGenerator` keeps this true is checked by the increment
-  that first runs it.
+  flag; `JavaGenerator` keeps this true, checked by hand with a plain
+  javac at the first release (`notes.md`).
 
 ## The codec contract
 
