@@ -1,8 +1,8 @@
 # Guide
 
-## Getting started
+sbe-buddy maps annotated Java to an SBE schema, uses sbe-tool to generate the standard flyweights, and generates codecs between those flyweights and the Java model.
 
-- [Getting started](getting-started.md) — a first message, end to end
+Start with [Getting started](getting-started.md) for a complete example from declaration to encode/decode.
 
 ## Reference
 
