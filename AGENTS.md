@@ -14,7 +14,7 @@ docs/rpc.md            parked idea, out of scope
 sbe-buddy-generator    the core: the schema model, the annotations as data, the mapping between them, the XML, the codec emitter, the corpus; no javac
 sbe-buddy-api          what users compile against: annotations, Codec, TypeBinding, built-ins
 sbe-buddy-processor    javac elements to the annotations as data; the only place javac appears
-sbe-buddy-example      annotated schemas, one per concern, each with its oracle; the end-to-end tests
+sbe-buddy-example      a realistic annotated schema with its oracle; the integration proof
 reference/             sbe-tool's sources as a git submodule, for reading only
 ```
 

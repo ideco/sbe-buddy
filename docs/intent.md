@@ -83,7 +83,7 @@ the scope above is complete, and nothing built may preclude them.
 - [x] 1. Build
 - [x] 2. The schema model and its XML, complete, with the corpus
 - [x] 3. The annotations, and the mapping from them to the model; no javac
-- [ ] 4. Discovery and the processor; the schema in the jar; the example schemas and their oracles
+- [ ] 4. Discovery and the processor; the schema in the jar; the corpus's source view; the example
 - [ ] 5. sbe-tool in the pipeline: the backstop and the flyweights. The first release, `v0.1.0`: records in, sbe-tool's flyweights out
 - [ ] 6. Codec: primitives
 - [ ] 7. Codec: schema evolution
