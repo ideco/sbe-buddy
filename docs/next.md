@@ -49,7 +49,11 @@ directions. Primitives still; every other construct keeps its refusal.
   `WARNING`, `Integer is boxed although the field is never absent`,
   because a box may be there for reasons of the user's own; the codec
   never hands it `null`, and refuses `null` from it on encode like any
-  required field. Decidable from one node once `Mapping` holds the
+  required field. The rule is about the primitive faces only: a component
+  of a reference type holds `null` as it is, so an enum, from increment 8
+  on, needs no rule and takes the same optional and added shapes with a
+  null test of its own, the encoding's null value that sbe-tool's enums
+  carry as `NULL_VAL`. Decidable from one node once `Mapping` holds the
   baseline, blamed on the field, tested in both directions and at the
   baseline itself like the other rules. The face rule stays as it is and
   looks through the box, so `Long` on an optional `uint16` still says
