@@ -11,12 +11,50 @@
 
   <artifactId>sbe-buddy-example</artifactId>
 
+  <!-- The api is all a user compiles against. The processor reaches the sources
+       through annotationProcessorPaths alone, so neither it, the generator nor
+       sbe-tool is on this module's compile classpath. -->
   <dependencies>
     <dependency>
       <groupId>net.concini</groupId>
       <artifactId>sbe-buddy-api</artifactId>
     </dependency>
+    <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-generator</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-generator</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.xmlunit</groupId>
+      <artifactId>xmlunit-assertj3</artifactId>
+      <version>${xmlunit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- Appended to the parent's Error Prone and NullAway paths. -->
+          <annotationProcessorPaths combine.children="append">
+            <path>
+              <groupId>net.concini</groupId>
+              <artifactId>sbe-buddy-processor</artifactId>
+              <version>${project.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 
   <properties>
     <module.name>com.example.trading</module.name>
