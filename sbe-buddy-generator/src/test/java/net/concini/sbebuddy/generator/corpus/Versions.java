@@ -1,8 +1,22 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedChoice;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnum;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnumValue;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedRef;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.choice;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
+import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.enumeration;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.group;
@@ -10,14 +24,22 @@ import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.ref;
 import static net.concini.sbebuddy.generator.Fixtures.set;
+import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static net.concini.sbebuddy.generator.Fixtures.validValue;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.INT32;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedCompositeBuilder;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedEnumBuilder;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedSetBuilder;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedTypeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -74,7 +96,6 @@ final class Versions {
 				.semanticVersion("FIX.5.0SP2")
 				.types(
 						messageHeader(),
-						groupSizeEncoding(),
 						composite("varStringEncoding").members(
 								type("length", UINT16),
 								type("varData", CHAR).length(0).characterEncoding("UTF-8")
@@ -94,7 +115,8 @@ final class Versions {
 								.members(
 										type("first", INT32),
 										ref("second", "Added").offset(4).sinceVersion(1).deprecated(3)
-								)
+								),
+						groupSizeEncoding()
 				)
 				.messages(
 						message("Versions", 1)
@@ -108,6 +130,59 @@ final class Versions {
 												.fields(field("pair", 3, "Pair").sinceVersion(2).deprecated(3))
 								)
 								.data(data("note", 4, "varStringEncoding").sinceVersion(2).deprecated(3))
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedCompositeBuilder varStringEncoding = annotatedComposite("VarStringEncoding")
+				.name("varStringEncoding")
+				.members(
+						annotatedType("length", UINT16),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
+				);
+		AnnotatedTypeBuilder added = annotatedType("Added", INT32).sinceVersion(1).deprecated(3);
+		AnnotatedEnumBuilder status = annotatedEnum("Status")
+				.primitiveType(UINT8)
+				.sinceVersion(1)
+				.deprecated(3)
+				.values(annotatedEnumValue("New", "1").sinceVersion(1).deprecated(3));
+		AnnotatedSetBuilder flags = annotatedSet("Flags")
+				.primitiveType(UINT8)
+				.sinceVersion(1)
+				.deprecated(3)
+				.choices(annotatedChoice("urgent", 0).sinceVersion(1).deprecated(3));
+		AnnotatedCompositeBuilder pair = annotatedComposite("Pair")
+				.sinceVersion(1)
+				.deprecated(3)
+				.members(
+						annotatedType("first", INT32),
+						annotatedRef("second", declared(added)).offset(4).sinceVersion(1).deprecated(3)
+				);
+		return annotatedSchema("corpus.versions", 1, 3)
+				.semanticVersion("FIX.5.0SP2")
+				.types(varStringEncoding, added, status, flags, pair)
+				.messages(
+						annotatedMessage("Versions", 1)
+								.sinceVersion(1)
+								.deprecated(3)
+								.components(
+										annotatedField("added", 1, primitive(INT))
+												.type(added)
+												.sinceVersion(1)
+												.deprecated(3),
+										annotatedGroup("extra", 2)
+												.sinceVersion(2)
+												.deprecated(3)
+												.components(
+														annotatedField("pair", 3, declared(pair))
+																.sinceVersion(2)
+																.deprecated(3)
+												),
+										annotatedData("note", 4, text(), varStringEncoding)
+												.sinceVersion(2)
+												.deprecated(3)
+								)
 				)
 				.build();
 	}

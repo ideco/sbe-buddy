@@ -1,11 +1,20 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.DOUBLE;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static uk.co.real_logic.sbe.xml.Presence.OPTIONAL;
 
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -44,6 +53,20 @@ final class OptionalFields {
 								field("orderId", 1, "int64"),
 								field("quantity", 2, "int32").presence(OPTIONAL),
 								field("price", 3, "double").presence(OPTIONAL).description("Absent for a market order")
+						)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		return annotatedSchema("corpus.optionalfields", 1, 0)
+				.messages(
+						annotatedMessage("OptionalFields", 1).components(
+								annotatedField("orderId", 1, primitive(LONG)),
+								annotatedField("quantity", 2, boxed(INT)).presence(OPTIONAL),
+								annotatedField("price", 3, boxed(DOUBLE))
+										.presence(OPTIONAL)
+										.description("Absent for a market order")
 						)
 				)
 				.build();

@@ -1,15 +1,25 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.INT64;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT32;
 import static uk.co.real_logic.sbe.xml.Presence.OPTIONAL;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedTypeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -66,6 +76,32 @@ final class NamedTypes {
 								field("symbol", 1, "Symbol"),
 								field("price", 2, "Price"),
 								field("quantity", 3, "Quantity")
+						)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedTypeBuilder symbol = annotatedType("Symbol", CHAR)
+				.length(6)
+				.characterEncoding("ASCII")
+				.semanticType("String")
+				.description("An instrument symbol");
+		AnnotatedTypeBuilder price = annotatedType("Price", INT64)
+				.minValue("0")
+				.maxValue("9223372036854775806")
+				.semanticType("Price");
+		AnnotatedTypeBuilder quantity = annotatedType("Quantity", UINT32)
+				.presence(OPTIONAL)
+				.nullValue("4294967294")
+				.description("Absent when the size is not disclosed");
+		return annotatedSchema("corpus.namedtypes", 1, 0)
+				.types(symbol, price, quantity)
+				.messages(
+						annotatedMessage("NamedTypes", 1).components(
+								annotatedField("symbol", 1, text()).type(symbol),
+								annotatedField("price", 2, primitive(LONG)).type(price),
+								annotatedField("quantity", 3, boxed(LONG)).type(quantity)
 						)
 				)
 				.build();

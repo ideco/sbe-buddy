@@ -1,14 +1,25 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Fixtures.annotatedChoice;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.choice;
+import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
 import static net.concini.sbebuddy.generator.Fixtures.set;
 import static net.concini.sbebuddy.generator.Fixtures.type;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedSetBuilder;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedTypeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -70,6 +81,34 @@ final class Sets {
 						message("Sets", 1).fields(
 								field("permissions", 1, "Permissions"),
 								field("handling", 2, "Handling")
+						)
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedTypeBuilder flagsEncoding = annotatedType("FlagsEncoding", UINT8);
+		AnnotatedSetBuilder permissions = annotatedSet("Permissions")
+				.primitiveType(UINT16)
+				.semanticType("MultipleCharValue")
+				.description("What the account may do")
+				.choices(
+						annotatedChoice("canTrade", 0).description("May submit orders"),
+						annotatedChoice("canQuote", 1).description("May submit quotes"),
+						annotatedChoice("canCancel", 2)
+				);
+		AnnotatedSetBuilder handling = annotatedSet("Handling")
+				.encodingType(flagsEncoding)
+				.choices(
+						annotatedChoice("urgent", 0),
+						annotatedChoice("manual", 7)
+				);
+		return annotatedSchema("corpus.sets", 1, 0)
+				.types(flagsEncoding, permissions, handling)
+				.messages(
+						annotatedMessage("Sets", 1).components(
+								annotatedField("permissions", 1, declared(permissions)),
+								annotatedField("handling", 2, declared(handling))
 						)
 				)
 				.build();

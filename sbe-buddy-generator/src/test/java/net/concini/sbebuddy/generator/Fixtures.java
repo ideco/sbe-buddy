@@ -913,6 +913,11 @@ public final class Fixtures {
 		return new Annotated.Declared(declaration.build());
 	}
 
+	/** A Java type no mapping knows, named as the problem would name it. */
+	public static Annotated.JavaType other(String javaName) {
+		return new Annotated.Other(javaName);
+	}
+
 	public static Annotated.JavaType listOfRecord(String elementName) {
 		return new Annotated.ListOfRecord(elementName);
 	}

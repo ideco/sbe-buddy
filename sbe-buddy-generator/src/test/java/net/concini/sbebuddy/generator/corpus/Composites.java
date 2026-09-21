@@ -1,7 +1,18 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Fixtures.annotatedChoice;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnum;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedEnumValue;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedRef;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.choice;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
+import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.enumeration;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
@@ -11,10 +22,14 @@ import static net.concini.sbebuddy.generator.Fixtures.ref;
 import static net.concini.sbebuddy.generator.Fixtures.set;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static net.concini.sbebuddy.generator.Fixtures.validValue;
+import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.INT64;
 import static uk.co.real_logic.sbe.PrimitiveType.INT8;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT64;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT8;
 
+import net.concini.sbebuddy.generator.Annotated;
+import net.concini.sbebuddy.generator.Fixtures.AnnotatedCompositeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -91,6 +106,40 @@ final class Composites {
 				)
 				.messages(
 						message("Composites", 1).fields(field("quote", 1, "Quote"))
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		AnnotatedCompositeBuilder decimal = annotatedComposite("Decimal")
+				.semanticType("Price")
+				.description("A price as mantissa and exponent")
+				.members(
+						annotatedType("mantissa", INT64),
+						annotatedType("exponent", INT8).offset(8)
+				);
+		AnnotatedCompositeBuilder quote = annotatedComposite("Quote").members(
+				annotatedRef("bid", declared(decimal)),
+				annotatedRef("ask", declared(decimal)).offset(9),
+				annotatedEnum("side")
+						.primitiveType(CHAR)
+						.offset(18)
+						.values(
+								annotatedEnumValue("Buy", "B"),
+								annotatedEnumValue("Sell", "S")
+						),
+				annotatedSet("flags").primitiveType(UINT8).offset(19).choices(annotatedChoice("firm", 0)),
+				annotatedComposite("stamp")
+						.offset(20)
+						.description("When the quote was made")
+						.members(annotatedType("time", UINT64))
+		);
+		return annotatedSchema("corpus.composites", 1, 0)
+				.types(decimal, quote)
+				.messages(
+						annotatedMessage("Composites", 1).components(
+								annotatedField("quote", 1, declared(quote))
+						)
 				)
 				.build();
 	}

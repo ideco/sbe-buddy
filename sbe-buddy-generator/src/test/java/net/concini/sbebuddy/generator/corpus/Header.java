@@ -1,13 +1,21 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT32;
 
+import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
@@ -53,6 +61,28 @@ final class Header {
 				)
 				.messages(
 						message("Header", 1).fields(field("orderId", 1, "int64"))
+				)
+				.build();
+	}
+
+	static Annotated annotated() {
+		return annotatedSchema("corpus.header", 1, 0)
+				.headerType(
+						annotatedComposite("ApplicationHeader")
+								.name("applicationHeader")
+								.description("The standard header and a sequence number")
+								.members(
+										annotatedType("blockLength", UINT16),
+										annotatedType("templateId", UINT16),
+										annotatedType("schemaId", UINT16),
+										annotatedType("version", UINT16),
+										annotatedType("sequenceNumber", UINT32)
+								)
+				)
+				.messages(
+						annotatedMessage("Header", 1).components(
+								annotatedField("orderId", 1, primitive(LONG))
+						)
 				)
 				.build();
 	}
