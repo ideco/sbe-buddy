@@ -13,7 +13,7 @@ import net.concini.sbebuddy.generator.corpus.Corpus;
 final class SbeProcessorTest {
 
 	static List<Corpus.Case> cases() {
-		return Corpus.CASES.stream().filter(aCase -> aCase.source() != null).toList();
+		return Corpus.CASES;
 	}
 
 	@ParameterizedTest

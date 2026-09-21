@@ -17,6 +17,28 @@ import net.concini.sbebuddy.generator.Schema;
 /** A schema on the wire the other way round. */
 final class BigEndian {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0, byteOrder = BIG_ENDIAN)
+			package corpus.bigendian;
+
+			import static net.concini.sbebuddy.ByteOrder.BIG_ENDIAN;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.bigendian;
+
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+
+			@SbeMessage(id = 1)
+			record BigEndian(
+					@SbeField(id = 1) long orderId
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.bigendian" id="1" version="0" byteOrder="bigEndian">

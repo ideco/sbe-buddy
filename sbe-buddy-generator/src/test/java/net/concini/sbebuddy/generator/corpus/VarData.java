@@ -32,6 +32,61 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class VarData {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.vardata;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.vardata;
+
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+			import static net.concini.sbebuddy.PrimitiveType.UINT16;
+			import static net.concini.sbebuddy.PrimitiveType.UINT32;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import net.concini.sbebuddy.SbeComposite;
+			import net.concini.sbebuddy.SbeData;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeComposite(name = "varStringEncoding")
+			record VarStringEncoding(
+					@SbeType(primitiveType = UINT16) int length,
+					@SbeType(primitiveType = CHAR, length = 0, characterEncoding = "UTF-8") String varData
+			) {
+			}
+
+			@SbeComposite(name = "varBlobEncoding")
+			record VarBlobEncoding(
+					@SbeType(primitiveType = UINT32, maxValue = "1073741824") long length,
+					@SbeType(primitiveType = UINT8, length = 0) byte[] varData
+			) {
+			}
+
+			@SbeComposite(name = "varByteEncoding")
+			record VarByteEncoding(
+					@SbeType(primitiveType = UINT8) short length,
+					@SbeType(primitiveType = UINT8, length = 0) byte[] varData
+			) {
+			}
+
+			@SbeMessage(id = 1)
+			record VarData(
+					@SbeField(id = 1) int orderId,
+					@SbeData(
+							id = 2, type = VarStringEncoding.class, offset = 4, semanticType = "String",
+							description = "A free-text note"
+					) String note,
+					@SbeData(id = 3, type = VarBlobEncoding.class) byte[] payload,
+					@SbeData(id = 4, type = VarByteEncoding.class) byte[] signature
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.vardata" id="1" version="0">

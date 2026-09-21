@@ -28,6 +28,52 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class NamedTypes {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.namedtypes;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.namedtypes;
+
+			import static net.concini.sbebuddy.Presence.OPTIONAL;
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+			import static net.concini.sbebuddy.PrimitiveType.INT64;
+			import static net.concini.sbebuddy.PrimitiveType.UINT32;
+
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeType(
+					primitiveType = CHAR, length = 6, characterEncoding = "ASCII", semanticType = "String",
+					description = "An instrument symbol"
+			)
+			final class Symbol {
+			}
+
+			@SbeType(primitiveType = INT64, minValue = "0", maxValue = "9223372036854775806", semanticType = "Price")
+			final class Price {
+			}
+
+			@SbeType(
+					primitiveType = UINT32, presence = OPTIONAL, nullValue = "4294967294",
+					description = "Absent when the size is not disclosed"
+			)
+			final class Quantity {
+			}
+
+			@SbeMessage(id = 1)
+			record NamedTypes(
+					@SbeField(id = 1, type = Symbol.class) String symbol,
+					@SbeField(id = 2, type = Price.class) long price,
+					@SbeField(id = 3, type = Quantity.class) Long quantity
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.namedtypes" id="1" version="0">

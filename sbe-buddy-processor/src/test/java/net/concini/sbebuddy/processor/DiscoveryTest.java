@@ -13,7 +13,6 @@ import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -22,7 +21,7 @@ import net.concini.sbebuddy.generator.corpus.Corpus;
 final class DiscoveryTest {
 
 	static List<Corpus.Case> cases() {
-		return Corpus.CASES.stream().filter(aCase -> aCase.source() != null).toList();
+		return Corpus.CASES;
 	}
 
 	@ParameterizedTest
@@ -36,15 +35,6 @@ final class DiscoveryTest {
 		assertThat(capture.discovered).isNotNull();
 		assertThat(capture.discovered.problems()).isEmpty();
 		assertThat(capture.discovered.annotated()).isEqualTo(aCase.annotated());
-	}
-
-	@Test
-	void everyCaseHasASource() {
-		assertThat(Corpus.CASES)
-				.filteredOn(aCase -> aCase.source() == null)
-				.extracting(Corpus.Case::name)
-				.as("cases without a source")
-				.isEmpty();
 	}
 
 	/** Hands the package to discovery in the first round and keeps the result. */

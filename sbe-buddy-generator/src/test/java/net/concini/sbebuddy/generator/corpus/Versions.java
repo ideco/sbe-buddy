@@ -48,6 +48,81 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Versions {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 3, semanticVersion = "FIX.5.0SP2")
+			package corpus.versions;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.versions;
+
+			import static net.concini.sbebuddy.PrimitiveType.CHAR;
+			import static net.concini.sbebuddy.PrimitiveType.INT32;
+			import static net.concini.sbebuddy.PrimitiveType.UINT16;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import java.util.List;
+
+			import net.concini.sbebuddy.SbeChoice;
+			import net.concini.sbebuddy.SbeComposite;
+			import net.concini.sbebuddy.SbeData;
+			import net.concini.sbebuddy.SbeEnum;
+			import net.concini.sbebuddy.SbeEnumValue;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeGroup;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeRef;
+			import net.concini.sbebuddy.SbeSet;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeComposite(name = "varStringEncoding")
+			record VarStringEncoding(
+					@SbeType(primitiveType = UINT16) int length,
+					@SbeType(primitiveType = CHAR, length = 0, characterEncoding = "UTF-8") String varData
+			) {
+			}
+
+			@SbeType(primitiveType = INT32, sinceVersion = 1, deprecated = 3)
+			final class Added {
+			}
+
+			@SbeEnum(primitiveType = UINT8, sinceVersion = 1, deprecated = 3)
+			enum Status {
+
+				@SbeEnumValue(value = "1", sinceVersion = 1, deprecated = 3)
+				New
+			}
+
+			@SbeSet(primitiveType = UINT8, sinceVersion = 1, deprecated = 3)
+			enum Flags {
+
+				@SbeChoice(value = 0, sinceVersion = 1, deprecated = 3)
+				urgent
+			}
+
+			@SbeComposite(sinceVersion = 1, deprecated = 3)
+			record Pair(
+					@SbeType(primitiveType = INT32) int first,
+					@SbeRef(offset = 4, sinceVersion = 1, deprecated = 3) Added second
+			) {
+			}
+
+			@SbeMessage(id = 1, sinceVersion = 1, deprecated = 3)
+			record Versions(
+					@SbeField(id = 1, type = Added.class, sinceVersion = 1, deprecated = 3) int added,
+					@SbeGroup(id = 2, sinceVersion = 2, deprecated = 3) List<Extra> extra,
+					@SbeData(id = 4, type = VarStringEncoding.class, sinceVersion = 2, deprecated = 3) String note
+			) {
+
+				record Extra(
+						@SbeField(id = 3, sinceVersion = 2, deprecated = 3) Pair pair
+				) {
+				}
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.versions" id="1" version="3" semanticVersion="FIX.5.0SP2">

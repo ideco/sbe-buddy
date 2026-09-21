@@ -28,6 +28,60 @@ import net.concini.sbebuddy.generator.Schema;
  */
 final class Sets {
 
+	static final String PACKAGE_INFO = """
+			@SbeSchema(id = 1, version = 0)
+			package corpus.sets;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	static final String SOURCE = """
+			package corpus.sets;
+
+			import static net.concini.sbebuddy.PrimitiveType.UINT16;
+			import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+			import net.concini.sbebuddy.SbeChoice;
+			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeMessage;
+			import net.concini.sbebuddy.SbeSet;
+			import net.concini.sbebuddy.SbeType;
+
+			@SbeType(primitiveType = UINT8)
+			final class FlagsEncoding {
+			}
+
+			@SbeSet(primitiveType = UINT16, semanticType = "MultipleCharValue", description = "What the account may do")
+			enum Permissions {
+
+				@SbeChoice(value = 0, description = "May submit orders")
+				canTrade,
+
+				@SbeChoice(value = 1, description = "May submit quotes")
+				canQuote,
+
+				@SbeChoice(2)
+				canCancel
+			}
+
+			@SbeSet(encodingType = FlagsEncoding.class)
+			enum Handling {
+
+				@SbeChoice(0)
+				urgent,
+
+				@SbeChoice(7)
+				manual
+			}
+
+			@SbeMessage(id = 1)
+			record Sets(
+					@SbeField(id = 1) Permissions permissions,
+					@SbeField(id = 2) Handling handling
+			) {
+			}
+			""";
+
 	static final String XML = """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.sets" id="1" version="0">
