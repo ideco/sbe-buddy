@@ -58,6 +58,8 @@ final class Messages {
 										field("orderId", 1, "int64")
 												.description("The identifier the sender gave the order"),
 										field("sentAt", 2, "uint64")
+												.epoch("unix")
+												.timeUnit("nanosecond")
 												.semanticType("UTCTimestamp")
 												.description("When the order was sent"),
 										field("price", 3, "int64").offset(16).semanticType("Price")
@@ -82,6 +84,8 @@ final class Messages {
 												.description("The identifier the sender gave the order"),
 										annotatedField("sentAt", 2, primitive(LONG))
 												.primitiveType(UINT64)
+												.epoch("unix")
+												.timeUnit("nanosecond")
 												.semanticType("UTCTimestamp")
 												.description("When the order was sent"),
 										annotatedField("price", 3, primitive(LONG))

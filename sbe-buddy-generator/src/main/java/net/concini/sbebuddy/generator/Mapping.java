@@ -134,8 +134,8 @@ public final class Mapping {
 				presence(field.presence()),
 				absentIfEmpty(field.valueRef()),
 				absentIfZero(field.offset()),
-				absentIfDefault(field.epoch(), "unix"),
-				absentIfDefault(field.timeUnit(), "nanosecond"),
+				absentIfEmpty(field.epoch()),
+				absentIfEmpty(field.timeUnit()),
 				absentIfEmpty(field.semanticType()),
 				absentIfEmpty(field.description()),
 				absentIfZero(field.sinceVersion()),
@@ -443,10 +443,6 @@ public final class Mapping {
 
 	private static @Nullable String absentIfEmpty(String value) {
 		return value.isEmpty() ? null : value;
-	}
-
-	private static @Nullable String absentIfDefault(String value, String xsdDefault) {
-		return value.equals(xsdDefault) ? null : value;
 	}
 
 	private static @Nullable Integer absentIfZero(int value) {

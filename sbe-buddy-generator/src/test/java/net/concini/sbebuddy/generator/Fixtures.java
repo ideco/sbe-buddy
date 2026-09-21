@@ -1240,8 +1240,8 @@ public final class Fixtures {
 		private Presence presence = Presence.REQUIRED;
 		private String valueRef = "";
 		private int offset;
-		private String epoch = "unix";
-		private String timeUnit = "nanosecond";
+		private String epoch = "";
+		private String timeUnit = "";
 		private String semanticType = "";
 		private String description = "";
 		private int sinceVersion;

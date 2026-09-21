@@ -30,9 +30,11 @@ public @interface SbeField {
 
 	int offset() default 0;
 
-	String epoch() default "unix";
+	/** SBE's default, {@code unix}, applies when this is left empty. */
+	String epoch() default "";
 
-	String timeUnit() default "nanosecond";
+	/** SBE's default, {@code nanosecond}, applies when this is left empty. */
+	String timeUnit() default "";
 
 	String semanticType() default "";
 
