@@ -30,8 +30,11 @@ primitives, unsigned and `char`, enums, sets, named types, composites,
 fixed-length arrays, groups, var-data, constants, optional presence, schema
 evolution (`sinceVersion`, `deprecated`, acting version, `semanticVersion`),
 byte order, custom header types. Plus message families as sealed interfaces
-with a dispatching codec, the one Java-side feature. The target Java
-representation of all of it is `type-mappings.md`.
+with a dispatching codec, the one Java-side feature. Then what makes the
+codec worth using: built-in bindings for the JDK types the SBE specification
+gives a standard encoding, and a real FIX order-entry schema as the proof
+that the whole thing holds. The target Java representation of all of it is
+`type-mappings.md`.
 
 ## Out of scope
 
@@ -80,64 +83,58 @@ the scope above is complete, and nothing built may preclude them.
 
 ## Increments
 
+In phases, in order; the increments are the fine print, and `next.md` holds
+the one being built.
+
+**Foundations.** The pipeline end to end, sbe-tool's flyweights out, and
+the codec on the smallest case so its mechanics settle before they grow.
+
 - [x] 1. Build
 - [x] 2. The schema model and its XML, complete, with the corpus
 - [x] 3. The annotations, and the mapping from them to the model; no javac
 - [x] 4. Discovery and the processor; the schema in the jar; the corpus's source view; the example
 - [x] 5. sbe-tool in the pipeline: the backstop and the flyweights. The first release, `v0.1.0`: records in, sbe-tool's flyweights out
 - [x] 6. Codec: primitives
-- [ ] 7. Codec: schema evolution
-- [ ] 8. Codec: enums, under the unknown-value contract of `type-mappings.md`
-- [ ] 9. Codec: named types and bindings
-- [ ] 10. Codec: composites
-- [ ] 11. Codec: fixed-length arrays
-- [ ] 12. Codec: groups
-- [ ] 13. Codec: var-data
-- [ ] 14. Codec: sets, constants, optional presence
-- [ ] 15. Codec: byte order and header types
-- [ ] 16. Message families
 
-## Where next
+**Simple messages.** Fixed-length blocks, no nesting: every construct of
+the block, one at a time.
 
-Not a plan, just the direction in mind right now; the increment list above
-is the fine print.
+- [ ] 7. Codec: absence. Optional presence and `sinceVersion` on fields, boxed components, the acting version read in decode; the first frozen schema version and the cross-version tests against reference flyweights
+- [ ] 8. Codec: enums and sets, under the unknown-value contract of `type-mappings.md`
+- [ ] 9. Codec: named types, constants, fixed-length arrays and `char` strings
+- [ ] 10. Codec: bindings. `TypeBinding`, `@Bind`, a `@SbeType` that is its own binding; primitive faces only
 
-```
-simple messages
-    ↓
-composites
-    ↓
-groups / var-data
-    ↓
-evolution
-    ↓
-common JDK type mappings
-    ↓
-a real FIX/SBE example
-    ↓
-tidy up the public API
-```
+**Composites.** Structured values, and bindings over them.
 
-- Finish the simple codec model: enums, named primitive types, optional
-  fields, constants, `sinceVersion`.
-- Composites, and with them nested structured values.
-- Groups and var-data, so the encoded length becomes variable and
-  `encodedLength` has to earn its keep.
-- Check that schema evolution still behaves through the generated domain
-  codecs, not only through the flyweights.
-- Once the SBE feature set is broad enough, useful mappings for common JDK
-  types: `UUID`, `Instant`, `OffsetDateTime`, `Duration`, `LocalDate`,
-  `LocalTime`. Built on the normal SBE model, no special cases; the wire
-  representation stays explicit, above all for timestamps and their
-  precision; SBE's semantic types and time units where they fit. Something
-  like `BigDecimal` as cents is a better example of a custom binding than a
-  built-in default.
-- Then prove the whole thing against a real, non-trivial SBE schema. A
-  small FIX order-entry subset would be ideal, `NewOrderSingle` and
-  `ExecutionReport` say, with the hand-written schema as the oracle and
-  structural and wire compatibility checked, not XML formatting.
-- Once that works, clean up whatever feels awkward in the annotation and
-  codec API.
+- [ ] 11. Codec: composites. Nested records, `@SbeRef`, inline declarations; bindings over composite faces, `Uuid` first
 
-RPC, Aeron integration, service generation and the like stay out of this
-for now (`rpc.md`).
+**Variable length.** `encodedLength` has to earn its keep.
+
+- [ ] 12. Codec: groups, nested
+- [ ] 13. Codec: var-data, and the built-in var-data encodings
+
+**The rest of `sbe.xsd`.**
+
+- [ ] 14. Codec: byte order and header types
+
+**Evolution, proved.** Through the codecs, not only the flyweights.
+
+- [ ] 15. Evolution through every construct: appended groups and var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
+
+**Families.**
+
+- [ ] 16. Message families: the sealed interface and its dispatching codec
+
+**JDK bindings.** Built on the normal SBE model, no special cases; the wire
+representation stays explicit, above all for timestamps and their
+precision.
+
+- [ ] 17. Built-in wire types and bindings for `UUID`, `Instant`, `LocalDate` and `LocalTime`, each over the SBE specification's standard encoding with its `timeUnit`. A fixed-scale `BigDecimal` and an `OffsetDateTime` over a `TZTimestamp` composite are the examples of a custom binding, not built-ins
+
+**A real schema.**
+
+- [ ] 18. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` as a family, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
+
+**The API pass.**
+
+- [ ] 19. Whatever feels awkward in the annotations and the codec once 18 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
