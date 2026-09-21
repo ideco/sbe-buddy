@@ -133,24 +133,24 @@ final class Versions {
 			            <type name="schemaId" primitiveType="uint16"/>
 			            <type name="version" primitiveType="uint16"/>
 			        </composite>
-			        <composite name="groupSizeEncoding">
-			            <type name="blockLength" primitiveType="uint16"/>
-			            <type name="numInGroup" primitiveType="uint16"/>
-			        </composite>
-			        <composite name="varStringEncoding">
-			            <type name="length" primitiveType="uint16"/>
-			            <type name="varData" primitiveType="char" length="0" characterEncoding="UTF-8"/>
-			        </composite>
 			        <type name="Added" primitiveType="int32" sinceVersion="1" deprecated="3"/>
-			        <enum name="Status" encodingType="uint8" sinceVersion="1" deprecated="3">
-			            <validValue name="New" sinceVersion="1" deprecated="3">1</validValue>
-			        </enum>
 			        <set name="Flags" encodingType="uint8" sinceVersion="1" deprecated="3">
 			            <choice name="urgent" sinceVersion="1" deprecated="3">0</choice>
 			        </set>
 			        <composite name="Pair" sinceVersion="1" deprecated="3">
 			            <type name="first" primitiveType="int32"/>
 			            <ref name="second" type="Added" offset="4" sinceVersion="1" deprecated="3"/>
+			        </composite>
+			        <enum name="Status" encodingType="uint8" sinceVersion="1" deprecated="3">
+			            <validValue name="New" sinceVersion="1" deprecated="3">1</validValue>
+			        </enum>
+			        <composite name="varStringEncoding">
+			            <type name="length" primitiveType="uint16"/>
+			            <type name="varData" primitiveType="char" length="0" characterEncoding="UTF-8"/>
+			        </composite>
+			        <composite name="groupSizeEncoding">
+			            <type name="blockLength" primitiveType="uint16"/>
+			            <type name="numInGroup" primitiveType="uint16"/>
 			        </composite>
 			    </types>
 			    <sbe:message name="Versions" id="1" sinceVersion="1" deprecated="3">
@@ -171,15 +171,7 @@ final class Versions {
 				.semanticVersion("FIX.5.0SP2")
 				.types(
 						messageHeader(),
-						composite("varStringEncoding").members(
-								type("length", UINT16),
-								type("varData", CHAR).length(0).characterEncoding("UTF-8")
-						),
 						type("Added", INT32).sinceVersion(1).deprecated(3),
-						enumeration("Status", "uint8")
-								.sinceVersion(1)
-								.deprecated(3)
-								.validValues(validValue("New", "1").sinceVersion(1).deprecated(3)),
 						set("Flags", "uint8")
 								.sinceVersion(1)
 								.deprecated(3)
@@ -191,6 +183,14 @@ final class Versions {
 										type("first", INT32),
 										ref("second", "Added").offset(4).sinceVersion(1).deprecated(3)
 								),
+						enumeration("Status", "uint8")
+								.sinceVersion(1)
+								.deprecated(3)
+								.validValues(validValue("New", "1").sinceVersion(1).deprecated(3)),
+						composite("varStringEncoding").members(
+								type("length", UINT16),
+								type("varData", CHAR).length(0).characterEncoding("UTF-8")
+						),
 						groupSizeEncoding()
 				)
 				.messages(
@@ -238,7 +238,7 @@ final class Versions {
 				);
 		return annotatedSchema("corpus.versions", 1, 3).codecs(false)
 				.semanticVersion("FIX.5.0SP2")
-				.types(varStringEncoding, added, status, flags, pair)
+				.types(added, flags, pair, status, varStringEncoding)
 				.messages(
 						annotatedMessage("Versions", 1)
 								.sinceVersion(1)

@@ -97,10 +97,6 @@ final class VarData {
 			            <type name="schemaId" primitiveType="uint16"/>
 			            <type name="version" primitiveType="uint16"/>
 			        </composite>
-			        <composite name="varStringEncoding">
-			            <type name="length" primitiveType="uint16"/>
-			            <type name="varData" primitiveType="char" length="0" characterEncoding="UTF-8"/>
-			        </composite>
 			        <composite name="varBlobEncoding">
 			            <type name="length" primitiveType="uint32" maxValue="1073741824"/>
 			            <type name="varData" primitiveType="uint8" length="0"/>
@@ -108,6 +104,10 @@ final class VarData {
 			        <composite name="varByteEncoding">
 			            <type name="length" primitiveType="uint8"/>
 			            <type name="varData" primitiveType="uint8" length="0"/>
+			        </composite>
+			        <composite name="varStringEncoding">
+			            <type name="length" primitiveType="uint16"/>
+			            <type name="varData" primitiveType="char" length="0" characterEncoding="UTF-8"/>
 			        </composite>
 			    </types>
 			    <sbe:message name="VarData" id="1">
@@ -126,10 +126,6 @@ final class VarData {
 		return messageSchema("corpus.vardata", 1, 0)
 				.types(
 						messageHeader(),
-						composite("varStringEncoding").members(
-								type("length", UINT16),
-								type("varData", CHAR).length(0).characterEncoding("UTF-8")
-						),
 						composite("varBlobEncoding").members(
 								type("length", UINT32).maxValue("1073741824"),
 								type("varData", UINT8).length(0)
@@ -137,6 +133,10 @@ final class VarData {
 						composite("varByteEncoding").members(
 								type("length", UINT8),
 								type("varData", UINT8).length(0)
+						),
+						composite("varStringEncoding").members(
+								type("length", UINT16),
+								type("varData", CHAR).length(0).characterEncoding("UTF-8")
 						)
 				)
 				.messages(
@@ -174,7 +174,7 @@ final class VarData {
 						annotatedType("varData", UINT8).length(0)
 				);
 		return annotatedSchema("corpus.vardata", 1, 0).codecs(false)
-				.types(varStringEncoding, varBlobEncoding, varByteEncoding)
+				.types(varBlobEncoding, varByteEncoding, varStringEncoding)
 				.messages(
 						annotatedMessage("VarData", 1).components(
 								annotatedField("orderId", 1, primitive(INT)),

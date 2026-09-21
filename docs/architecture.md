@@ -49,6 +49,14 @@ Nothing with wire semantics, no offset, no null value, no flyweight method
 name, is computed here. With step 7 off (below), the pipeline is the first
 release: annotated records in, sbe-tool's own flyweights out.
 
+Discovery orders the package's top level itself, messages by `id` and
+declarations by qualified Java name, never in the order javac entered the
+types, which an incremental build does not keep. Mapping then writes the
+header first and each declaration after the ones it names. The same
+sources give the same `schema.xml` however they were compiled; sbe-tool
+reads `types` by name and `message` by id, so the order carries no meaning
+on the wire.
+
 ## The models
 
 Two closed grammars, each one file of nested records, used qualified and

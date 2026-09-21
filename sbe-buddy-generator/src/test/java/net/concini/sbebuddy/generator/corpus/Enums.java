@@ -97,14 +97,14 @@ final class Enums {
 			            <type name="version" primitiveType="uint16"/>
 			        </composite>
 			        <type name="StatusCode" primitiveType="uint8"/>
-			        <enum name="Side" encodingType="char" semanticType="Side" description="Which side of the market an order takes">
-			            <validValue name="Buy" description="The order buys">B</validValue>
-			            <validValue name="Sell" description="The order sells">S</validValue>
-			        </enum>
 			        <enum name="OrderStatus" encodingType="StatusCode">
 			            <validValue name="New">0</validValue>
 			            <validValue name="PartiallyFilled">1</validValue>
 			            <validValue name="Filled">2</validValue>
+			        </enum>
+			        <enum name="Side" encodingType="char" semanticType="Side" description="Which side of the market an order takes">
+			            <validValue name="Buy" description="The order buys">B</validValue>
+			            <validValue name="Sell" description="The order sells">S</validValue>
 			        </enum>
 			    </types>
 			    <sbe:message name="Enums" id="1">
@@ -225,18 +225,18 @@ final class Enums {
 				.types(
 						messageHeader(),
 						type("StatusCode", UINT8),
+						enumeration("OrderStatus", "StatusCode").validValues(
+								validValue("New", "0"),
+								validValue("PartiallyFilled", "1"),
+								validValue("Filled", "2")
+						),
 						enumeration("Side", "char")
 								.semanticType("Side")
 								.description("Which side of the market an order takes")
 								.validValues(
 										validValue("Buy", "B").description("The order buys"),
 										validValue("Sell", "S").description("The order sells")
-								),
-						enumeration("OrderStatus", "StatusCode").validValues(
-								validValue("New", "0"),
-								validValue("PartiallyFilled", "1"),
-								validValue("Filled", "2")
-						)
+								)
 				)
 				.messages(
 						message("Enums", 1).fields(
@@ -268,7 +268,7 @@ final class Enums {
 						annotatedEnumValue("Filled", "2")
 				);
 		return annotatedSchema("corpus.enums", 1, 0)
-				.types(statusCode, side, orderStatus)
+				.types(orderStatus, side, statusCode)
 				.messages(
 						annotatedMessage("Enums", 1).components(
 								annotatedField("side", 1, declared(side)),
