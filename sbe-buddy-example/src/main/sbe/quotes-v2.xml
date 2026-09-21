@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The oracle for com.example.quotes: the schema the annotated records must
-     produce, written by hand as a person would write it. -->
+<!-- Version 2 of com.example.quotes, frozen: never edited again. The
+     reference flyweights in com.example.quotes.xmlref.v2 come from it. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="com.example.quotes"
                    id="92"
-                   version="3"
+                   version="2"
                    description="Top of book quotes">
     <types>
         <composite name="messageHeader">
@@ -13,21 +13,6 @@
             <type name="schemaId" primitiveType="uint16"/>
             <type name="version" primitiveType="uint16"/>
         </composite>
-        <enum name="Venue" encodingType="uint8" description="Where a quote comes from">
-            <validValue name="XNAS">1</validValue>
-            <validValue name="XNYS">2</validValue>
-            <validValue name="XLON">3</validValue>
-        </enum>
-        <enum name="MarketState" encodingType="char" description="The state of the instrument's market">
-            <validValue name="OPEN">O</validValue>
-            <validValue name="HALTED">H</validValue>
-            <validValue name="CLOSED">C</validValue>
-        </enum>
-        <set name="QuoteFlag" encodingType="uint8" description="What a quote says about itself">
-            <choice name="indicative">0</choice>
-            <choice name="crossed">1</choice>
-            <choice name="locked">2</choice>
-        </set>
     </types>
     <sbe:message name="Quote" id="1" description="The best bid and offer of one instrument">
         <field name="instrumentId" id="1" type="int64"/>
@@ -38,8 +23,5 @@
         <field name="sequence" id="6" type="uint64" sinceVersion="1" description="The sequence number of the update"/>
         <field name="tradeCount" id="7" type="uint32" sinceVersion="2" description="Trades of the session so far"/>
         <field name="vwap" id="8" type="double" presence="optional" sinceVersion="2" description="The volume-weighted average price of the session, absent until the instrument has traded"/>
-        <field name="venue" id="9" type="Venue" sinceVersion="3" description="The venue the quote comes from"/>
-        <field name="state" id="10" type="MarketState" sinceVersion="3" description="The state of the instrument's market"/>
-        <field name="flags" id="11" type="QuoteFlag" sinceVersion="3" description="What the quote says about itself"/>
     </sbe:message>
 </sbe:messageSchema>

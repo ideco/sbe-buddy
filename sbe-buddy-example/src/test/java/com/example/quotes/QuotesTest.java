@@ -8,6 +8,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumSet;
+import java.util.Set;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
@@ -39,19 +41,30 @@ final class QuotesTest {
 
 	@Test
 	void aQuoteRoundTripsThroughItsCodec() {
-		assertRoundTrip(new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, 10_060.5));
+		assertRoundTrip(
+				new Quote(
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED)
+				)
+		);
 	}
 
 	@Test
-	void aQuoteWithoutAVwapRoundTrips() {
-		assertRoundTrip(new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 0L, null));
+	void aQuoteWithoutAVwapAndWithoutFlagsRoundTrips() {
+		assertRoundTrip(
+				new Quote(
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 0L, null, Venue.XLON, MarketState.CLOSED, Set.of()
+				)
+		);
 	}
 
 	@Test
 	void aNullTradeCountIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		Quote quote = new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null);
+		Quote quote = new Quote(
+				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, Venue.XNAS, MarketState.OPEN, Set.of()
+		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -59,10 +72,34 @@ final class QuotesTest {
 	}
 
 	@Test
+	void aNullVenueIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, null, null, MarketState.OPEN, Set.of());
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("venue is required");
+	}
+
+	@Test
+	void theUnknownVenueHasNoWireFormAndIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = new Quote(
+				42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, null, Venue.OTHER, MarketState.OPEN, Set.of()
+		);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("Venue.OTHER has no wire form");
+	}
+
+	@Test
 	void anotherTemplateIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		codec.encode(new Quote(1, 2, 3, 4, 5, 6, 7L, null), buffer, 0);
+		codec.encode(new Quote(1, 2, 3, 4, 5, 6, 7L, null, Venue.XNAS, MarketState.OPEN, Set.of()), buffer, 0);
 		new MessageHeaderEncoder().wrap(buffer, 0).templateId(99);
 
 		assertThatThrownBy(() -> codec.decode(buffer, 0))
