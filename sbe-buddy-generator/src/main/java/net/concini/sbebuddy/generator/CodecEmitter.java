@@ -17,6 +17,7 @@ import uk.co.real_logic.sbe.generation.java.JavaUtil;
 import uk.co.real_logic.sbe.ir.Encoding;
 import uk.co.real_logic.sbe.ir.GenerationUtil;
 import uk.co.real_logic.sbe.ir.Ir;
+import uk.co.real_logic.sbe.ir.Signal;
 import uk.co.real_logic.sbe.ir.Token;
 
 /**
@@ -87,6 +88,7 @@ public final class CodecEmitter {
 							headerDecoder.wrap(buffer, offset);
 							return {flyweights}.{header}Decoder.ENCODED_LENGTH + headerDecoder.blockLength();
 						}
+						{declaredTypes}
 					}
 					"""
 	);
@@ -102,30 +104,15 @@ public final class CodecEmitter {
 						"{message} version " + headerDecoder.version() + " is below the baseline {baseline}");
 			}""");
 
+	// ---- a primitive field
+
 	private static final Template ENCODE_FIELD = Template.of("encoder.{property}(value.{component}());");
 
 	private static final Template ENCODE_OPTIONAL_FIELD = Template.of(
 			"encoder.{property}(value.{component}() == null ? {flyweights}.{message}Encoder.{property}NullValue() : value.{component}());"
 	);
 
-	/** A boxed component of a required field: null has no wire form. */
-	private static final Template ENCODE_BOXED_FIELD = Template.of("""
-			if (value.{component}() == null) {
-				throw new IllegalArgumentException("{component} is required");
-			}
-			encoder.{property}(value.{component}());""");
-
 	private static final Template DECODE_FIELD = Template.of("decoder.{property}()");
-
-	private static final Template DECODE_OPTIONAL_FIELD = Template.of("{isNull} ? null : decoder.{property}()");
-
-	/**
-	 * Absent below the acting version, decided on the version and never on the null
-	 * value, which a required field may legitimately hold.
-	 */
-	private static final Template DECODE_ADDED_FIELD = Template.of(
-			"decoder.actingVersion() < {flyweights}.{message}Decoder.{property}SinceVersion() ? null : decoder.{property}()"
-	);
 
 	private static final Template IS_NULL = Template.of(
 			"decoder.{property}() == {flyweights}.{message}Decoder.{property}NullValue()"
@@ -135,6 +122,105 @@ public final class CodecEmitter {
 	private static final Template IS_NULL_FLOATING = Template.of(
 			"{box}.compare(decoder.{property}(), {flyweights}.{message}Decoder.{property}NullValue()) == 0"
 	);
+
+	// ---- a field of an enum
+
+	private static final Template ENCODE_ENUM_FIELD = Template
+			.of("encoder.{property}(encode{enum}(value.{component}()));");
+
+	private static final Template ENCODE_OPTIONAL_ENUM_FIELD = Template.of(
+			"encoder.{property}(value.{component}() == null ? {flyweights}.{enum}.NULL_VAL : encode{enum}(value.{component}()));"
+	);
+
+	private static final Template DECODE_ENUM_FIELD = Template.of("decode{enum}(decoder.{property}Raw())");
+
+	private static final Template IS_NULL_ENUM = Template.of(
+			"decoder.{property}Raw() == {flyweights}.{enum}.NULL_VAL.value()"
+	);
+
+	// ---- a field of a set
+
+	private static final Template ENCODE_SET_FIELD = Template
+			.of("encode{set}(value.{component}(), encoder.{property}());");
+
+	private static final Template DECODE_SET_FIELD = Template.of("decode{set}(decoder.{property}())");
+
+	// ---- the shapes over them
+
+	/** A component that may be null on a required field: null has no wire form. */
+	private static final Template ENCODE_CHECKED_FIELD = Template.of("""
+			if (value.{component}() == null) {
+				throw new IllegalArgumentException("{component} is required");
+			}
+			{call}""");
+
+	private static final Template DECODE_OPTIONAL_FIELD = Template.of("{isNull} ? null : {read}");
+
+	/**
+	 * Absent below the acting version, decided on the version and never on the null
+	 * value, which a required field may legitimately hold.
+	 */
+	private static final Template DECODE_ADDED_FIELD = Template.of(
+			"decoder.actingVersion() < {flyweights}.{message}Decoder.{property}SinceVersion() ? null : {read}"
+	);
+
+	// ---- an enum's mapping, one pair per codec
+
+	private static final Template ENCODE_ENUM = Template.of("""
+			private static {flyweights}.{enum} encode{enum}({javaEnum} value) {
+				return switch (value) {
+					{cases}
+				};
+			}""");
+
+	private static final Template ENUM_TO_WIRE = Template.of("case {constant} -> {flyweights}.{enum}.{wireConstant};");
+
+	private static final Template UNKNOWN_TO_WIRE = Template.of(
+			"case {constant} -> throw new IllegalArgumentException(\"{enum}.{constant} has no wire form\");"
+	);
+
+	private static final Template DECODE_ENUM = Template.of("""
+			private static {javaEnum} decode{enum}({face} raw) {
+				return switch (raw) {
+					{cases}
+				};
+			}""");
+
+	private static final Template WIRE_TO_ENUM = Template.of("case {literal} -> {javaEnum}.{constant};");
+
+	private static final Template WIRE_TO_UNKNOWN = Template.of("default -> {javaEnum}.{constant};");
+
+	private static final Template WIRE_TO_NOTHING = Template.of(
+			"default -> throw new IllegalArgumentException(\"{enum} has no value \" + raw);"
+	);
+
+	// ---- a set's mapping, one pair per codec
+
+	private static final Template ENCODE_SET = Template.of("""
+			private static void encode{set}(java.util.Set<{javaEnum}> value, {flyweights}.{set}Encoder wire) {
+				wire.clear();
+				{choices}
+			}""");
+
+	private static final Template ENCODE_CHOICE = Template.of("wire.{choice}(value.contains({javaEnum}.{constant}));");
+
+	/** A bit no choice names has nowhere to go in a Set of the enum. */
+	private static final Template DECODE_SET = Template.of("""
+			private static java.util.Set<{javaEnum}> decode{set}({flyweights}.{set}Decoder wire) {
+				if ((wire.getRaw() & ~({knownBits})) != 0) {
+					throw new IllegalArgumentException("{set} has a bit no choice names: " + wire.getRaw());
+				}
+				java.util.Set<{javaEnum}> value = java.util.EnumSet.noneOf({javaEnum}.class);
+				{choices}
+				return value;
+			}""");
+
+	private static final Template KNOWN_BIT = Template.of("1L << {bit}");
+
+	private static final Template DECODE_CHOICE = Template.of("""
+			if (wire.{choice}()) {
+				value.add({javaEnum}.{constant});
+			}""");
 
 	private final Ir ir;
 	private final Annotated annotated;
@@ -177,6 +263,13 @@ public final class CodecEmitter {
 	}
 
 	/**
+	 * How one field reaches the wire: the plain call each way, and the optional
+	 * forms where the wire has a null value for it.
+	 */
+	private record Access(String encode, @Nullable String encodeOptional, String decode, @Nullable String isNull) {
+	}
+
+	/**
 	 * The codec's source, or null with a problem for a construct not covered yet.
 	 */
 	private @Nullable String codec(Annotated.Message message) {
@@ -204,17 +297,32 @@ public final class CodecEmitter {
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		List<String> encodeFields = new ArrayList<>();
 		List<String> decodeFields = new ArrayList<>();
+		Map<String, String> declaredTypes = new LinkedHashMap<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
 			Token type = fields.get(i + 1);
+			if (field.encoding().presence() == Encoding.Presence.CONSTANT) {
+				return refuse(message, "a constant");
+			}
 			String unsupported = unsupported(type);
 			if (unsupported != null) {
 				return refuse(message, unsupported);
 			}
+			Annotated.Field component = component(message, field);
 			String property = JavaUtil.formatPropertyName(field.name());
-			String component = component(message, field).javaName();
-			encodeFields.add(encodeField(message, field, type, flyweights, messageClass, property, component));
-			decodeFields.add(decodeField(field, type, flyweights, messageClass, property));
+			List<Token> typeTokens = fields.subList(i + 1, i + 1 + type.componentTokenCount());
+			Access access = switch (type.signal()) {
+				case ENCODING -> primitiveAccess(type, flyweights, messageClass, property, component.javaName());
+				case BEGIN_ENUM -> enumAccess(
+						typeTokens, enumOf(component), flyweights, messageClass, property, component.javaName(),
+						declaredTypes
+				);
+				case BEGIN_SET ->
+					setAccess(typeTokens, setOf(component), flyweights, property, component.javaName(), declaredTypes);
+				default -> throw new IllegalStateException("a field of " + type.signal());
+			};
+			encodeFields.add(encodeField(field, component, access));
+			decodeFields.add(decodeField(field, flyweights, messageClass, property, access));
 		}
 		int baseline = annotated.baselineVersion();
 		return CODEC.fill(
@@ -228,27 +336,26 @@ public final class CodecEmitter {
 				"refuseBelowBaseline", baseline == 0
 						? ""
 						: REFUSE_BELOW_BASELINE.fill("message", messageClass, "baseline", String.valueOf(baseline)),
-				"decodeFields", String.join(",\n", decodeFields)
+				"decodeFields", String.join(",\n", decodeFields),
+				"declaredTypes", declaredTypes.isEmpty() ? "" : "\n" + String.join("\n\n", declaredTypes.values())
 		);
 	}
 
 	/**
 	 * The encode side is decided from the component: an optional field takes the
-	 * null value for null, any other boxed component refuses it.
+	 * null value for null, any other component that may be null refuses it.
 	 */
-	private String encodeField(
-			Annotated.Message message, Token field, Token type, String flyweights, String messageClass,
-			String property, String component
-	) {
-		if (optional(type)) {
-			return ENCODE_OPTIONAL_FIELD.fill(
-					"property", property, "component", component, "flyweights", flyweights, "message", messageClass
-			);
+	private static String encodeField(Token field, Annotated.Field component, Access access) {
+		if (optional(field)) {
+			if (access.encodeOptional() == null) {
+				throw new IllegalStateException(component.javaName() + " is optional without a null value");
+			}
+			return access.encodeOptional();
 		}
-		if (boxed(component(message, field))) {
-			return ENCODE_BOXED_FIELD.fill("property", property, "component", component);
+		if (component.javaType() instanceof Annotated.Primitive primitive && !primitive.boxed()) {
+			return access.encode();
 		}
-		return ENCODE_FIELD.fill("property", property, "component", component);
+		return ENCODE_CHECKED_FIELD.fill("component", component.javaName(), "call", access.encode());
 	}
 
 	/**
@@ -256,15 +363,32 @@ public final class CodecEmitter {
 	 * field, whatever its version, since below the acting version the getter
 	 * returns it; the version for a required field added above the baseline.
 	 */
-	private String decodeField(Token field, Token type, String flyweights, String messageClass, String property) {
-		if (optional(type)) {
-			return DECODE_OPTIONAL_FIELD
-					.fill("isNull", isNull(type, flyweights, messageClass, property), "property", property);
+	private String decodeField(Token field, String flyweights, String messageClass, String property, Access access) {
+		if (optional(field)) {
+			if (access.isNull() == null) {
+				throw new IllegalStateException(field.name() + " is optional without a null value");
+			}
+			return DECODE_OPTIONAL_FIELD.fill("isNull", access.isNull(), "read", access.decode());
 		}
 		if (field.version() > annotated.baselineVersion()) {
-			return DECODE_ADDED_FIELD.fill("property", property, "flyweights", flyweights, "message", messageClass);
+			return DECODE_ADDED_FIELD.fill(
+					"flyweights", flyweights, "message", messageClass, "property", property, "read", access.decode()
+			);
 		}
-		return DECODE_FIELD.fill("property", property);
+		return access.decode();
+	}
+
+	private static Access primitiveAccess(
+			Token type, String flyweights, String messageClass, String property, String component
+	) {
+		return new Access(
+				ENCODE_FIELD.fill("property", property, "component", component),
+				ENCODE_OPTIONAL_FIELD.fill(
+						"property", property, "component", component, "flyweights", flyweights, "message", messageClass
+				),
+				DECODE_FIELD.fill("property", property),
+				isNull(type, flyweights, messageClass, property)
+		);
 	}
 
 	private static String isNull(Token type, String flyweights, String messageClass, String property) {
@@ -278,22 +402,131 @@ public final class CodecEmitter {
 		return IS_NULL.fill("property", property, "flyweights", flyweights, "message", messageClass);
 	}
 
-	private static boolean optional(Token type) {
-		return type.encoding().presence() == Encoding.Presence.OPTIONAL;
+	private static Access enumAccess(
+			List<Token> tokens, Annotated.Enum enumeration, String flyweights, String messageClass, String property,
+			String component, Map<String, String> declaredTypes
+	) {
+		String enumClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
+		declaredTypes.computeIfAbsent(
+				tokens.get(0).applicableTypeName(), name -> enumPair(tokens, enumeration, flyweights, enumClass)
+		);
+		return new Access(
+				ENCODE_ENUM_FIELD.fill("property", property, "enum", enumClass, "component", component),
+				ENCODE_OPTIONAL_ENUM_FIELD
+						.fill(
+								"property", property, "component", component, "flyweights", flyweights, "enum",
+								enumClass
+						),
+				DECODE_ENUM_FIELD.fill("enum", enumClass, "property", property),
+				IS_NULL_ENUM.fill("property", property, "flyweights", flyweights, "enum", enumClass)
+		);
 	}
 
-	private static boolean boxed(Annotated.Field component) {
-		return component.javaType() instanceof Annotated.Primitive primitive && primitive.boxed();
+	/**
+	 * The wire value is read raw and mapped by the valid values' text, never
+	 * through the flyweight's enum, so an unknown value is ours to decide: the
+	 * constant the enum designates, or an exception.
+	 */
+	private static String enumPair(
+			List<Token> tokens, Annotated.Enum enumeration, String flyweights, String enumClass
+	) {
+		PrimitiveType primitive = tokens.get(0).encoding().primitiveType();
+		List<String> toWire = new ArrayList<>();
+		List<String> fromWire = new ArrayList<>();
+		for (Token value : tokens) {
+			if (value.signal() != Signal.VALID_VALUE) {
+				continue;
+			}
+			String constant = validValue(enumeration, value.name()).javaName();
+			toWire.add(
+					ENUM_TO_WIRE.fill(
+							"constant", constant, "flyweights", flyweights, "enum", enumClass,
+							"wireConstant", JavaUtil.formatForJavaKeyword(value.name())
+					)
+			);
+			fromWire.add(
+					WIRE_TO_ENUM.fill(
+							"literal", JavaUtil.generateLiteral(primitive, value.encoding().constValue().toString()),
+							"javaEnum", enumeration.qualifiedName(), "constant", constant
+					)
+			);
+		}
+		String unknown = enumeration.unknownValue();
+		if (unknown == null) {
+			fromWire.add(WIRE_TO_NOTHING.fill("enum", enumClass));
+		} else {
+			toWire.add(UNKNOWN_TO_WIRE.fill("constant", unknown, "enum", enumClass));
+			fromWire.add(WIRE_TO_UNKNOWN.fill("javaEnum", enumeration.qualifiedName(), "constant", unknown));
+		}
+		return String.join(
+				"\n\n",
+				ENCODE_ENUM.fill(
+						"flyweights", flyweights, "enum", enumClass, "javaEnum", enumeration.qualifiedName(),
+						"cases", String.join("\n", toWire)
+				),
+				DECODE_ENUM.fill(
+						"javaEnum", enumeration.qualifiedName(), "enum", enumClass,
+						"face", JavaUtil.javaTypeName(primitive), "cases", String.join("\n", fromWire)
+				)
+		);
+	}
+
+	private static Access setAccess(
+			List<Token> tokens, Annotated.Set set, String flyweights, String property, String component,
+			Map<String, String> declaredTypes
+	) {
+		String setClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
+		declaredTypes.computeIfAbsent(
+				tokens.get(0).applicableTypeName(), name -> setPair(tokens, set, flyweights, setClass)
+		);
+		return new Access(
+				ENCODE_SET_FIELD.fill("set", setClass, "component", component, "property", property),
+				null,
+				DECODE_SET_FIELD.fill("set", setClass, "property", property),
+				null
+		);
+	}
+
+	private static String setPair(List<Token> tokens, Annotated.Set set, String flyweights, String setClass) {
+		List<String> encodeChoices = new ArrayList<>();
+		List<String> decodeChoices = new ArrayList<>();
+		List<String> knownBits = new ArrayList<>();
+		for (Token choice : tokens) {
+			if (choice.signal() != Signal.CHOICE) {
+				continue;
+			}
+			String property = JavaUtil.formatPropertyName(choice.name());
+			String constant = choice(set, choice.name()).javaName();
+			encodeChoices
+					.add(ENCODE_CHOICE.fill("choice", property, "javaEnum", set.qualifiedName(), "constant", constant));
+			decodeChoices
+					.add(DECODE_CHOICE.fill("choice", property, "javaEnum", set.qualifiedName(), "constant", constant));
+			knownBits.add(KNOWN_BIT.fill("bit", choice.encoding().constValue().toString()));
+		}
+		return String.join(
+				"\n\n",
+				ENCODE_SET.fill(
+						"set", setClass, "javaEnum", set.qualifiedName(), "flyweights", flyweights,
+						"choices", String.join("\n", encodeChoices)
+				),
+				DECODE_SET.fill(
+						"javaEnum", set.qualifiedName(), "set", setClass, "flyweights", flyweights,
+						"knownBits", String.join(" | ", knownBits), "choices", String.join("\n", decodeChoices)
+				)
+		);
+	}
+
+	private static boolean optional(Token field) {
+		return field.encoding().presence() == Encoding.Presence.OPTIONAL;
 	}
 
 	/**
 	 * What the codec cannot do with the field's type yet, or null for a primitive,
-	 * required or optional.
+	 * an enum or a set.
 	 */
 	private static @Nullable String unsupported(Token type) {
 		return switch (type.signal()) {
-			case BEGIN_ENUM -> "an enum";
-			case BEGIN_SET -> "a set";
+			case BEGIN_ENUM, BEGIN_SET -> null;
 			case BEGIN_COMPOSITE -> "a composite";
 			case ENCODING -> encodingUnsupported(type);
 			default -> throw new IllegalStateException("a field of " + type.signal());
@@ -323,6 +556,49 @@ public final class CodecEmitter {
 			}
 		}
 		throw new IllegalStateException(message.javaName() + " has no component for field " + field.name());
+	}
+
+	/**
+	 * The field's enum, named by {@code type} or as the component's own type; the
+	 * face rule saw to it.
+	 */
+	private static Annotated.Enum enumOf(Annotated.Field field) {
+		if (field.type() instanceof Annotated.Enum enumeration) {
+			return enumeration;
+		}
+		if (field.javaType() instanceof Annotated.Declared declared
+				&& declared.declaration() instanceof Annotated.Enum enumeration) {
+			return enumeration;
+		}
+		throw new IllegalStateException(field.javaName() + " is not a field of an enum");
+	}
+
+	private static Annotated.Set setOf(Annotated.Field field) {
+		if (field.type() instanceof Annotated.Set set) {
+			return set;
+		}
+		if (field.javaType() instanceof Annotated.SetOf setOf && setOf.declaration() instanceof Annotated.Set set) {
+			return set;
+		}
+		throw new IllegalStateException(field.javaName() + " is not a field of a set");
+	}
+
+	private static Annotated.ValidValue validValue(Annotated.Enum enumeration, String wireName) {
+		for (Annotated.ValidValue value : enumeration.values()) {
+			if ((value.name().isEmpty() ? value.javaName() : value.name()).equals(wireName)) {
+				return value;
+			}
+		}
+		throw new IllegalStateException(enumeration.javaName() + " has no value " + wireName);
+	}
+
+	private static Annotated.Choice choice(Annotated.Set set, String wireName) {
+		for (Annotated.Choice choice : set.choices()) {
+			if ((choice.name().isEmpty() ? choice.javaName() : choice.name()).equals(wireName)) {
+				return choice;
+			}
+		}
+		throw new IllegalStateException(set.javaName() + " has no choice " + wireName);
 	}
 
 	private static String wireName(Annotated.Field field) {

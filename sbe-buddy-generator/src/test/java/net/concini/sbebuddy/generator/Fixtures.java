@@ -922,6 +922,10 @@ public final class Fixtures {
 		return new Annotated.ListOfRecord();
 	}
 
+	public static Annotated.JavaType setOf(AnnotatedDeclarationBuilder set) {
+		return new Annotated.SetOf(set.build());
+	}
+
 	public interface AnnotatedDeclarationBuilder {
 		Annotated.Declaration build();
 	}
@@ -1535,7 +1539,9 @@ public final class Fixtures {
 	public static final class AnnotatedEnumBuilder implements AnnotatedDeclarationBuilder, AnnotatedMemberBuilder {
 
 		private final String javaName;
+		private String qualifiedName = "";
 		private final List<Annotated.ValidValue> values = new ArrayList<>();
+		private @Nullable String unknownValue;
 		private Annotated.@Nullable Declaration encodingType;
 		private @Nullable PrimitiveType primitiveType;
 		private String name = "";
@@ -1554,6 +1560,17 @@ public final class Fixtures {
 			for (AnnotatedEnumValueBuilder builder : builders) {
 				values.add(builder.build());
 			}
+			return this;
+		}
+
+		/** The name code uses for the enum; every twin says it, as discovery does. */
+		public AnnotatedEnumBuilder qualifiedName(String qualifiedName) {
+			this.qualifiedName = qualifiedName;
+			return this;
+		}
+
+		public AnnotatedEnumBuilder unknownValue(String unknownValue) {
+			this.unknownValue = unknownValue;
 			return this;
 		}
 
@@ -1601,7 +1618,8 @@ public final class Fixtures {
 		public Annotated.Enum build() {
 			if (built == null) {
 				built = new Annotated.Enum(
-						javaName, values, encodingType, apiPrimitive(primitiveType), name, offset,
+						javaName, qualifiedName, values, unknownValue, encodingType, apiPrimitive(primitiveType), name,
+						offset,
 						semanticType, description, sinceVersion, deprecated
 				);
 			}
@@ -1651,6 +1669,7 @@ public final class Fixtures {
 	public static final class AnnotatedSetBuilder implements AnnotatedDeclarationBuilder, AnnotatedMemberBuilder {
 
 		private final String javaName;
+		private String qualifiedName = "";
 		private final List<Annotated.Choice> choices = new ArrayList<>();
 		private Annotated.@Nullable Declaration encodingType;
 		private @Nullable PrimitiveType primitiveType;
@@ -1664,6 +1683,12 @@ public final class Fixtures {
 
 		private AnnotatedSetBuilder(String javaName) {
 			this.javaName = javaName;
+		}
+
+		/** The name code uses for the enum; every twin says it, as discovery does. */
+		public AnnotatedSetBuilder qualifiedName(String qualifiedName) {
+			this.qualifiedName = qualifiedName;
+			return this;
 		}
 
 		public AnnotatedSetBuilder choices(AnnotatedChoiceBuilder... builders) {
@@ -1717,7 +1742,7 @@ public final class Fixtures {
 		public Annotated.Set build() {
 			if (built == null) {
 				built = new Annotated.Set(
-						javaName, choices, encodingType, apiPrimitive(primitiveType), name, offset,
+						javaName, qualifiedName, choices, encodingType, apiPrimitive(primitiveType), name, offset,
 						semanticType, description, sinceVersion, deprecated
 				);
 			}

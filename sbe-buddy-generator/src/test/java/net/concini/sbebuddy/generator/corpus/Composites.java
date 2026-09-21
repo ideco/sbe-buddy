@@ -193,13 +193,15 @@ final class Composites {
 				annotatedRef("bid", declared(decimal)),
 				annotatedRef("ask", declared(decimal)).offset(9),
 				annotatedEnum("side")
+						.qualifiedName("corpus.composites.Quote.Side")
 						.primitiveType(CHAR)
 						.offset(18)
 						.values(
 								annotatedEnumValue("Buy", "B"),
 								annotatedEnumValue("Sell", "S")
 						),
-				annotatedSet("flags").primitiveType(UINT8).offset(19).choices(annotatedChoice("firm", 0)),
+				annotatedSet("flags").qualifiedName("corpus.composites.Quote.Flags").primitiveType(UINT8).offset(19)
+						.choices(annotatedChoice("firm", 0)),
 				annotatedComposite("stamp")
 						.offset(20)
 						.description("When the quote was made")

@@ -55,6 +55,112 @@ final class PlacementTest {
 	}
 
 	@Test
+	void discoveryNamesTheConstantCarryingBothAnnotations() {
+		String source = """
+				package placement;
+
+				import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+				import net.concini.sbebuddy.SbeEnum;
+				import net.concini.sbebuddy.SbeEnumValue;
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.UnknownValue;
+
+				@SbeEnum(primitiveType = UINT8)
+				enum Side {
+
+					@SbeEnumValue("1")
+					Buy,
+
+					@SbeEnumValue("2") @UnknownValue Both
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1) Side side
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(result, source, "Both", "a constant carries @SbeEnumValue or @UnknownValue, not both");
+	}
+
+	@Test
+	void discoveryNamesTheSecondUnknownValue() {
+		String source = """
+				package placement;
+
+				import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+				import net.concini.sbebuddy.SbeEnum;
+				import net.concini.sbebuddy.SbeEnumValue;
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.UnknownValue;
+
+				@SbeEnum(primitiveType = UINT8)
+				enum Side {
+
+					@SbeEnumValue("1")
+					Buy,
+
+					@UnknownValue
+					Other,
+
+					@UnknownValue Twice
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1) Side side
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(result, source, "Twice", "an enum designates one unknown value, and Other already is");
+	}
+
+	@Test
+	void discoveryNamesTheUnknownValueOnASet() {
+		String source = """
+				package placement;
+
+				import static net.concini.sbebuddy.PrimitiveType.UINT8;
+
+				import java.util.Set;
+
+				import net.concini.sbebuddy.SbeChoice;
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.SbeSet;
+				import net.concini.sbebuddy.UnknownValue;
+
+				@SbeSet(primitiveType = UINT8)
+				enum Flags {
+
+					@SbeChoice(0) @UnknownValue Odd
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1) Set<Flags> flags
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(
+				result, source, "Odd", "@UnknownValue goes on a constant of an @SbeEnum; a set has no unknown value"
+		);
+	}
+
+	@Test
 	void mappingNamesTheComponentWhoseTypeMapsToNothing() {
 		String source = """
 				package placement;

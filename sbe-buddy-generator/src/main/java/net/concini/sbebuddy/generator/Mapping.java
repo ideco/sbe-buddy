@@ -139,6 +139,7 @@ public final class Mapping {
 	private Schema.Field field(Annotated.Field field) {
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
 		face(field);
+		declaredFace(field);
 		boxing(field);
 		Schema.Field result = new Schema.Field(
 				name(field, field.name(), field.javaName()),
@@ -222,6 +223,7 @@ public final class Mapping {
 		}
 		return switch (javaType) {
 			case Annotated.Declared declared -> declare(declared.declaration());
+			case Annotated.SetOf set -> declare(set.declaration());
 			case Annotated.Primitive primitive -> defaultMapping(node, primitive.kind());
 			case Annotated.Text text -> unmappable(node, "String");
 			case Annotated.Bytes bytes -> unmappable(node, "byte[]");
@@ -269,12 +271,46 @@ public final class Mapping {
 			case Annotated.Text text -> "String";
 			case Annotated.Bytes bytes -> "byte[]";
 			case Annotated.Declared declared -> "a declared type";
+			case Annotated.SetOf set -> "Set";
 			case Annotated.ListOfRecord list -> "List";
 			case Annotated.Other other -> other.javaName();
 		};
 		if (!actual.equals(face)) {
 			problem(field, actual + " is not the face of " + wire.primitiveName() + ", which is " + face);
 		}
+	}
+
+	/**
+	 * The face of an enum is the enum, the face of a set is a {@code Set} of the
+	 * set's enum, and a set has no null value to be optional with.
+	 */
+	private void declaredFace(Annotated.Field field) {
+		Annotated.Declaration wire = field.type() != null ? field.type() : declarationOf(field.javaType());
+		if (wire instanceof Annotated.Enum enumeration
+				&& !(field.javaType() instanceof Annotated.Declared declared
+						&& declared.declaration() == enumeration)) {
+			problem(field, enumeration.javaName() + " is an enum; use " + enumeration.javaName());
+		}
+		if (wire instanceof Annotated.Set set) {
+			if (!(field.javaType() instanceof Annotated.SetOf setOf && setOf.declaration() == set)) {
+				problem(field, set.javaName() + " is a set; use Set<" + set.javaName() + ">");
+			}
+			if (wirePresence(field) == Presence.OPTIONAL) {
+				problem(field, "a set has no null value; a set field cannot be optional");
+			}
+		}
+	}
+
+	private static Annotated.@Nullable Declaration declarationOf(Annotated.JavaType javaType) {
+		return switch (javaType) {
+			case Annotated.Declared declared -> declared.declaration();
+			case Annotated.SetOf set -> set.declaration();
+			case Annotated.Primitive primitive -> null;
+			case Annotated.Text text -> null;
+			case Annotated.Bytes bytes -> null;
+			case Annotated.ListOfRecord list -> null;
+			case Annotated.Other other -> null;
+		};
 	}
 
 	/**

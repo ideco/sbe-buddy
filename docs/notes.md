@@ -115,6 +115,41 @@ alternatives considered.
   version is the field's own, which is what the flyweight's guard reads.
   (`IrGenerator.java`, `add(EncodedDataType, int, Field)` and `add(Field)`,
   read 2026-09-21.)
+- An enum's `encodingType` is `char`, `int8`, `uint8`, `int16`, `uint16`
+  or `int32`, or a named type of those with length 1; anything else is
+  `illegal encodingType for enum`. So an enum's raw value is at most an
+  `int` and a Java `switch` over it is legal. A set's is `uint8` to
+  `uint64`. (`EnumType.java` and `SetType.java`, read 2026-09-21.)
+- The flyweight enum's constants are the valid values' names through
+  `JavaUtil.formatForJavaKeyword`, each with `value()` in the face type,
+  plus `NULL_VAL` with the encoding's null value and a static `get` that
+  throws on anything else. An enum field's decoder has `<field>Raw()` in
+  the face type, guarded below the acting version like a primitive, and
+  `<field>()` through `get`; its encoder has `<field>(Enum)` writing
+  `value()` and no raw form; the meta methods `<field>Id()`,
+  `<field>SinceVersion()`, `<field>EncodingOffset()` and
+  `<field>EncodingLength()` exist for it as for a primitive.
+  (`JavaGenerator.java`, `generateEnumDecoder`, `generateEnumEncoder`,
+  `generateEnumValues` and `generateEnumLookupMethod`, read 2026-09-21;
+  the quotes example's `aVenueNoConstantNamesDecodesToTheUnknownValue`.)
+- A set is its own flyweight pair, `<Set>Decoder` with `getRaw()` in the
+  face type, `isEmpty()` and `boolean <choice>()` per choice, and
+  `<Set>Encoder` with `clear()`, `setRaw()` and `<choice>(boolean)`; a set
+  field's `<field>()` on either message flyweight returns it wrapped at
+  the field, and the decoder's returns `null` below the acting version.
+  The choice methods are named through `JavaUtil.formatPropertyName`,
+  which lowercases the first character, so a choice named `INDICATIVE`
+  becomes `iNDICATIVE()`; a wire `name` in Java's own case avoids it.
+  (`JavaGenerator.java`, `generateBitSet`, `generateChoiceDecoders`,
+  `generateChoiceEncoders` and `generateBitSetProperty`, `JavaUtil.java`,
+  read 2026-09-21; the quotes example.)
+- `JavaUtil.generateLiteral(primitiveType, text)` renders a value's text
+  as a Java literal of the face, `(byte)66` for a `char` `B`, `(short)1`
+  for `uint8`, a bare number for `uint16` and `int32`, which is legal as a
+  `case` label. A valid value's text reaches the IR as
+  `encoding().constValue().toString()`, the number for `char` too.
+  (`JavaUtil.java` and `PrimitiveValue.java`, read 2026-09-21; the Enums
+  corpus case.)
 - `SbeTool.main` takes schema files as arguments, reads `sbe.output.dir`,
   `sbe.target.namespace`, `sbe.validation.stop.on.error` and
   `sbe.validation.warnings.fatal` from system properties, writes Java
@@ -239,8 +274,11 @@ alternatives considered.
   without a diagnostic.)
 - `Messager.printMessage(kind, message, element, mirror)` positions the
   diagnostic on the annotation rather than on the element's own
-  declaration. (`PlacementTest`, on a message whose `@SbeMessage` is
-  written on the line above the record.)
+  declaration; without a mirror, on the element's declaration, which for
+  an enum constant with annotations on the lines above it is the first
+  annotation's line. (`PlacementTest`, on a message whose `@SbeMessage`
+  is written on the line above the record, and on the `@UnknownValue`
+  snippets, 2026-09-21.)
 - `Filer.createResource(CLASS_OUTPUT, "a.b", "schema.xml", origin)` writes
   `a/b/schema.xml` under the class output directory, so the resource ships
   in the jar beside the package's classes and is on the test classpath of

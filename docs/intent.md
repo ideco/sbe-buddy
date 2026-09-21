@@ -100,7 +100,7 @@ the codec on the smallest case so its mechanics settle before they grow.
 the block, one at a time.
 
 - [x] 7. Codec: absence. Optional presence and `sinceVersion` on fields, boxed components, the acting version read in decode; the first frozen schema version and the cross-version tests against reference flyweights
-- [ ] 8. Codec: enums and sets, under the unknown-value contract of `type-mappings.md`
+- [x] 8. Codec: enums and sets, under the unknown-value contract of `type-mappings.md`
 - [ ] 9. Codec: named types, constants, fixed-length arrays and `char` strings
 - [ ] 10. Codec: bindings. `TypeBinding`, `@Bind`, a `@SbeType` that is its own binding; primitive faces only
 

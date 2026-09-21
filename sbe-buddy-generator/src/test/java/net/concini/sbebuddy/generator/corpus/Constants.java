@@ -128,6 +128,7 @@ final class Constants {
 
 	static Annotated annotated() {
 		AnnotatedEnumBuilder side = annotatedEnum("Side")
+				.qualifiedName("corpus.constants.Side")
 				.primitiveType(CHAR)
 				.values(
 						annotatedEnumValue("Buy", "B"),
