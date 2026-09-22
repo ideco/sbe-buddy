@@ -150,6 +150,11 @@ alternatives considered.
   `encoding().constValue().toString()`, the number for `char` too.
   (`JavaUtil.java` and `PrimitiveValue.java`, read 2026-09-21; the Enums
   corpus case.)
+* The flyweights address a block's fields by offset, `buffer.getInt(offset
+  + 24, BYTE_ORDER)` in the generated quotes decoder, so a codec may read
+  and write the fields of a block in any order; only groups and var-data
+  are sequential. (The generated `QuoteDecoder` and the `Layout` corpus
+  case, 2026-09-22.)
 * `SbeTool.main` takes schema files as arguments, reads `sbe.output.dir`,
   `sbe.target.namespace`, `sbe.validation.stop.on.error` and
   `sbe.validation.warnings.fatal` from system properties, writes Java
@@ -254,8 +259,13 @@ alternatives considered.
   declaration order; `MessageHeader` from the api jar reads as
   `@SbeComposite(name="messageHeader")` over four `@SbeType(primitiveType=
   UINT16)` components. (Spike experiment, javac 21, 2026-09-21.)
-* `AnnotationMirror.getElementValues()` holds only the members written
-  explicitly; `Elements.getElementValuesWithDefaults` fills the rest.
+* An annotation may carry an array of annotations as a member,
+  `SbeField[] unmapped() default {}`; only an annotation type containing
+  itself, directly or through another, is refused. In the mirror the
+  array is a `List` of `AnnotationValue`s whose values are
+  `AnnotationMirror`s, read like the annotation on an element.
+  (`Discovery.Members.annotations`, javac 21, 2026-09-22.)
+* `AnnotationMirror.getElementValues()` holds only the members written explicitly; `Elements.getElementValuesWithDefaults` fills the rest.
   Discovery reads every member through the latter, so a member left at its
   default is the default's value. (`javax.lang.model` Javadoc, and the
   spike above.)

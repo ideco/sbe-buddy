@@ -41,9 +41,9 @@ memory.
 | XSD | Java | Members |
 | --- | --- | --- |
 | `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` class; default the standard `messageHeader` of four `uint16`, provided by the api); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`) |
-| `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
+| `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` (the body in wire order, by name; empty for declaration order), `unmapped` (complete `@SbeField`s no component carries) |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
-| `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
+| `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message |
 | `data` | `@SbeData` on a `String` or `byte[]` component | `id`, `name`, `type` (a `@SbeComposite` class of the `{length, varData}` shape), `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 
 A field, group or data component whose `type` and `primitiveType` are both
@@ -201,7 +201,15 @@ nor `dimensionType`.
 ## Layout and evolution
 
 * Fields lay out in component order with sbe-tool's offset rules; `offset`
-  and `blockLength` override exactly as in XML.
+  and `blockLength` override exactly as in XML. A message or group may give
+  a `layout` instead, the body in wire order by name, a component by its
+  Java name and an unmapped field by its `name`, each exactly once; the
+  components may then be declared in any order, and the record's canonical
+  constructor keeps their declared order.
+* A field the record does not carry is declared under `unmapped`, complete
+  with its `name` and its type, and takes its place through `layout`. It is
+  in the schema like any other field; the codec writes its null value and
+  never reads it. That is how a field SBE cannot remove leaves the record.
 * Groups after fields, data after groups, in each message and each group.
 * A node with `sinceVersion = n` must follow every sibling with a lower
   `sinceVersion`, and `n` is at most the schema version; `deprecated` is at

@@ -101,7 +101,7 @@ the block, one at a time.
 
 * [x] 7. Codec: absence. Optional presence and `sinceVersion` on fields, boxed components, the acting version read in decode; the first frozen schema version and the cross-version tests against reference flyweights
 * [x] 8. Codec: enums and sets, under the unknown-value contract of `type-mappings.md`
-* [ ] 9. The layout: `layout` and `unmapped` on `@SbeMessage` and `@SbeGroup`, the wire order named at the top of the record and fields the record does not carry, so a record can retire a field and its component order stops mattering
+* [x] 9. The layout: `layout` and `unmapped` on `@SbeMessage` and `@SbeGroup`, the wire order named at the top of the record and fields the record does not carry, so a record can retire a field and its component order stops mattering
 * [ ] 10. Codec: named types, constants, fixed-length arrays and `char` strings
 * [ ] 11. Codec: bindings. `TypeBinding`, `@Bind`, a `@SbeType` that is its own binding; primitive faces only
 
