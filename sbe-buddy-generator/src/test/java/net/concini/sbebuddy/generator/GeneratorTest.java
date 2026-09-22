@@ -1,6 +1,7 @@
 package net.concini.sbebuddy.generator;
 
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
@@ -14,6 +15,7 @@ import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.other;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
@@ -198,6 +200,36 @@ final class GeneratorTest {
 				new Problem(
 						annotated.messages().get(0),
 						"no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"
+				)
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void twoBindingsWithOneSimpleNameInOneCodecIsAProblem() {
+		// The codec names its binding field after the class's simple name.
+		Schema schema = messageSchema("p", 1, 0)
+				.types(messageHeader())
+				.messages(message("M", 1).fields(field("fee", 1, "int64"), field("tax", 2, "int64")))
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.messages(
+						annotatedMessage("M", 1).components(
+								annotatedField("fee", 1, other("java.math.BigDecimal")).primitiveType(INT64)
+										.binding("a.Cents", primitive(LONG)),
+								annotatedField("tax", 2, other("java.math.BigDecimal")).primitiveType(INT64)
+										.binding("b.Cents", primitive(LONG))
+						)
+				)
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).containsExactly(
+				new Problem(
+						annotated.messages().get(0),
+						"two bindings share the simple name Cents in one codec; the second is b.Cents"
 				)
 		);
 		assertThat(output.getSources()).isEmpty();

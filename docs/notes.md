@@ -342,6 +342,14 @@ alternatives considered.
   work although `MessageHeader` carries `@SbeComposite`. (Every corpus
   case, which resolves `MessageHeader` from the api jar and compiles
   without a diagnostic.)
+* `Types.asMemberOf(declaredType, method)` on an interface's method, with
+  the class implementing the interface as the type, returns the
+  `ExecutableType` with the class's type arguments substituted: for
+  `CentsBinding implements TypeBinding<BigDecimal, Long>` and
+  `TypeBinding.toWire`, a parameter type of `java.math.BigDecimal` and a
+  return type of `java.lang.Long`. `Types.isSubtype` over the erasures
+  tells whether the class implements the interface at all.
+  (`Discovery.toWire` and `PlacementTest`, javac 21, 2026-09-22.)
 * `Messager.printMessage(kind, message, element, mirror)` positions the
   diagnostic on the annotation rather than on the element's own
   declaration; without a mirror, on the element's declaration, which for

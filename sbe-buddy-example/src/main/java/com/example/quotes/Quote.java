@@ -1,9 +1,11 @@
 package com.example.quotes;
 
 import static net.concini.sbebuddy.Presence.OPTIONAL;
+import static net.concini.sbebuddy.PrimitiveType.INT64;
 import static net.concini.sbebuddy.PrimitiveType.UINT32;
 import static net.concini.sbebuddy.PrimitiveType.UINT64;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
@@ -12,7 +14,8 @@ import net.concini.sbebuddy.SbeField;
 import net.concini.sbebuddy.SbeMessage;
 
 /**
- * The best bid and offer of one instrument, prices as fixed-point mantissas.
+ * The best bid and offer of one instrument, prices as fixed-point mantissas on
+ * the wire and as decimals in the record, through the {@link Price} binding.
  * Version 1 appended the sequence number, a plain {@code long} because the
  * schema's baseline retired version 0 readers; version 2 appended the session's
  * trade statistics and version 3 where the quote comes from, which a message of
@@ -30,8 +33,8 @@ import net.concini.sbebuddy.SbeMessage;
 		"bidDepth"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
 public record Quote(
 		@SbeField(id = 1) long instrumentId,
-		@SbeField(id = 2) long bid,
-		@SbeField(id = 3) long ask,
+		@SbeField(id = 2, primitiveType = INT64, binding = Price.class) BigDecimal bid,
+		@SbeField(id = 3, primitiveType = INT64, binding = Price.class) BigDecimal ask,
 		@SbeField(id = 4, primitiveType = UINT32) long bidSize,
 		@SbeField(id = 5, primitiveType = UINT32) long askSize,
 		@SbeField(id = 6, primitiveType = UINT64, sinceVersion = 1, description = "The sequence number of the update") long sequence,

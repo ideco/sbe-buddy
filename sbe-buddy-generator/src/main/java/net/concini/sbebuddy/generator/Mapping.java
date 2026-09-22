@@ -333,20 +333,25 @@ public final class Mapping {
 		if (field.javaType() instanceof Annotated.Unmapped) {
 			return;
 		}
+		Annotated.Binding binding = field.binding();
 		Annotated.Type named = namedType(field);
 		if (named != null && named.primitiveType() != PrimitiveType.NONE && length(named) > 1) {
 			String face = arrayFace(primitive(named.primitiveType()));
-			if (!javaTypeName(field.javaType()).equals(face)) {
+			String wireName = wireName(named.name(), named.javaName());
+			if (binding != null) {
+				if (!boundName(binding.wire()).equals(face)) {
+					problem(
+							field, bindsTheWireAs(binding) + ", but the face of " + wireName + " is " + face
+									+ "; implement TypeBinding over " + face
+					);
+				}
+			} else if (!javaTypeName(field.javaType()).equals(face)) {
 				problem(
-						field, javaTypeName(field.javaType()) + " is not the face of "
-								+ wireName(named.name(), named.javaName()) + ", which is " + face
+						field, javaTypeName(field.javaType()) + " is not the face of " + wireName + ", which is " + face
 				);
 			}
 			if (wirePresence(field) == Presence.OPTIONAL) {
-				problem(
-						field, wireName(named.name(), named.javaName())
-								+ " has a length; a field of it cannot be optional"
-				);
+				problem(field, wireName + " has a length; a field of it cannot be optional");
 			}
 			return;
 		}
@@ -355,13 +360,61 @@ public final class Mapping {
 			return;
 		}
 		String face = JavaUtil.javaTypeName(wire);
-		if (!javaTypeName(field.javaType()).equals(face)) {
+		if (binding != null) {
+			// A primitive face takes its specialization, so nothing is boxed on the way.
+			if (!boundName(binding.wire()).equals(face)) {
+				problem(
+						field, bindsTheWireAs(binding) + ", but the face of " + wire.primitiveName() + " is " + face
+								+ "; implement TypeBinding.Of" + box(face)
+				);
+			}
+		} else if (!javaTypeName(field.javaType()).equals(face)) {
 			problem(
 					field,
 					javaTypeName(field.javaType()) + " is not the face of " + wire.primitiveName() + ", which is "
 							+ face
 			);
 		}
+	}
+
+	private static String declarationName(Annotated.Declaration declaration) {
+		return switch (declaration) {
+			case Annotated.Type type -> type.javaName();
+			case Annotated.Composite composite -> composite.javaName();
+			case Annotated.Enum enumeration -> enumeration.javaName();
+			case Annotated.Set set -> set.javaName();
+		};
+	}
+
+	private static String bindsTheWireAs(Annotated.Binding binding) {
+		String simpleName = binding.qualifiedName().substring(binding.qualifiedName().lastIndexOf('.') + 1);
+		return simpleName + " binds the wire as " + boundName(binding.wire());
+	}
+
+	/**
+	 * What a binding hands the flyweight, as code names it: a primitive for a
+	 * specialization, its box for the generic interface, the reference type
+	 * otherwise.
+	 */
+	private static String boundName(Annotated.JavaType javaType) {
+		if (javaType instanceof Annotated.Primitive primitive) {
+			String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
+			return primitive.boxed() ? box(plain) : plain;
+		}
+		return javaTypeName(javaType);
+	}
+
+	/** The specialization's name for a face, {@code Int} for {@code int}. */
+	private static String box(String primitive) {
+		return switch (primitive) {
+			case "byte" -> "Byte";
+			case "short" -> "Short";
+			case "int" -> "Int";
+			case "long" -> "Long";
+			case "float" -> "Float";
+			case "double" -> "Double";
+			default -> primitive;
+		};
 	}
 
 	private static String javaTypeName(Annotated.JavaType javaType) {
@@ -424,6 +477,10 @@ public final class Mapping {
 			return;
 		}
 		Annotated.Declaration wire = field.type() != null ? field.type() : declarationOf(field.javaType());
+		if ((wire instanceof Annotated.Enum || wire instanceof Annotated.Set) && field.binding() != null) {
+			String kind = wire instanceof Annotated.Enum ? "an enum" : "a set";
+			problem(field, declarationName(wire) + " is " + kind + "; a field of it takes no binding");
+		}
 		if (wire instanceof Annotated.Enum enumeration
 				&& !(field.javaType() instanceof Annotated.Declared declared
 						&& declared.declaration() == enumeration)) {

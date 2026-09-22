@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,13 +24,18 @@ import com.example.quotes.sbe.MessageHeaderEncoder;
  * the generated codec and comes back equal, at an offset, with every length the
  * contract promises agreeing, with and without its optional field; what it
  * refuses, it refuses with the exception the contract names: a string that does
- * not fit, an array of the wrong length, a constant the record disagrees with.
+ * not fit, an array of the wrong length, a constant the record disagrees with;
+ * what a binding refuses passes through as the binding's own exception.
  */
 final class QuotesTest {
 
 	private static final String RESOURCE = "/com/example/quotes/schema.xml";
 
 	private static final int OFFSET = 16;
+
+	private static final BigDecimal BID = new BigDecimal("1.0050");
+
+	private static final BigDecimal ASK = new BigDecimal("1.0075");
 
 	private static final byte EXPONENT = -4;
 
@@ -48,7 +54,7 @@ final class QuotesTest {
 	void aQuoteRoundTripsThroughItsCodec() {
 		assertRoundTrip(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
 						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH
 				)
 		);
@@ -58,7 +64,7 @@ final class QuotesTest {
 	void aQuoteWithoutAVwapAndWithoutFlagsRoundTrips() {
 		assertRoundTrip(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of(), "",
+						42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of(), "",
 						EXPONENT, new long[5]
 				)
 		);
@@ -69,7 +75,7 @@ final class QuotesTest {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
-				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
+				42, BID, ASK, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
 				DEPTH
 		);
 
@@ -83,7 +89,7 @@ final class QuotesTest {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
-				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of(), "ACME",
+				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of(), "ACME",
 				EXPONENT, DEPTH
 		);
 
@@ -137,6 +143,18 @@ final class QuotesTest {
 	}
 
 	@Test
+	void aPriceWithMoreDecimalsThanTheExponentAllowsIsTheBindingsOwnException() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = new Quote(
+				42, new BigDecimal("1.00505"), ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN,
+				Set.of(), "ACME", EXPONENT, DEPTH
+		);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET)).isInstanceOf(ArithmeticException.class);
+	}
+
+	@Test
 	void anotherTemplateIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
@@ -150,7 +168,7 @@ final class QuotesTest {
 
 	private static Quote quoteWith(String symbol, byte priceExponent, long[] bidDepth) {
 		return new Quote(
-				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), symbol,
+				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), symbol,
 				priceExponent, bidDepth
 		);
 	}

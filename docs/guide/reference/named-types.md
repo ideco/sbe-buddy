@@ -91,4 +91,4 @@ A constant `char` type whose `value` is longer than one character is a string co
 
 ## Coverage
 
-This page covers named types on message fields: scalars, strings, arrays and constants. A named type on a composite's component and a binding over a named type's face have their own pages.
+This page covers named types on message fields: scalars, strings, arrays and constants. A named type on a composite's component has its own page; a field that wants the type as a Java type of its own names a [binding](bindings.md).

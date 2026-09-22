@@ -46,6 +46,7 @@ public final class CodecEmitter {
 						private final {flyweights}.{header}Decoder headerDecoder = new {flyweights}.{header}Decoder();
 						private final {flyweights}.{message}Encoder encoder = new {flyweights}.{message}Encoder();
 						private final {flyweights}.{message}Decoder decoder = new {flyweights}.{message}Decoder();
+						{bindings}
 						private int lastDecodedLength;
 
 						public {codec}() {
@@ -108,10 +109,10 @@ public final class CodecEmitter {
 
 	// ---- a primitive field
 
-	private static final Template ENCODE_FIELD = Template.of("encoder.{property}(value.{component}());");
+	private static final Template ENCODE_FIELD = Template.of("encoder.{property}({source});");
 
 	private static final Template ENCODE_OPTIONAL_FIELD = Template.of(
-			"encoder.{property}(value.{component}() == null ? {flyweights}.{message}Encoder.{property}NullValue() : value.{component}());"
+			"encoder.{property}(value.{component}() == null ? {flyweights}.{message}Encoder.{property}NullValue() : {source});"
 	);
 
 	private static final Template DECODE_FIELD = Template.of("decoder.{property}()");
@@ -161,7 +162,7 @@ public final class CodecEmitter {
 	// ---- a char string: the flyweight's own String form, checked first
 
 	private static final Template ENCODE_STRING_FIELD = Template.of(
-			"encoder.{property}(ascii(value.{component}(), {flyweights}.{message}Encoder.{property}Length(), \"{component}\"));"
+			"encoder.{property}(ascii({source}, {flyweights}.{message}Encoder.{property}Length(), \"{component}\"));"
 	);
 
 	/**
@@ -183,7 +184,7 @@ public final class CodecEmitter {
 
 	// ---- a fixed-length array: a pair per field, over the index accessors
 
-	private static final Template ENCODE_ARRAY_FIELD = Template.of("write{field}(value.{component}(), encoder);");
+	private static final Template ENCODE_ARRAY_FIELD = Template.of("write{field}({source}, encoder);");
 
 	private static final Template DECODE_ARRAY_FIELD = Template.of("read{field}(decoder)");
 
@@ -234,12 +235,12 @@ public final class CodecEmitter {
 	// ---- a constant: no bytes; the record must agree with the schema
 
 	private static final Template CHECK_CONSTANT_FIELD = Template.of("""
-			if (value.{component}() != encoder.{property}()) {
+			if ({source} != encoder.{property}()) {
 				throw new IllegalArgumentException("{component} is the constant " + encoder.{property}());
 			}""");
 
 	private static final Template CHECK_CONSTANT_STRING_FIELD = Template.of("""
-			if (!encoder.{property}().equals(value.{component}())) {
+			if (!encoder.{property}().equals({source})) {
 				throw new IllegalArgumentException("{component} is the constant " + encoder.{property}());
 			}""");
 
@@ -247,6 +248,17 @@ public final class CodecEmitter {
 			if (value.{component}() != {javaEnum}.{constant}) {
 				throw new IllegalArgumentException("{component} is the constant {constant}");
 			}""");
+
+	// ---- a binding: the component mapped before the flyweight and after it
+
+	private static final Template BINDING_FIELD = Template.of("private final {binding} {name} = new {binding}();");
+
+	/** What the flyweight is handed: the component, or the binding's view of it. */
+	private static final Template SOURCE = Template.of("value.{component}()");
+
+	private static final Template BOUND_SOURCE = Template.of("{name}.toWire(value.{component}())");
+
+	private static final Template BOUND_READ = Template.of("{name}.fromWire({read})");
 
 	// ---- the shapes over them
 
@@ -401,6 +413,7 @@ public final class CodecEmitter {
 		List<String> encodeFields = new ArrayList<>();
 		Map<Annotated.Component, String> reads = new IdentityHashMap<>();
 		Map<String, String> helpers = new LinkedHashMap<>();
+		Map<String, String> bindings = new LinkedHashMap<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
 			Token type = fields.get(i + 1);
@@ -418,15 +431,30 @@ public final class CodecEmitter {
 				}
 				continue;
 			}
+			Annotated.Binding binding = component.binding();
+			String bindingName = binding == null ? null : bindingName(binding, bindings);
+			if (binding != null && bindingName == null) {
+				problems.add(
+						new Problem(
+								message, "two bindings share the simple name " + simpleName(binding.qualifiedName())
+										+ " in one codec; the second is " + binding.qualifiedName()
+						)
+				);
+				return null;
+			}
+			String source = bindingName == null
+					? SOURCE.fill("component", component.javaName())
+					: BOUND_SOURCE.fill("name", bindingName, "component", component.javaName());
 			Access access;
 			if (constant(field)) {
 				access = constantAccess(
-						field, typeTokens, component, flyweights, messageClass, property, helpers
+						field, typeTokens, component, flyweights, messageClass, property, source, helpers
 				);
 			} else {
 				access = switch (type.signal()) {
-					case ENCODING ->
-						encodingAccess(type, flyweights, messageClass, property, component.javaName(), helpers);
+					case ENCODING -> encodingAccess(
+							type, flyweights, messageClass, property, component.javaName(), source, helpers
+					);
 					case BEGIN_ENUM -> enumAccess(
 							typeTokens, enumOf(component), flyweights, messageClass, property, component.javaName(),
 							helpers
@@ -435,6 +463,13 @@ public final class CodecEmitter {
 						setAccess(typeTokens, setOf(component), flyweights, property, component.javaName(), helpers);
 					default -> throw new IllegalStateException("a field of " + type.signal());
 				};
+			}
+			if (bindingName != null) {
+				// The null value and the version are decided before the binding is called.
+				access = new Access(
+						access.encode(), access.encodeOptional(),
+						BOUND_READ.fill("name", bindingName, "read", access.decode()), access.isNull()
+				);
 			}
 			encodeFields.add(encodeField(field, component, access));
 			reads.put(component, decodeField(field, flyweights, messageClass, property, access));
@@ -458,6 +493,7 @@ public final class CodecEmitter {
 				"flyweights", flyweights,
 				"header", JavaUtil.formatClassName(header),
 				"message", messageClass,
+				"bindings", bindingFields(bindings),
 				"encodeFields", String.join("\n", encodeFields),
 				"refuseBelowBaseline", baseline == 0
 						? ""
@@ -529,18 +565,18 @@ public final class CodecEmitter {
 	 * through its accessor.
 	 */
 	private static Access encodingAccess(
-			Token type, String flyweights, String messageClass, String property, String component,
+			Token type, String flyweights, String messageClass, String property, String component, String source,
 			Map<String, String> helpers
 	) {
 		if (type.arrayLength() <= 1) {
-			return primitiveAccess(type, flyweights, messageClass, property, component);
+			return primitiveAccess(type, flyweights, messageClass, property, component, source);
 		}
 		if (type.encoding().primitiveType() == PrimitiveType.CHAR) {
 			helpers.computeIfAbsent("ascii", name -> ASCII.fill());
 			return new Access(
 					ENCODE_STRING_FIELD.fill(
-							"property", property, "component", component, "flyweights", flyweights, "message",
-							messageClass
+							"property", property, "source", source, "component", component, "flyweights", flyweights,
+							"message", messageClass
 					),
 					null,
 					DECODE_FIELD.fill("property", property),
@@ -552,7 +588,7 @@ public final class CodecEmitter {
 				"field " + property, name -> arrayPair(type, flyweights, messageClass, property, field, component)
 		);
 		return new Access(
-				ENCODE_ARRAY_FIELD.fill("field", field, "component", component),
+				ENCODE_ARRAY_FIELD.fill("field", field, "source", source),
 				null,
 				DECODE_ARRAY_FIELD.fill("field", field),
 				null
@@ -596,7 +632,7 @@ public final class CodecEmitter {
 	 */
 	private Access constantAccess(
 			Token field, List<Token> typeTokens, Annotated.Field component, String flyweights, String messageClass,
-			String property, Map<String, String> helpers
+			String property, String source, Map<String, String> helpers
 	) {
 		Token type = typeTokens.get(0);
 		return switch (type.signal()) {
@@ -606,7 +642,7 @@ public final class CodecEmitter {
 						&& encoding.constValue().byteArrayValue(PrimitiveType.CHAR).length > 1;
 				Template check = string ? CHECK_CONSTANT_STRING_FIELD : CHECK_CONSTANT_FIELD;
 				yield new Access(
-						check.fill("component", component.javaName(), "property", property),
+						check.fill("source", source, "component", component.javaName(), "property", property),
 						null,
 						DECODE_FIELD.fill("property", property),
 						null
@@ -634,12 +670,13 @@ public final class CodecEmitter {
 	}
 
 	private static Access primitiveAccess(
-			Token type, String flyweights, String messageClass, String property, String component
+			Token type, String flyweights, String messageClass, String property, String component, String source
 	) {
 		return new Access(
-				ENCODE_FIELD.fill("property", property, "component", component),
+				ENCODE_FIELD.fill("property", property, "source", source),
 				ENCODE_OPTIONAL_FIELD.fill(
-						"property", property, "component", component, "flyweights", flyweights, "message", messageClass
+						"property", property, "component", component, "source", source, "flyweights", flyweights,
+						"message", messageClass
 				),
 				DECODE_FIELD.fill("property", property),
 				isNull(type, flyweights, messageClass, property)
@@ -769,6 +806,33 @@ public final class CodecEmitter {
 						"knownBits", String.join(" | ", knownBits), "choices", String.join("\n", decodeChoices)
 				)
 		);
+	}
+
+	/**
+	 * The codec's field for the binding, named after the class,
+	 * {@code priceBinding} for {@code Price}, and declared on first use; null when
+	 * another class of that simple name already has the name.
+	 */
+	private static @Nullable String bindingName(Annotated.Binding binding, Map<String, String> bindings) {
+		String simpleName = simpleName(binding.qualifiedName());
+		String name = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
+		if (!name.endsWith("Binding")) {
+			name += "Binding";
+		}
+		String declared = bindings.putIfAbsent(name, binding.qualifiedName());
+		return declared == null || declared.equals(binding.qualifiedName()) ? name : null;
+	}
+
+	private static String bindingFields(Map<String, String> bindings) {
+		List<String> fields = new ArrayList<>();
+		for (Map.Entry<String, String> binding : bindings.entrySet()) {
+			fields.add(BINDING_FIELD.fill("binding", binding.getValue(), "name", binding.getKey()));
+		}
+		return String.join("\n", fields);
+	}
+
+	private static String simpleName(String qualifiedName) {
+		return qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1);
 	}
 
 	private static boolean optional(Token field) {

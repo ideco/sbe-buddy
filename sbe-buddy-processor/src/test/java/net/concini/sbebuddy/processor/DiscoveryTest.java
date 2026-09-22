@@ -57,7 +57,8 @@ final class DiscoveryTest {
 		public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
 			if (discovered == null && !round.processingOver()) {
 				PackageElement schemaPackage = processingEnv.getElementUtils().getPackageElement(packageName);
-				discovered = Discovery.discover(schemaPackage, processingEnv.getElementUtils());
+				discovered = Discovery
+						.discover(schemaPackage, processingEnv.getElementUtils(), processingEnv.getTypeUtils());
 			}
 			return false;
 		}

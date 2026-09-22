@@ -264,8 +264,17 @@ public record Annotated(
 			String semanticType,
 			String description,
 			int sinceVersion,
-			int deprecated
+			int deprecated,
+			@Nullable Binding binding
 	) implements Component {
+	}
+
+	/**
+	 * A field's {@code binding}: the class code names, and its {@code W}, the Java
+	 * type it hands the flyweight, which the face rule compares. Its {@code J} is
+	 * the component's type, which only javac can check.
+	 */
+	public record Binding(String qualifiedName, JavaType wire) {
 	}
 
 	/**

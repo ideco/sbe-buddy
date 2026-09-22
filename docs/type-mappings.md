@@ -63,9 +63,9 @@ primitive it is the default mapping below; anything else is an error.
 | `set` | `@SbeSet` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `choice` | `@SbeChoice` on each constant | `value` (the bit, 0 to 63), `name`, `description`, `sinceVersion`, `deprecated` |
 
-The Java side adds two annotations that contribute nothing to the schema:
-`@UnknownValue` on one constant of an `@SbeEnum` in place of
-`@SbeEnumValue` (unknown values, below), and `@Bind` on a component
+The Java side adds one annotation and one member that contribute nothing
+to the schema: `@UnknownValue` on one constant of an `@SbeEnum` in place of
+`@SbeEnumValue` (unknown values, below), and `binding` on `@SbeField`
 (bindings, below).
 
 Inside an `@SbeComposite` record every component is one of: `@SbeType` (an
@@ -183,12 +183,24 @@ and its face is `String`.
 public interface TypeBinding<J, W> { W toWire(J value); J fromWire(W wire); }
 ```
 
-`@Bind(X.class)` on a component names a stateless binding with a public
-no-arg constructor; `J` is the component type, `W` the face of the field's
-SBE type. A `@SbeType` class may implement `TypeBinding` itself, in which
-case `@SbeField(type = X.class)` needs no `@Bind`. A binding may check a
-schema attribute it depends on (`timeUnit`, `characterEncoding`) and never
-supplies one. Absence passes through as `null` without calling the binding.
+`@SbeField(binding = X.class)` names a stateless binding with a no-arg
+constructor the schema package can call, public when the class lives
+elsewhere; `J` is the component type, and the face of the field's SBE type
+decides the interface: a primitive face takes its specialization,
+`TypeBinding.OfLong<J>` with `long toWire(J)` and `J fromWire(long)` for
+`int64`, `uint64` and `uint32`, `OfInt` for `int32` and `uint16`, `OfShort`
+for `int16` and `uint8`, `OfByte` for `int8` and `char`, `OfFloat` and
+`OfDouble`, so nothing is boxed on the way; a reference face, a `String` or
+an array, takes `TypeBinding<J, W>` with the face as `W`. A binding is a
+class of its own: a declaration never implements `TypeBinding`, and a binding never
+carries a declaration annotation, so what is schema and what is Java stay
+apart, and the field alone says which binding it wants over which wire. A
+binding may check a schema attribute it depends on (`timeUnit`,
+`characterEncoding`) and never supplies one. Absence passes through as
+`null` without calling the binding; the codec holds one instance of each
+binding class it uses, and whatever a binding throws passes through
+unwrapped. A field of an enum or a set takes no binding: their faces are
+the user's types already.
 
 Built-ins in the api: the standard `MessageHeader` and `GroupSizeEncoding`
 composites; `VarStringEncoding` (UTF-8), `VarAsciiEncoding`,
@@ -250,11 +262,11 @@ record PlaceOrder(
     @SbeField(id = 1) long accountId,
     @SbeField(id = 2) int quantity,
     @SbeField(id = 3, primitiveType = UINT16) int venue,
-    @SbeField(id = 4, primitiveType = INT64) @Bind(Cents.class) BigDecimal price,
-    @SbeField(id = 5, type = UuidWire.class) @Bind(Uuid.class) UUID orderId,
+    @SbeField(id = 4, primitiveType = INT64, binding = CentsBinding.class) BigDecimal price,
+    @SbeField(id = 5, type = UuidWire.class, binding = Uuid.class) UUID orderId,
     @SbeField(id = 6) Side side,
     @SbeField(id = 7, type = Symbol.class, presence = OPTIONAL) String symbol,
-    @SbeField(id = 8, type = Cents.class, sinceVersion = 1) BigDecimal commission,
+    @SbeField(id = 8, type = Cents.class, sinceVersion = 1, binding = CentsBinding.class) BigDecimal commission,
     @SbeGroup(id = 9) List<Leg> legs,
     @SbeData(id = 10, type = VarStringEncoding.class, sinceVersion = 2) String note
 ) implements IngressMessage {}
@@ -270,8 +282,10 @@ enum Side { @SbeEnumValue("0") BUY, @SbeEnumValue("1") SELL }
 final class Symbol {}
 
 @SbeType(primitiveType = INT64)
-final class Cents implements TypeBinding<BigDecimal, Long> {
-    public Long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
-    public BigDecimal fromWire(Long wire) { return BigDecimal.valueOf(wire, 2); }
+final class Cents {}
+
+final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
+    public long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
+    public BigDecimal fromWire(long wire) { return BigDecimal.valueOf(wire, 2); }
 }
 ```
