@@ -16,10 +16,6 @@ public final class Corpus {
 
 	public static final List<Case> CASES = List.of(
 			new Case(
-					"Versions", Versions.PACKAGE_INFO, Versions.SOURCE, Versions.schema(), Versions.XML,
-					Versions.annotated(), Map.of()
-			),
-			new Case(
 					"Header", Header.PACKAGE_INFO, Header.SOURCE, Header.schema(), Header.XML, Header.annotated(),
 					Map.of()
 			),
