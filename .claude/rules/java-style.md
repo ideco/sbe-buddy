@@ -64,54 +64,20 @@ Apply these rules to the code being changed. Do not perform unrelated cleanup or
 
 ## sbe-buddy specifics
 
-The decisions that shaped the first code, so later code matches it.
-
-- A closed grammar is one file with a nested record per node: `Schema`
-  for the XSD's elements, `Annotated` for the api's annotations and
-  `CodecModel` for what a codec is made of. Nesting is for those three
-  only, not a habit: `SchemaXml`, `Mapping`, `FaceRules`, `Generator`, `CodecWalk`,
-  `CodecWriter` and `CodecTemplates` are their own files. Nested model
-  types are used qualified, `Schema.Field`, `Annotated.Field`, and never
-  imported: `Schema.Enum` and `Schema.Set` would shadow `java.lang` and
-  `java.util` in any file that imported them. `CodecModel`'s nodes sit
-  under its interfaces, `Shape.Enum`, `Member.Field`, so the walk and the
-  writer import `Body`, `Member`, `Shape`, `Helper` and `Absence`, and
-  every leaf is still read qualified by its interface.
-- Records are pure: canonical constructor, no builder, no wither, no
-  setter. A record's compact constructor copies its lists and does nothing
-  else; every schema rule lives in `Generator.validate`, positioned. A
-  Javadoc on a record names the XSD element it mirrors and stops; the XSD
-  is the documentation.
-- Components are the XSD's attributes with the XSD's names, required ones
-  first, then children, then optional ones in XSD order. Optional is
-  `@Nullable`, boxed where the attribute is numeric; nothing has a default,
-  because a default in our code is a second copy of the XSD. Where the XML
-  holds a name that sbe-tool resolves (`type`, `encodingType`,
-  `dimensionType`, `valueRef`, `headerType`) the component is a `String`;
-  where the XSD enumerates, it is an enum (`PrimitiveType`, `Presence`,
-  `ByteOrder`); numbers the XSD types as strings stay `String`.
-- Structure encodes the order rules: a message holds `fields`, `groups`
-  and `data` as three lists because the XSD orders them; a composite holds
-  one list of a sealed `Member` because the XSD does not. Sealed types are
-  switched without `default`.
-- Checked exceptions do not leave the generator except `IOException` from
-  a method that takes a `Writer`. `IllegalStateException` for cannot-happen,
-  `IllegalArgumentException` for a caller's mistake.
-- Tests: JUnit, AssertJ, XMLUnit. Every assertion is AssertJ's, exceptions
-  included (`assertThatThrownBy`); JUnit's `Assertions` are not used. Test
-  classes and methods package-private, helpers shared across test packages
-  public;
-  parameterized tests over an explicit list, never classpath scanning,
-  except the tests module, which finds its schema cases on its own
-  classpath so a new schema needs no registration;
-  method names are sentences in camelCase. `Fixtures` holds plain
-  factories for the few models the generator's tests build by hand, the
-  fixed defaults inside them; a test builds a node once and passes it to
-  its parent. A rule a user can break is tested as the source they write.
-- Imports, never fully qualified names in code. Spotless removes unused
-  imports and orders them; nothing adds an import for you. The one exception is a
-  type that collides with one of ours in the same file, such as
+- Imports, never fully qualified names. The one exception is a type that
+  collides with one of ours in the same file, such as
   `javax.xml.validation.Schema` beside `Schema`; it is qualified and the
-  line says why.
+  line says why. Nested model types whose names shadow `java.lang` or
+  `java.util`, such as `Schema.Enum` and `Schema.Set`, are used qualified
+  by their outer type and not imported.
+- Records are pure: canonical constructor, no builder, no wither, no
+  setter. A compact constructor copies lists and does nothing else.
+- Sealed types are switched without `default`.
+- `IllegalStateException` for cannot-happen, `IllegalArgumentException`
+  for a caller's mistake. Checked exceptions do not leak out of the
+  generator, except `IOException` from a method that takes a `Writer`.
+- Tests: JUnit, AssertJ and XMLUnit. Every assertion is AssertJ's,
+  exceptions included (`assertThatThrownBy`). Test classes and methods
+  are package-private; method names are sentences in camelCase.
 - Not used anywhere: Lombok, `Utils` classes, an interface with one
-  implementation, an abstraction for a front-end that does not exist yet.
+  implementation.

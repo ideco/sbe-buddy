@@ -6,7 +6,7 @@ flyweights and a record codec, byte-identical to the hand-written schema.
 ```
 docs/intent.md         what it is, scope, non-negotiables, increment list
 docs/type-mappings.md  the target Java form of every sbe.xsd node; normative
-docs/architecture.md   modules, the pipeline, the model, rules, Codec contract, testing, build
+docs/architecture.md   modules, the pipeline, the models, rules, generation, Codec contract, testing, build
 docs/next.md           the increment being built now
 docs/notes.md          verified facts about sbe-tool, javac, Agrona and the build
 docs/guide/            the user guide: getting started, one page per construct, how-to, concepts
