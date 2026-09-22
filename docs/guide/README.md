@@ -13,7 +13,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 * [Enums](reference/enums.md) — `@SbeEnum`, explicit wire values and unknown values
 * [Sets](reference/sets.md) — `@SbeSet`, bit choices and `Set` components
 * [Composites](reference/composites.md) — `@SbeComposite`, members, refs, the record as the field
-* Groups — repeating groups
+* [Groups](reference/groups.md) — `@SbeGroup`, the entry record, nested groups, what a group costs
 * Variable data — strings and byte arrays
 * Codecs — the `Codec` contract and its lifecycle
 

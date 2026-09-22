@@ -97,6 +97,44 @@ alternatives considered.
   for a group, and wraps var-data with length zero. Encoders have no
   version guard. (`JavaGenerator.java`, `generateFieldNotPresentCondition`
   and the group and var-data guards, read 2026-09-20.)
+* A group is a static nested class of its message's flyweight,
+  `<Msg>Encoder.<Group>Encoder` and `<Msg>Decoder.<Group>Decoder`, named
+  by `JavaUtil.formatClassName` on the group's name, and a nested group's
+  class is nested in its parent group's. The encoder's `<group>Count(int)`
+  writes the dimensions at the limit and returns the group encoder, whose
+  `wrap` refuses a count outside the dimension type's range with its own
+  `IllegalArgumentException("count outside allowed range")` and whose
+  `next()` opens the next entry, moving the limit by `sbeBlockLength()`.
+  The decoder's `<group>()` reads the dimensions and returns the group
+  decoder, with `count()`, `hasNext()` and `next()`, which moves the limit
+  by the block length read from the wire; below the acting version it
+  returns the decoder with count and index zero without touching the
+  limit. Both group classes have static `sbeHeaderSize()` and
+  `sbeBlockLength()`, the latter the declared `blockLength` where there is
+  one; the parent decoder has static `<group>DecoderId()` and
+  `<group>DecoderSinceVersion()`, named after the group's decoder class
+  rather than the group, since `generateDecoderGroups` hands
+  `generateGroupDecoderProperty` the class name where the encoder side
+  gets the group's, so the encoder's is `<group>Id()`; the group decoder
+  has `actingVersion()`, the message's. Inside a group the fields
+  are generated as a message's, addressed from the entry's `offset`,
+  which `next()` sets, with their static meta methods on the group class
+  and their getters guarded by `parentMessage.actingVersion`, so a
+  field's guard inside a group is never reached while the group's own
+  guard holds. `count` has static `countMinValue()` and `countMaxValue()`.
+  The message decoder's `sbeSkip()` rewinds to the block and walks every
+  group, each entry's `sbeSkip()` walking its own, and every var-data;
+  `sbeDecodedLength()` calls it and restores the limit, so it needs a
+  wrapped decoder and disturbs nothing. (`JavaGenerator.java`,
+  `generateDecoderGroups`, `generateEncoderGroups`,
+  `generateGroupDecoderProperty`, `generateGroupEncoderProperty`,
+  `generateGroupDecoderClassHeader`, `generateGroupEncoderClassHeader`,
+  `generateFieldNotPresentCondition`, `generateMessageLength` and the
+  decoder's `sbeDecodedLength`, read 2026-09-22.)
+* sbe-tool's offset rule, `Message.computeAndValidateOffsets`, treats
+  every position after a group or var-data as variable length, so an
+  `offset` on a `data` element after a group is accepted whatever its
+  value. (`Message.java`, read 2026-09-22.)
 * Every primitive field has static meta methods on both flyweights, typed
   as the face: `<field>NullValue()`, `<field>MinValue()`,
   `<field>MaxValue()`, `<field>SinceVersion()`, `<field>Id()`,

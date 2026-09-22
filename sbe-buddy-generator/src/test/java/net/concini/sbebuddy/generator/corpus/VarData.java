@@ -6,6 +6,7 @@ import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.SHORT;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
@@ -13,6 +14,9 @@ import static net.concini.sbebuddy.generator.Fixtures.bytes;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
+import static net.concini.sbebuddy.generator.Fixtures.group;
+import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
+import static net.concini.sbebuddy.generator.Fixtures.listOfRecord;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
@@ -30,7 +34,8 @@ import net.concini.sbebuddy.generator.Schema;
 
 /**
  * Variable-length data: text with a character encoding, opaque bytes without
- * one, and a length type wide enough to need its own maxValue.
+ * one, a length type wide enough to need its own maxValue, and var-data inside
+ * a group's entry.
  */
 final class VarData {
 
@@ -49,9 +54,12 @@ final class VarData {
 			import static net.concini.sbebuddy.PrimitiveType.UINT32;
 			import static net.concini.sbebuddy.PrimitiveType.UINT8;
 
+			import java.util.List;
+
 			import net.concini.sbebuddy.SbeComposite;
 			import net.concini.sbebuddy.SbeData;
 			import net.concini.sbebuddy.SbeField;
+			import net.concini.sbebuddy.SbeGroup;
 			import net.concini.sbebuddy.SbeMessage;
 			import net.concini.sbebuddy.SbeType;
 
@@ -79,13 +87,20 @@ final class VarData {
 			@SbeMessage(id = 1)
 			record VarData(
 					@SbeField(id = 1) int orderId,
+					@SbeGroup(id = 5) List<Attachment> attachments,
 					@SbeData(
-							id = 2, type = VarStringEncoding.class, offset = 4, semanticType = "String",
+							id = 2, type = VarStringEncoding.class, semanticType = "String",
 							description = "A free-text note"
 					) String note,
 					@SbeData(id = 3, type = VarBlobEncoding.class) byte[] payload,
 					@SbeData(id = 4, type = VarByteEncoding.class) byte[] signature
 			) {
+
+				record Attachment(
+						@SbeField(id = 6) int kind,
+						@SbeData(id = 7, type = VarByteEncoding.class, offset = 4) byte[] content
+				) {
+				}
 			}
 			""";
 
@@ -111,10 +126,18 @@ final class VarData {
 			            <type name="length" primitiveType="uint16"/>
 			            <type name="varData" primitiveType="char" length="0" characterEncoding="UTF-8"/>
 			        </composite>
+			        <composite name="groupSizeEncoding">
+			            <type name="blockLength" primitiveType="uint16"/>
+			            <type name="numInGroup" primitiveType="uint16"/>
+			        </composite>
 			    </types>
 			    <sbe:message name="VarData" id="1">
 			        <field name="orderId" id="1" type="int32"/>
-			        <data name="note" id="2" type="varStringEncoding" offset="4" semanticType="String" description="A free-text note"/>
+			        <group name="attachments" id="5">
+			            <field name="kind" id="6" type="int32"/>
+			            <data name="content" id="7" type="varByteEncoding" offset="4"/>
+			        </group>
+			        <data name="note" id="2" type="varStringEncoding" semanticType="String" description="A free-text note"/>
 			        <data name="payload" id="3" type="varBlobEncoding"/>
 			        <data name="signature" id="4" type="varByteEncoding"/>
 			    </sbe:message>
@@ -139,14 +162,19 @@ final class VarData {
 						composite("varStringEncoding").members(
 								type("length", UINT16),
 								type("varData", CHAR).length(0).characterEncoding("UTF-8")
-						)
+						),
+						groupSizeEncoding()
 				)
 				.messages(
 						message("VarData", 1)
 								.fields(field("orderId", 1, "int32"))
+								.groups(
+										group("attachments", 5)
+												.fields(field("kind", 6, "int32"))
+												.data(data("content", 7, "varByteEncoding").offset(4))
+								)
 								.data(
 										data("note", 2, "varStringEncoding")
-												.offset(4)
 												.semanticType("String")
 												.description("A free-text note"),
 										data("payload", 3, "varBlobEncoding"),
@@ -183,8 +211,13 @@ final class VarData {
 				.messages(
 						annotatedMessage("VarData", 1).components(
 								annotatedField("orderId", 1, primitive(INT)),
+								annotatedGroup("attachments", 5)
+										.javaType(listOfRecord("corpus.vardata.VarData.Attachment"))
+										.components(
+												annotatedField("kind", 6, primitive(INT)),
+												annotatedData("content", 7, bytes(), varByteEncoding).offset(4)
+										),
 								annotatedData("note", 2, text(), varStringEncoding)
-										.offset(4)
 										.semanticType("String")
 										.description("A free-text note"),
 								annotatedData("payload", 3, bytes(), varBlobEncoding),

@@ -11,8 +11,9 @@ nested group is a list inside an entry, however deep. `encodedLength` earns
 its keep: it sums the dimensions and the entries of every group without
 encoding, and `decodedLength` walks them without decoding. A group appended
 above the baseline is `null` below its version, as a field is. After it, what
-the emitter still refuses is var-data, a field added above the baseline
-inside a group, a header of the schema's own and big-endian byte order.
+the emitter still refuses is var-data, in a message or a group, a field or
+a group added above the baseline inside a group, a header of the schema's
+own and big-endian byte order.
 
 ## Settled before it started
 
@@ -24,8 +25,9 @@ inside a group, a header of the schema's own and big-endian byte order.
   dimensions and returns the group decoder, with `count()`, `hasNext()` and
   `next()`, and below the acting version returns it with a count of zero
   without moving the limit. Both group classes have static `sbeHeaderSize()`
-  and `sbeBlockLength()`, the parent decoder a static `<group>SinceVersion()`,
-  and the group decoder `actingVersion()`. Inside a group the fields are
+  and `sbeBlockLength()`, the parent decoder a static
+  `<group>DecoderSinceVersion()`, named after the group's decoder class as
+  sbe-tool has it, and the group decoder `actingVersion()`. Inside a group the fields are
   generated as a message's, their static meta methods on the group class
   and their getters guarded by the message's acting version. The encoder's
   wrap refuses a count outside the dimension type's range with its own
@@ -45,14 +47,24 @@ inside a group, a header of the schema's own and big-endian byte order.
   zero entries is an empty list. A `null` list on encode is an
   `IllegalArgumentException`, `legs is required`, from `encodedLength` and
   `encode` alike. A group appended above the baseline is absent below its
-  version, decodes to `null` by the flyweight's `<group>SinceVersion()` as
-  a field does, and its component is nullable; the flyweight's count of
+  version, decodes to `null` by the flyweight's `<group>DecoderSinceVersion()`
+  as a field does by its own, and its component is nullable; the flyweight's count of
   zero below the version is never read as an empty list. A list longer than
   the dimension type's `numInGroup` allows is refused by the flyweight.
-- A field added above the baseline inside a group is increment 16's,
-  although the flyweight guards it: the shape is a field's, and the proof
-  is a frozen version with one, which the example does not have yet. So
-  is var-data, in a message or a group, increment 14's.
+- Inside a group the baseline is the group's own `sinceVersion` where that
+  is higher than the schema's: an entry exists only in a message whose
+  version carries the group, so a field at its group's version is never
+  absent while the group is present, and its component is a plain
+  primitive. The flyweight agrees, since the group's guard fires before
+  the field's ever could. sbe-tool's own conventions and the `Versions`
+  corpus write the group's version on its fields, so `Mapping`'s absence
+  rule reads the effective baseline, and so does the emitter.
+- A field or a group added above that baseline inside a group is increment
+  16's, although the flyweight guards both: the shape is a field's, and the
+  proof is a frozen version with one, which the example does not have yet.
+  So is var-data, in a message or a group, increment 14's; a group holding
+  var-data is refused as var-data is, which means the emitter's walk looks
+  inside every group before it emits anything.
 
 ## What gets built
 
@@ -61,23 +73,30 @@ inside a group, a header of the schema's own and big-endian byte order.
   name as code names it, which the codec's helpers and locals are typed
   with; `Discovery` fills it from the `E` of `List<E>`, and the corpus DSL
   gains `listOfRecord(name)`.
-- **The rules.** Nothing new in `Mapping`: a group must be a `List` of a
-  record, its body follows the message's rules, and a group has no
-  presence to check. The emitter refuses a field added above the baseline
-  inside a group, `a field added above the baseline in a group`, beside
-  var-data.
+- **The rules.** `Mapping`'s absence rule takes the effective baseline: a
+  body is checked against the higher of the schema's `baselineVersion` and
+  its group's `sinceVersion`, and a nested group's against the higher of
+  its parent's and its own, so a field at its group's version is a plain
+  primitive and one above it is boxed. Otherwise a group must be a `List`
+  of a record, its body follows the message's rules, and a group has no
+  presence to check. The emitter refuses a field or a group added above
+  that baseline inside a group, `a field added above the baseline in a
+  group` and `a group added above the baseline in a group`, and var-data
+  wherever it is, in a message or in a group at any depth.
 - **The codec emitter.** Every shape takes its flyweight classes from its
   owner, the message's, a composite's or a group's, so a field inside a
   group is the same template over `<Msg>Encoder.<Group>Encoder`. A group
-  is three private static methods keyed by its path, `write<Group>(List<E>
+  is three private methods keyed by its path, `write<Group>(List<E>
   entries, <Group>Encoder encoder)` looping the entries with `next()` and
   the body's encode statements, `List<E> read<Group>(<Group>Decoder decoder)`
   looping `hasNext()` and `next()` into an `ArrayList` sized by `count()`,
-  and `int <group>Length(List<E> entries)`, the header plus the entries
-  times the block length, plus each entry's nested groups where there are
-  any, refusing `null`; a nested group's methods carry the parent's name,
+  both the codec's own since an entry's bound field reaches its binding,
+  and the static `int <group>Length(List<E> entries)`, the header plus the
+  entries times the block length, plus each entry's nested groups where
+  there are any, refusing `null`; a nested group's methods carry the parent's name,
   `writeLegsAllocations`, as an array pair does, in order of first use
-  after the codec's own methods. A group encodes as
+  after the codec's own methods, a group's three before those of what its
+  body uses. A group encodes as
   `write<Group>(value.<group>(), encoder.<group>Count(value.<group>().size()))`
   under the checked shape, after the fields, and decodes into a local,
   `List<E> <group> = read<Group>(decoder.<group>())`, under the added shape
@@ -127,7 +146,10 @@ inside a group, a header of the schema's own and big-endian byte order.
   and `decodedLength` equal to the bytes written, and decodes a version 6
   message without them.
 - Each refusal above has a test that builds the mistake and asserts the
-  `Problem` and the node.
+  `Problem` and the node: a field and a group added above the baseline in
+  a group, and var-data inside a group as well as in a message. The
+  effective baseline has a `Mapping` test each way: a field at its group's
+  version stays a plain primitive, one above it must be boxed.
 - The guide's reference page compiles as written: its snippets are the
   example's and the corpus's.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
@@ -135,7 +157,7 @@ inside a group, a header of the schema's own and big-endian byte order.
 
 ## Out of scope
 
-Var-data, increment 14, in a message or a group. A field added above the
-baseline inside a group, increment 16, and `sinceVersion` inside a
-composite with it. A header type of the schema's own, increment 15. A
+Var-data, increment 14, in a message or a group. A field or a group added
+above the baseline inside a group, increment 16, and `sinceVersion` inside
+a composite with it. A header type of the schema's own, increment 15. A
 group under `unmapped`, which `retire-a-field.md` still promises.

@@ -6,11 +6,13 @@ import static net.concini.sbebuddy.PrimitiveType.UINT32;
 import static net.concini.sbebuddy.PrimitiveType.UINT64;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
 import net.concini.sbebuddy.SbeField;
+import net.concini.sbebuddy.SbeGroup;
 import net.concini.sbebuddy.SbeMessage;
 
 /**
@@ -26,13 +28,17 @@ import net.concini.sbebuddy.SbeMessage;
  * fixed-length string, the depth of the bid side, a fixed-length array, and the
  * price exponent, a constant of the schema that a message of any version
  * decodes to. Version 6 appended the last trade, a composite held as its
- * record.
+ * record. Version 7 appended the contributors, a group of each venue's own
+ * quote: a message of an earlier version has no group at all, so the list is
+ * {@code null} there, and a current message without contributors carries an
+ * empty one.
  */
 @SbeMessage(id = 1, description = "The best bid and offer of one instrument", layout = {
 		"instrumentId", "bid", "ask", "bidSize", "askSize", "sequence", "tradeCount", "vwap", "venue", "state",
 		"flags", "symbol", "priceExponent",
 		"bidDepth",
-		"lastTrade"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
+		"lastTrade",
+		"contributors"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
 public record Quote(
 		@SbeField(id = 1) long instrumentId,
 		@SbeField(id = 2, primitiveType = INT64, binding = Price.class) BigDecimal bid,
@@ -47,6 +53,7 @@ public record Quote(
 		@SbeField(id = 12, type = Symbol.class, sinceVersion = 5, description = "The instrument's symbol") @Nullable String symbol,
 		@SbeField(id = 13, type = PriceExponent.class, sinceVersion = 5, description = "The exponent of bid, ask and vwap") byte priceExponent,
 		@SbeField(id = 14, type = Depth.class, sinceVersion = 5, description = "The bid sizes at the five best levels") long @Nullable [] bidDepth,
-		@SbeField(id = 15, sinceVersion = 6, description = "The last trade of the instrument") @Nullable Trade lastTrade
+		@SbeField(id = 15, sinceVersion = 6, description = "The last trade of the instrument") @Nullable Trade lastTrade,
+		@SbeGroup(id = 16, sinceVersion = 7, description = "The venues' own quotes behind the best") @Nullable List<Contributor> contributors
 ) {
 }

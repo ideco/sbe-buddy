@@ -41,7 +41,7 @@ public final class Corpus {
 			),
 			new Case(
 					"Groups", Groups.PACKAGE_INFO, Groups.SOURCE, Groups.schema(), Groups.XML, Groups.annotated(),
-					Map.of()
+					Map.of("corpus.groups.GroupsCodec", Groups.CODEC)
 			),
 			new Case(
 					"VarData", VarData.PACKAGE_INFO, VarData.SOURCE, VarData.schema(), VarData.XML,

@@ -131,7 +131,9 @@ Three layers, in the order a mistake meets them.
   `0..65535`, a name outside the XSD's pattern, a `baselineVersion` above
   the schema's version, a primitive component on a field that can be
   absent, and the one warning, a box on a field that never is
-  (`type-mappings.md`, absence), a field of an enum whose component is
+  (`type-mappings.md`, absence), each body judged against its own
+  baseline, the schema's or the enclosing group's `sinceVersion` where
+  that is higher, a field of an enum whose component is
   not that enum, a field of a set whose component is not a `Set` of that
   enum, `presence = OPTIONAL` on a set field, which has no null value, a
   component that is not the face of a type with a length, `String` for
@@ -202,7 +204,10 @@ Three layers, in the order a mistake meets them.
   the IR and its numbers from the flyweights' constants (`BLOCK_LENGTH`,
   `sbeHeaderSize()`, `sbeBlockLength()`, `ENCODED_LENGTH`), so generated
   code holds no wire number. A construct the emitter does not cover yet
-  is a `Problem` naming the message, never a silent skip.
+  is a `Problem` naming the message, never a silent skip, wherever the
+  walk meets it: the body walk throws out of any depth and the message's
+  codec catches it once, so var-data inside a group is refused as var-data
+  in a message is.
 * Absence, per field, is decided on each side. The encode side follows
   the component: `encodeField` for a primitive, `encodeOptionalField`
   writing the flyweight's `<field>NullValue()` for `null`, and
@@ -291,6 +296,41 @@ Three layers, in the order a mistake meets them.
   encodes as `write<Composite>(value.<field>(), encoder.<field>())` under
   the checked shape and decodes as `read<Composite>(decoder.<field>())`
   under the added shape, and a binding wraps both.
+* Every shape takes its flyweight classes from its owner, the message's,
+  a composite's or a group's, so a field inside a group is the same
+  template over `<Msg>Encoder.<Group>Encoder`, and a group's own baseline,
+  the higher of its owner's and its `sinceVersion`, decides which of its
+  fields would need the added shape. A group is three private methods
+  keyed by its path, the parent's name before its own as an array pair's
+  is, `writeLegsAllocations` for `allocations` inside `legs`:
+  `write<Group>(List<E> entries, <Group>Encoder encoder)` looping the
+  entries with `next()` and the body's encode statements, `List<E>
+  read<Group>(<Group>Decoder decoder)` looping `hasNext()` and `next()`
+  into an `ArrayList` sized by `count()`, both the codec's own because an
+  entry's bound field reaches its binding, and the static `int
+  <group>Length(List<E> entries)`, `sbeHeaderSize()` plus the entries
+  times `sbeBlockLength()`, plus each entry's nested groups where there
+  are any, refusing `null` with `<group> is required`. A group's three
+  precede the helpers its body registers, in order of first use after the
+  codec's own methods. A group encodes as
+  `write<Group>(value.<group>(), encoder.<group>Count(value.<group>().size()))`
+  under the checked shape, after the fields, and decodes into a local
+  before the constructor call, `List<E> <group> = read<Group>(decoder.<group>())`,
+  under the added shape where its `sinceVersion` is above the baseline,
+  which tests `decoder.actingVersion()` against
+  `<group>DecoderSinceVersion()`, the name sbe-tool gives it, and never
+  reads the flyweight's count of zero as an empty list; the
+  constructor takes the local where the component is. Groups are
+  sequential on the wire, so the locals are read in wire order, while an
+  entry's fields are addressed from the entry's start and read in
+  component order as a message's are. `encodedLength` adds a
+  `<group>Length` term per group to the header and the block, without
+  encoding; `decodedLength` wraps the decoder and returns the header plus
+  `sbeDecodedLength()` where the message has a group, and stays the
+  header's block length where it has none. What the emitter still refuses
+  inside a group is a field or a group added above the group's baseline,
+  whose shape is a field's but whose proof is a frozen version the example
+  does not have, and var-data anywhere.
 - A body's wire order is its `layout` when it gives one, declaration order
   otherwise; `Mapping` orders the fields, groups and data before every
   rule that reads the order, so `SchemaXml` and sbe-tool see one document
@@ -363,7 +403,8 @@ public interface Codec<T> {
   static mutable state, nothing shared. Bindings are stateless.
 * One exception is the codec's own, `IllegalArgumentException`, for what
   it is handed and cannot represent: on encode a value with no wire form,
-  `null` in a required field, an array of the wrong length, a string that
+  `null` in a required field or a `null` group, from `encodedLength` and
+  `encode` alike, an array of the wrong length, a string that
   does not fit, an enum's unknown-value constant; on decode a header of
   another schema or template, or a wire value the schema does not know
   (`type-mappings.md`, unknown values). Everything else passes through
@@ -425,7 +466,8 @@ Reflection is banned in main code and free in tests.
   the construct it lacks, which is the work list the codec increments
   shrink. No javac.
 * **The example, as integration.** Realistic schemas a user would write,
-  `com.example.trading` and the primitives-only `com.example.quotes`,
+  `com.example.trading` and `com.example.quotes`, which grows a construct
+  per increment and carries a group since version 7,
   compiled by the real build with the processor on
   `annotationProcessorPaths`, each with its oracle a file in
   `src/main/sbe`. One test per package asserts the `schema.xml` in the class output
@@ -448,8 +490,12 @@ Reflection is banned in main code and free in tests.
   comment saying so and never edited again, each with its own reference
   package, `xmlref.v0`, `xmlref.v1` and so on, so cross-version decoding is tested in both
   directions without old-version records: a message from an older writer
-  decodes with its later fields `null`, an older reader consumes a newer
-  message whole, and a message below the baseline is refused.
+  decodes with its later fields and its later group `null`, an older
+  reader consumes a newer message's block whole and stops before a group
+  it does not know, which is SBE's limit, and a message below the baseline
+  is refused. The reference tests read a group the codec wrote entry by
+  entry and write one the codec reads, so the group's bytes are
+  sbe-tool's on both sides.
 * **The processor** runs javac in memory through the Compiler API, with
   one helper: sources as strings, `-proc:only`, diagnostics and written
   files collected. The corpus tests above; one negative snippet per rule
