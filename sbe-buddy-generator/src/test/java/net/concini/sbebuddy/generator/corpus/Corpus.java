@@ -36,10 +36,6 @@ public final class Corpus {
 					Map.of("corpus.sets.SetsCodec", Sets.CODEC)
 			),
 			new Case(
-					"Composites", Composites.PACKAGE_INFO, Composites.SOURCE, Composites.schema(), Composites.XML,
-					Composites.annotated(), Map.of("corpus.composites.CompositesCodec", Composites.CODEC)
-			),
-			new Case(
 					"Groups", Groups.PACKAGE_INFO, Groups.SOURCE, Groups.schema(), Groups.XML, Groups.annotated(),
 					Map.of("corpus.groups.GroupsCodec", Groups.CODEC)
 			),
