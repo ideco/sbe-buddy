@@ -22,9 +22,9 @@ a `char` string's and an array's; composite faces come with composites.
   contract).
 - The binding is a member of `@SbeField`, `binding`, beside `type`, the
   way `layout` and `unmapped` sit on `@SbeMessage`: the Java side of the
-  annotation, contributing nothing to the schema. There is no `@Bind`;
-  `@SbeData` gets the same member with var-data, and a composite's members
-  none until a schema asks.
+  annotation, contributing nothing to the schema, and no annotation of its
+  own. `@SbeData` gets the same member with var-data, and a composite's
+  members none until a schema asks.
 - A declaration never implements `TypeBinding`. The "type that is its own
   binding" form is dropped: it welds a Java type to one encoding, where
   the field should decide, and it blurs what is schema and what is Java.
