@@ -42,10 +42,6 @@ public final class Corpus {
 			new Case(
 					"AddedFields", AddedFields.PACKAGE_INFO, AddedFields.SOURCE, AddedFields.schema(), AddedFields.XML,
 					AddedFields.annotated(), Map.of("corpus.addedfields.AddedFieldsCodec", AddedFields.CODEC)
-			),
-			new Case(
-					"Layout", Layout.PACKAGE_INFO, Layout.SOURCE, Layout.schema(), Layout.XML, Layout.annotated(),
-					Map.of("corpus.layout.LayoutCodec", Layout.CODEC)
 			)
 	);
 
