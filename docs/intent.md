@@ -101,40 +101,41 @@ the block, one at a time.
 
 * [x] 7. Codec: absence. Optional presence and `sinceVersion` on fields, boxed components, the acting version read in decode; the first frozen schema version and the cross-version tests against reference flyweights
 * [x] 8. Codec: enums and sets, under the unknown-value contract of `type-mappings.md`
-* [ ] 9. Codec: named types, constants, fixed-length arrays and `char` strings
-* [ ] 10. Codec: bindings. `TypeBinding`, `@Bind`, a `@SbeType` that is its own binding; primitive faces only
+* [ ] 9. The layout: `layout` and `unmapped` on `@SbeMessage` and `@SbeGroup`, the wire order named at the top of the record and fields the record does not carry, so a record can retire a field and its component order stops mattering
+* [ ] 10. Codec: named types, constants, fixed-length arrays and `char` strings
+* [ ] 11. Codec: bindings. `TypeBinding`, `@Bind`, a `@SbeType` that is its own binding; primitive faces only
 
 **Composites.** Structured values, and bindings over them.
 
-* [ ] 11. Codec: composites. Nested records, `@SbeRef`, inline declarations; bindings over composite faces, `Uuid` first
+* [ ] 12. Codec: composites. Nested records, `@SbeRef`, inline declarations; bindings over composite faces, `Uuid` first
 
 **Variable length.** `encodedLength` has to earn its keep.
 
-* [ ] 12. Codec: groups, nested
-* [ ] 13. Codec: var-data, and the built-in var-data encodings
+* [ ] 13. Codec: groups, nested
+* [ ] 14. Codec: var-data, and the built-in var-data encodings
 
 **The rest of `sbe.xsd`.**
 
-* [ ] 14. Codec: byte order and header types
+* [ ] 15. Codec: byte order and header types
 
 **Evolution, proved.** Through the codecs, not only the flyweights.
 
-* [ ] 15. Evolution through every construct: appended groups and var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
+* [ ] 16. Evolution through every construct: appended groups and var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
 
 **Families.**
 
-* [ ] 16. Message families: the sealed interface and its dispatching codec
+* [ ] 17. Message families: the sealed interface and its dispatching codec
 
 **JDK bindings.** Built on the normal SBE model, no special cases; the wire
 representation stays explicit, above all for timestamps and their
 precision.
 
-* [ ] 17. Built-in wire types and bindings for `UUID`, `Instant`, `LocalDate` and `LocalTime`, each over the SBE specification's standard encoding with its `timeUnit`. A fixed-scale `BigDecimal` and an `OffsetDateTime` over a `TZTimestamp` composite are the examples of a custom binding, not built-ins
+* [ ] 18. Built-in wire types and bindings for `UUID`, `Instant`, `LocalDate` and `LocalTime`, each over the SBE specification's standard encoding with its `timeUnit`. A fixed-scale `BigDecimal` and an `OffsetDateTime` over a `TZTimestamp` composite are the examples of a custom binding, not built-ins
 
 **A real schema.**
 
-* [ ] 18. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` as a family, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
+* [ ] 19. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` as a family, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
 
 **The API pass.**
 
-* [ ] 19. Whatever feels awkward in the annotations and the codec once 18 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
+* [ ] 20. Whatever feels awkward in the annotations and the codec once 19 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim

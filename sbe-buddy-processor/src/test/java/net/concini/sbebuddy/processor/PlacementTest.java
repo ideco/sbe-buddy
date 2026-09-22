@@ -329,7 +329,7 @@ final class PlacementTest {
 				}
 				""";
 
-		// Symbol is an array, which the codec gains in increment 9.
+		// Symbol is an array, which the codec gains in increment 10.
 		String packageInfo = """
 				@SbeSchema(id = 1, version = 0, codecs = false)
 				package placement;

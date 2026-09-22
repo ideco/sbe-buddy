@@ -1,162 +1,135 @@
-# Increment 8: the codec, enums and sets
+# Increment 9: the layout, and fields the record does not carry
 
 ## Goal
 
-A field of an `@SbeEnum` decodes to the user's own enum constant and a field
-of an `@SbeSet` to a `Set` of the user's enum, and back, under the
-unknown-value contract of `type-mappings.md`: the wire value is read raw and
-mapped by `@SbeEnumValue`, never through the flyweight's generated enum, so
-a value the schema does not know is the codec's `IllegalArgumentException`,
-or the constant an enum designates with `@UnknownValue`. Absence works for
-both through the shapes increment 7 settled: an enum is `null` for the null
-value or below the acting version, a set is `null` below the acting version
-and has no null value. The mapping between a declared type and its wire
-form lives in the codec as one pair of private methods per type, so the
-message code stays one line per field.
+A record may say its wire order at the top, `@SbeMessage(layout = {...})`,
+over its components and over fields it does not carry,
+`unmapped = {@SbeField(...)}`. Both are optional and default to nothing, so
+every schema written so far maps exactly as before. Two things become
+possible. A field SBE can never remove, deprecated or merely useless to
+this program, leaves the record: the codec writes its null value and skips
+it on the way back, and the wire is unchanged. And the order of a record's
+components stops mattering: the layout is a named list an IDE will not
+shuffle, where component order is one keystroke away from a silent change
+of every offset. Nothing is inferred, because the layout is written by hand
+and every unmapped field is declared in full; nothing in the schema changes,
+because both members are the Java side. The increment comes before more
+constructs so that each of them lands on a message shape that is final.
 
 ## Settled before it started
 
-* sbe-tool takes `char`, `int8`, `uint8`, `int16`, `uint16` and `int32` as
-  an enum's encoding, and a named type of those, so the raw value is at
-  most an `int` and a Java `switch` over it is always legal; a set's
-  encoding is `uint8` to `uint64`. The flyweight enum's constants are the
-  valid values' names through `JavaUtil.formatForJavaKeyword`, each with
-  `value()`, plus `NULL_VAL`; the decoder's `<field>Raw()` returns the
-  primitive and is guarded below the acting version like a primitive
-  field, the encoder's `<field>(Enum)` takes the flyweight enum and has no
-  raw form. A set field's `<field>()` on either flyweight returns the
-  set's own flyweight wrapped at the field, `null` below the acting
-  version on the decoder; the set decoder has `getRaw()` in the face type
-  and `boolean <choice>()` per choice, the set encoder `clear()`,
-  `setRaw()` and `<choice>(boolean)`. `JavaUtil.generateLiteral` renders
-  a valid value's text as a Java literal of the encoding's face. All in
-  `notes.md`.
+- sbe-tool's fixed-block accessors are offset-addressed,
+  `buffer.getInt(offset + 24, ...)` in the generated quotes decoder, so a
+  codec may read and write the fields of a block in any order; only groups
+  and var-data are sequential. An annotation may carry an array of
+  annotations as a member, and only self-nesting is forbidden;
+  `Discovery` reads members from the `AnnotationMirror`, where an array
+  of annotations is a list of mirrors. All in `notes.md`.
 
 ## What gets built
 
-* **`@UnknownValue` in the api**, on one constant of an `@SbeEnum` in place
-  of `@SbeEnumValue`: the Java side, contributing no `validValue`.
-  `Annotated.Enum` carries the constant's Java name, or null; `Discovery`
-  reads it, and refuses a constant carrying both annotations, a second
-  `@UnknownValue` in one enum, and one on a constant of an `@SbeSet`, each
-  on the constant. `Mapping` and the schema never see it.
-* **The set's face, `Set<E>`.** `Annotated.JavaType` gains `SetOf`, a
-  `java.util.Set` of an `@SbeSet` enum; `Discovery` reads `Set<E>` to it
-  when `E` carries `@SbeSet`, and to `Other` otherwise; `Mapping` maps a
-  bare `SetOf` component to its set as it maps a bare enum, and `Fixtures`
-  gains `setOf`. The `Sets` corpus case writes `Set<Permissions>` and
-  `Set<Handling>` in its source and twin, which changes no oracle.
-* **The face rules for declared types, in `Mapping`.** A field whose wire
-  type is an `@SbeEnum`, by `type` or by its component, must have that
-  enum as its component's type; one whose wire type is an `@SbeSet` must
-  have a `Set` of that enum: the bare set enum is a `Problem`,
-  `Permissions is a set; use Set<Permissions>`, and a `Set` of anything
-  else, or the wrong enum, is one too. `presence = OPTIONAL` on a set
-  field is a `Problem`, `a set has no null value`, because sbe-tool writes
-  nothing for absence there and an empty set is a value. The boxing rule
-  does not apply: a reference holds `null` as it is, and a required enum
-  or set field refuses `null` on encode through the shape a boxed
-  primitive already takes. One test each, in both directions where there
-  are two.
-* **The codec emitter, declared types.** The refusals for an enum and a
-  set go; each message's codec gains, after its last method, one pair of
-  private static methods per enum and per set the message uses, in order
-  of first use, from templates named after them:
-  * `encodeEnum`, `encode<Enum>(<enum> value)` returning the flyweight
-    enum: a `switch` expression over the user's constants, `enumToWire`
-    per valid value naming the flyweight's constant, and `unknownToWire`
-    for the `@UnknownValue` constant, which throws
-    `IllegalArgumentException("<Enum>.<constant> has no wire form")`;
-  * `decodeEnum`, `decode<Enum>(<face> raw)` returning the user's enum: a
-    `switch` over the raw value, `wireToEnum` per valid value with the
-    literal `JavaUtil.generateLiteral` gives for its text, and the default
-    from `wireToUnknown`, the designated constant, or `wireToNothing`,
-    which throws `IllegalArgumentException("<Enum> has no value " + raw)`;
-    the null value on a required field is such a value;
-  * `encodeSet`, `encode<Set>(Set<E> value, <Set>Encoder wire)`, which
-    clears the wire and sets each choice from `value.contains`, one line
-    per choice from `encodeChoice`;
-  * `decodeSet`, `decode<Set>(<Set>Decoder wire)` returning a `Set<E>`,
-    which first refuses a bit no choice names,
-    `IllegalArgumentException("<Set> has a bit no choice names: " +
-    wire.getRaw())`, against a mask of the declared bits written as one
-    `1L << <bit>` per choice from `knownBit`, and then adds each choice
-    the wire has to an `EnumSet`, one `if` per choice from `decodeChoice`.
+- **Two members on `@SbeMessage` and on `@SbeGroup`**, the Java side,
+  contributing nothing to the schema: `String[] layout() default {}`, the
+  body's components and unmapped fields in wire order, by name; and
+  `SbeField[] unmapped() default {}`, fields of the body that no component
+  carries, each a complete `@SbeField`. On `@SbeGroup` they describe the
+  group's record, the way the group's members already do.
+- **`Annotated`.** `Message` and `Group` gain `layout`, a list of names,
+  and `unmapped`, a list of `Annotated.Field` whose `javaType` is the new
+  `JavaType.Unmapped` and whose `javaName` is its wire `name`. `Discovery`
+  reads both arrays; each unmapped field is read as a component's
+  `@SbeField` is, without a Java type; the corpus DSL gains `layout` and
+  `unmapped` on its message and group builders and `unmapped()` as a Java
+  type.
+- **The rules, in `Mapping`,** decidable from the message or group node
+  and blamed on it, with the `@SbeMessage` or `@SbeGroup` mirror, because
+  an unmapped field has no element of its own:
+  - an unmapped field gives its `name`, and its `type` or
+    `primitiveType`, since nothing can default them: `an unmapped field
+    needs a name` and `an unmapped field needs a type or a primitiveType`;
+  - a body with unmapped fields gives a `layout`: `unmapped fields need a
+    layout to take their place in`;
+  - a `layout` names every component by its Java name exactly once and
+    every unmapped field by its `name` exactly once, and nothing else: `the
+    layout misses quantity`, `the layout names price twice`, `the layout
+    names nothing called prize`; a name that is both a component's Java
+    name and an unmapped field's `name` is a `Problem` too;
+  - the face and boxing rules skip an unmapped field, which has no
+    component, and a constant unmapped field is as legal as a constant
+    field.
 
-  A field of an enum then takes the shapes of increment 7 with the pair
-  in place of the flyweight call: `encodeField` becomes
-  `encoder.<field>(encode<Enum>(value.<field>()))` and the optional shape
-  writes `<Enum>.NULL_VAL` for `null`; `decodeField` becomes
-  `decode<Enum>(decoder.<field>Raw())`, the optional shape tests
-  `decoder.<field>Raw()` against `<Enum>.NULL_VAL.value()`, and the added
-  shape tests the version as before. A field of a set encodes through
-  `encode<Set>(value.<field>(), encoder.<field>())` and decodes through
-  `decode<Set>(decoder.<field>())`, required or added, never optional.
-  The checked encode shape, `null` refused before the call, now covers
-  every reference component of a required field, boxed primitive, enum or
-  set, and is renamed `encodeCheckedField`. Every flyweight name is still
-  `JavaUtil`'s, including the enum constants through
-  `formatForJavaKeyword`; the choice bits and the valid values' literals
-  are the schema's own declarations pasted in, as the baseline is, and
-  the mask is written as shifts of them, so no computed number appears.
-  The pair's methods are named after the type's wire name through
-  `formatClassName`, which is unique in a schema.
-* **The corpus.** `Enums` and `Sets` turn codecs on and carry their
-  codecs; `OrderStatus` in `Enums` gains an `@UnknownValue` constant, so
-  the codec view shows both defaults side by side, and `Side` keeps
-  none. `Versions`, which carries an enum and a set among everything
-  else, stays refused for its group and var-data. Nothing else moves.
-* **The example.** `com.example.quotes` goes to `version = 3`, appending
-  what a feed says about where a quote comes from: `Venue venue`, an
-  `@SbeEnum` over `uint8` with an `@UnknownValue` constant, because
-  venues are added faster than readers update; `MarketState state`, an
-  `@SbeEnum` over `char` without one, because a state the reader does
-  not know is not a quote it can use; and `Set<QuoteFlag> flags`, an
-  `@SbeSet` over `uint8`. The oracle grows, `quotes-v2.xml` is frozen
-  with its reference package `xmlref.v2`, and the tests gain:
-  * a round trip with every field, and one with empty flags;
-  * the reference decoder reading the venue and state raw and each flag
-    bit from what the codec wrote, and the codec decoding what the
-    reference encoder wrote;
-  * a version 2 message decoding with `venue`, `state` and `flags` `null`;
-  * a raw venue no constant names, written through the reference
-    encoder's flyweight enum in a later-versioned twin or straight into
-    the buffer at `venueEncodingOffset()`, decoding to the unknown
-    constant, and encoding that constant refused;
-  * a raw state no constant names refused with the exception naming the
-    enum and the value, and a flags bit no choice names, written through
-    the reference set encoder's `setRaw`, refused naming the set.
-* **The documents.** `architecture.md`'s generation section describes the
-  pairs and the shapes over them, and its rules section the face rules
-  for declared types; `type-mappings.md` names `@UnknownValue` beside the
-  annotations it is a Java-side peer of, and says a set field cannot be
-  optional; `notes.md` takes the facts above; `intent.md` ticks increment
-  8; the README says enums and sets are covered.
+  The body's order is the `layout` when given and declaration order
+  otherwise; the fields-then-groups-then-data rule and, in
+  `Generator.validate`, the append-only rule and the name and id checks
+  run over that order, so an unmapped field with a `sinceVersion` obeys
+  them like any other. `Schema` and `SchemaXml` do not change.
+- **The codec emitter.** An unmapped field is written as its null value
+  on encode, `encodeUnmappedField` for a primitive,
+  `encoder.<field>(<Msg>Encoder.<field>NullValue())`,
+  `encodeUnmappedEnumField` writing `NULL_VAL`, and
+  `encodeUnmappedSetField`, `encoder.<field>().clear()`; a constant needs
+  nothing. On decode it contributes nothing. The constructor call's
+  arguments follow the record's component order, which is what the
+  canonical constructor takes, while the encode statements follow the
+  wire order the emitter already walks; the two agree today because they
+  are the same order and diverge under a `layout`, which fixed-block
+  addressing makes harmless. The emitter finds a field's component by
+  wire name as before and, finding none, its unmapped declaration.
+- **The corpus.** A new case, `Layout`, a message whose record lists its
+  components out of wire order and whose layout retires a deprecated
+  field in the middle of the block; its oracle is the document a record
+  in wire order would write, which is the point, and its codec view
+  shows the null value written, the field skipped, and the constructor
+  in component order. The `Groups` case gives one group a `layout` with
+  its record's components out of order, which changes no oracle. A
+  `Layout` twin without the `unmapped` field and a group without a
+  `layout` keep proving the default is untouched, since every other case
+  is one.
+- **The example.** `com.example.quotes` goes to `version = 4` and retires
+  `tradeCount`, which the feed now sends elsewhere: the field stays in
+  the schema with `deprecated = 4`, moves from the record to `unmapped`,
+  and the record states its `layout`. `quotes-v3.xml` is frozen with its
+  reference package `xmlref.v3`. The tests: a round trip without the
+  component; the reference decoder reading the null value of `uint32`
+  where `tradeCount` was and every other field as written; a version 3
+  message with a `tradeCount` decoding to the same record without it; a
+  version 3 reader reading a current message whole.
+- **The guide.** A how-to page, `docs/guide/how-to/retire-a-field.md`,
+  beside the planned "Evolve a message": deprecate the field, move it to
+  `unmapped`, state the `layout`, and what the wire carries afterwards;
+  the guide's index links it. The primitives page's sentence that fields
+  appear in component order gains its qualification, with a pointer to
+  the how-to. The schemas reference page, when it is written, documents
+  both members with `@SbeMessage`.
+- **The documents.** `type-mappings.md` names the two members on the
+  `message` and `group` rows as the Java side, and its layout section says
+  the order is the `layout` when given; `architecture.md`'s models
+  section takes the new components and the Java type, its rules section
+  the new rules, its generation section the unmapped shapes and the two
+  orders; `notes.md` takes the facts above; `intent.md` ticks increment
+  9, which this pull request already inserted before the constructs that
+  remain.
 
 ## Criteria
 
-* `Enums`' and `Sets`' emitted codecs equal their `codecs` view exactly;
-  every other refused case still names its construct, and none names an
-  enum or a set.
-* The quotes example round trips its enums and set, agrees with the
-  reference flyweights in both directions, decodes a version 2 message,
-  maps an unknown venue to its constant and refuses to encode it, and
-  refuses an unknown state and an unknown flag bit, all in the real build.
-* The face rules and the optional-set rule each have a test that builds
-  the mistake and asserts the `Problem` and the node; the `@UnknownValue`
-  rules have one placement snippet each in the processor.
-* Every new template is a text block filled through `Template`; the
-  emitter reads the valid values, choices and the unknown constant from
-  the IR and `Annotated` and decides nothing else; the only literals in
-  generated code are the schema's own declarations.
-* `./mvnw verify` is green on a fresh clone, and the CI job passes on this
+- `Layout`'s emitted codec equals its `codecs` view exactly, and every
+  existing case's oracle and codec view are untouched.
+- The quotes example round trips without `tradeCount`, writes the null
+  value where it was, and decodes a version 3 message that carries one,
+  all in the real build.
+- Every rule above has a test that builds the mistake and asserts the
+  `Problem` and the node, and one processor snippet asserts a layout
+  mistake lands on the record's `@SbeMessage`.
+- The guide's how-to compiles as written: its snippet is the example's.
+- `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Named types, constants and `valueRef`, arrays and `char` strings, bindings,
-composites and the enums and sets declared inline in them, groups,
-var-data, byte order, header types: each keeps its refusal and its
-increment. `sinceVersion` on a valid value or a choice changes nothing in a
-codec: a newer writer's value is an unknown value, which is the contract.
-Reference flyweights for the trading schema. Publishing.
+Unmapped groups and var-data, which must still be walked on decode and
+written empty on encode; they belong with evolution, increment 16. A
+written value other than the null value, which would need a wrapper
+around `@SbeField` and a need that has not appeared. `layout` and
+`unmapped` on `@SbeComposite`, which meet the same footgun and arrive
+with composites, increment 12. Reordering that changes the wire: the
+layout says where fields are, never moves them.
