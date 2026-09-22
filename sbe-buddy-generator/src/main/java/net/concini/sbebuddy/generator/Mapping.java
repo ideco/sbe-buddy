@@ -6,15 +6,12 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
-
-import uk.co.real_logic.sbe.generation.java.JavaUtil;
 
 import net.concini.sbebuddy.ByteOrder;
 import net.concini.sbebuddy.Presence;
@@ -49,6 +46,7 @@ public final class Mapping {
 	private final Map<Object, Object> origins = new IdentityHashMap<>();
 	private final List<Schema.Declaration> types = new ArrayList<>();
 	private final Map<Annotated.Declaration, String> wireNames = new IdentityHashMap<>();
+	private final FaceRules faces = new FaceRules(problems);
 	private final int baselineVersion;
 
 	private Mapping(int baselineVersion) {
@@ -223,10 +221,7 @@ public final class Mapping {
 			problem(field, "an unmapped field needs a name");
 		}
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
-		constant(field);
-		face(field);
-		declaredFace(field);
-		boxing(field, baseline);
+		faces.field(field, baseline);
 		Schema.Field result = new Schema.Field(
 				name(field, field.name(), field.javaName()),
 				id(field, field.id()),
@@ -323,7 +318,7 @@ public final class Mapping {
 			case Annotated.Primitive primitive -> defaultMapping(node, primitive.kind());
 			case Annotated.Text text -> unmappable(node, "String");
 			case Annotated.Bytes bytes -> unmappable(node, "byte[]");
-			case Annotated.Array array -> unmappable(node, javaTypeName(array));
+			case Annotated.Array array -> unmappable(node, FaceRules.javaTypeName(array));
 			case Annotated.ListOfRecord list -> unmappable(node, "List");
 			case Annotated.Other other -> unmappable(node, other.javaName());
 		};
@@ -349,400 +344,6 @@ public final class Mapping {
 	private String unmappable(Object node, String javaType) {
 		problem(node, javaType + " maps to no SBE type; give type or primitiveType");
 		return "?";
-	}
-
-	/**
-	 * The codec hands the component to the flyweight, whose face for a wire
-	 * primitive {@link JavaUtil} decides: {@code int} for {@code uint16},
-	 * {@code long} for {@code uint32}, and so on; for a type with a length, a
-	 * {@code String} for {@code char}, {@code byte[]} for the byte-sized
-	 * primitives, and the array of the element's face for the rest. Checked where
-	 * the wire type is known; the default mapping is its own face.
-	 */
-	private void face(Annotated.Field field) {
-		if (field.javaType() instanceof Annotated.Unmapped) {
-			return;
-		}
-		Annotated.Binding binding = field.binding();
-		Annotated.Type named = namedType(field);
-		if (named != null && named.primitiveType() != PrimitiveType.NONE && length(named) > 1) {
-			String face = arrayFace(primitive(named.primitiveType()));
-			String wireName = wireName(named.name(), named.javaName());
-			if (binding != null) {
-				if (!boundName(binding.wire()).equals(face)) {
-					problem(
-							field, bindsTheWireAs(binding) + ", but the face of " + wireName + " is " + face
-									+ "; implement TypeBinding over " + face
-					);
-				}
-			} else if (!javaTypeName(field.javaType()).equals(face)) {
-				problem(
-						field, javaTypeName(field.javaType()) + " is not the face of " + wireName + ", which is " + face
-				);
-			}
-			if (wirePresence(field) == Presence.OPTIONAL) {
-				problem(field, wireName + " has a length; a field of it cannot be optional");
-			}
-			return;
-		}
-		uk.co.real_logic.sbe.PrimitiveType wire = wirePrimitive(field);
-		if (wire == null) {
-			return;
-		}
-		String face = JavaUtil.javaTypeName(wire);
-		if (binding != null) {
-			// A primitive face takes its specialization, so nothing is boxed on the way.
-			if (!boundName(binding.wire()).equals(face)) {
-				problem(
-						field, bindsTheWireAs(binding) + ", but the face of " + wire.primitiveName() + " is " + face
-								+ "; implement TypeBinding.Of" + specialization(face)
-				);
-			}
-		} else if (!javaTypeName(field.javaType()).equals(face)) {
-			problem(
-					field,
-					javaTypeName(field.javaType()) + " is not the face of " + wire.primitiveName() + ", which is "
-							+ face
-			);
-		}
-	}
-
-	private static String declarationName(Annotated.Declaration declaration) {
-		return switch (declaration) {
-			case Annotated.Type type -> type.javaName();
-			case Annotated.Composite composite -> composite.javaName();
-			case Annotated.Enum enumeration -> enumeration.javaName();
-			case Annotated.Set set -> set.javaName();
-		};
-	}
-
-	private static String bindsTheWireAs(Annotated.Binding binding) {
-		String simpleName = binding.qualifiedName().substring(binding.qualifiedName().lastIndexOf('.') + 1);
-		return simpleName + " binds the wire as " + boundName(binding.wire());
-	}
-
-	/**
-	 * What a binding hands the flyweight, as code names it: a primitive for a
-	 * specialization, its box for the generic interface, the reference type
-	 * otherwise.
-	 */
-	private static String boundName(Annotated.JavaType javaType) {
-		if (javaType instanceof Annotated.Primitive primitive) {
-			String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
-			return primitive.boxed() ? box(plain) : plain;
-		}
-		return javaTypeName(javaType);
-	}
-
-	/** The box of a primitive face. */
-	private static String box(String primitive) {
-		return switch (primitive) {
-			case "byte" -> "Byte";
-			case "short" -> "Short";
-			case "int" -> "Integer";
-			case "long" -> "Long";
-			case "float" -> "Float";
-			case "double" -> "Double";
-			default -> primitive;
-		};
-	}
-
-	/**
-	 * The specialization's name for a primitive face, {@code Int} for {@code int}.
-	 */
-	private static String specialization(String primitive) {
-		return primitive.equals("int") ? "Int" : box(primitive);
-	}
-
-	private static String javaTypeName(Annotated.JavaType javaType) {
-		return switch (javaType) {
-			case Annotated.Primitive primitive -> primitive.kind().name().toLowerCase(Locale.ROOT);
-			case Annotated.Text text -> "String";
-			case Annotated.Bytes bytes -> "byte[]";
-			case Annotated.Array array -> array.kind().name().toLowerCase(Locale.ROOT) + "[]";
-			case Annotated.Declared declared -> declarationName(declared.declaration());
-			case Annotated.SetOf set -> "Set";
-			case Annotated.Unmapped none -> "unmapped";
-			case Annotated.ListOfRecord list -> "List";
-			case Annotated.Other other -> other.javaName();
-		};
-	}
-
-	/**
-	 * The face of a type with a length: sbe-tool reads a {@code char} array as a
-	 * string and gives the byte-sized primitives bulk accessors over
-	 * {@code byte[]}; every other array is the array of its element's face.
-	 */
-	private static String arrayFace(uk.co.real_logic.sbe.PrimitiveType primitive) {
-		return switch (primitive) {
-			case CHAR -> "String";
-			case INT8, UINT8 -> "byte[]";
-			default -> JavaUtil.javaTypeName(primitive) + "[]";
-		};
-	}
-
-	/**
-	 * The named type a field is written as, given as {@code type} or as the
-	 * component's own type; null for a primitive, an enum, a set or a composite.
-	 */
-	private static Annotated.@Nullable Type namedType(Annotated.Field field) {
-		Annotated.Declaration declaration = field.type();
-		if (declaration == null && field.javaType() instanceof Annotated.Declared declared) {
-			declaration = declared.declaration();
-		}
-		return declaration instanceof Annotated.Type named ? named : null;
-	}
-
-	/**
-	 * A type's length as sbe-tool reads it: its {@code length}, or for a constant
-	 * {@code char} value longer than one character without one, the value's.
-	 */
-	private static int length(Annotated.Type named) {
-		if (named.length() == 1 && named.presence() == Presence.CONSTANT
-				&& named.primitiveType() == PrimitiveType.CHAR) {
-			return Math.max(1, named.value().length());
-		}
-		return named.length();
-	}
-
-	/**
-	 * A composite's inline type as a field of that type would be: the component is
-	 * the face, boxed when the member is optional, and a constant carries a value.
-	 */
-	private void memberFace(Annotated.Type member) {
-		Annotated.JavaType javaType = member.javaType();
-		if (javaType == null) {
-			return;
-		}
-		if (javaType instanceof Annotated.Unmapped) {
-			if (member.name().isEmpty()) {
-				problem(member, "an unmapped member needs a name");
-			}
-			return;
-		}
-		if (member.presence() == Presence.CONSTANT && member.value().isEmpty() && member.valueRef().isEmpty()) {
-			problem(member, "a constant member needs a value or a valueRef");
-		}
-		if (member.primitiveType() == PrimitiveType.NONE) {
-			return;
-		}
-		String face = faceOf(member);
-		if (!javaTypeName(javaType).equals(face)) {
-			problem(
-					member, javaTypeName(javaType) + " is not the face of " + wireName(member.name(), member.javaName())
-							+ ", which is " + face
-			);
-		}
-		boolean optional = member.presence() == Presence.OPTIONAL;
-		if (optional && length(member) > 1) {
-			problem(member, wireName(member.name(), member.javaName()) + " has a length; it cannot be optional");
-		}
-		if (javaType instanceof Annotated.Primitive primitive && primitive.kind() != Annotated.JavaPrimitive.CHAR
-				&& primitive.kind() != Annotated.JavaPrimitive.BOOLEAN) {
-			if (optional && !primitive.boxed()) {
-				problem(
-						member, javaTypeName(javaType) + " cannot hold null, but the member can be absent; use "
-								+ box(javaTypeName(javaType))
-				);
-			}
-			if (!optional && primitive.boxed()) {
-				problems.add(
-						new Problem(
-								member, box(javaTypeName(javaType)) + " is boxed although the member is never absent",
-								Problem.Severity.WARNING
-						)
-				);
-			}
-		}
-	}
-
-	/**
-	 * The face of a named type: its primitive's, its array's where it has a length,
-	 * and for {@code length = 0}, the variable-length member of a var-data
-	 * encoding, a {@code String} for {@code char} and {@code byte[]} otherwise.
-	 */
-	private static String faceOf(Annotated.Type type) {
-		uk.co.real_logic.sbe.PrimitiveType primitive = primitive(type.primitiveType());
-		if (type.length() == 0) {
-			return primitive == uk.co.real_logic.sbe.PrimitiveType.CHAR ? "String" : "byte[]";
-		}
-		return length(type) > 1 ? arrayFace(primitive) : JavaUtil.javaTypeName(primitive);
-	}
-
-	/**
-	 * A ref's component is the face of what it refers to: the record of a
-	 * composite, the enum, a {@code Set} of the set's enum, or a type's face.
-	 */
-	private void refFace(Annotated.Ref ref) {
-		Annotated.Declaration target = ref.value();
-		if (target == null && ref.javaType() instanceof Annotated.Declared declared) {
-			target = declared.declaration();
-		}
-		if (target == null) {
-			return;
-		}
-		String targetName = declarationName(target);
-		boolean fits = switch (target) {
-			case Annotated.Composite composite ->
-				ref.javaType() instanceof Annotated.Declared declared && declared.declaration() == composite;
-			case Annotated.Enum enumeration ->
-				ref.javaType() instanceof Annotated.Declared declared && declared.declaration() == enumeration;
-			case Annotated.Set set -> ref.javaType() instanceof Annotated.SetOf setOf && setOf.declaration() == set;
-			case Annotated.Type type -> type.primitiveType() == PrimitiveType.NONE
-					|| javaTypeName(ref.javaType()).equals(faceOf(type));
-		};
-		if (!fits) {
-			String face = switch (target) {
-				case Annotated.Composite composite -> targetName;
-				case Annotated.Enum enumeration -> targetName;
-				case Annotated.Set set -> "Set<" + targetName + ">";
-				case Annotated.Type type -> faceOf(type);
-			};
-			problem(ref, javaTypeName(ref.javaType()) + " is not the face of " + targetName + ", which is " + face);
-		}
-	}
-
-	/**
-	 * The face of an enum is the enum, the face of a set is a {@code Set} of the
-	 * set's enum, the face of a composite is its record, and neither a set nor a
-	 * composite has a null value to be optional with.
-	 */
-	private void declaredFace(Annotated.Field field) {
-		if (field.javaType() instanceof Annotated.Unmapped) {
-			return;
-		}
-		Annotated.Declaration wire = field.type() != null ? field.type() : declarationOf(field.javaType());
-		if ((wire instanceof Annotated.Enum || wire instanceof Annotated.Set) && field.binding() != null) {
-			String kind = wire instanceof Annotated.Enum ? "an enum" : "a set";
-			problem(field, declarationName(wire) + " is " + kind + "; a field of it takes no binding");
-		}
-		if (wire instanceof Annotated.Enum enumeration
-				&& !(field.javaType() instanceof Annotated.Declared declared
-						&& declared.declaration() == enumeration)) {
-			problem(field, enumeration.javaName() + " is an enum; use " + enumeration.javaName());
-		}
-		if (wire instanceof Annotated.Set set) {
-			if (!(field.javaType() instanceof Annotated.SetOf setOf && setOf.declaration() == set)) {
-				problem(field, set.javaName() + " is a set; use Set<" + set.javaName() + ">");
-			}
-			if (wirePresence(field) == Presence.OPTIONAL) {
-				problem(field, "a set has no null value; a set field cannot be optional");
-			}
-		}
-		if (wire instanceof Annotated.Composite composite) {
-			Annotated.Binding binding = field.binding();
-			if (binding != null) {
-				if (!(binding.wire() instanceof Annotated.Declared declared && declared.declaration() == composite)) {
-					problem(
-							field, bindsTheWireAs(binding) + ", but the face of " + composite.javaName() + " is "
-									+ composite.javaName() + "; implement TypeBinding over " + composite.javaName()
-					);
-				}
-			} else if (!(field.javaType() instanceof Annotated.Declared declared
-					&& declared.declaration() == composite)) {
-				problem(field, composite.javaName() + " is a composite; use " + composite.javaName());
-			}
-			if (wirePresence(field) == Presence.OPTIONAL) {
-				problem(field, composite.javaName() + " is a composite; a field of it cannot be optional");
-			}
-		}
-	}
-
-	private static Annotated.@Nullable Declaration declarationOf(Annotated.JavaType javaType) {
-		return switch (javaType) {
-			case Annotated.Declared declared -> declared.declaration();
-			case Annotated.SetOf set -> set.declaration();
-			case Annotated.Unmapped none -> null;
-			case Annotated.Primitive primitive -> null;
-			case Annotated.Text text -> null;
-			case Annotated.Bytes bytes -> null;
-			case Annotated.Array array -> null;
-			case Annotated.ListOfRecord list -> null;
-			case Annotated.Other other -> null;
-		};
-	}
-
-	/**
-	 * A field that can be absent decodes to null, so a primitive component must be
-	 * its box; a box on a field that is never absent may be there for reasons of
-	 * the user's own, so it is a warning.
-	 */
-	private void boxing(Annotated.Field field, int baseline) {
-		if (!(field.javaType() instanceof Annotated.Primitive primitive)) {
-			return;
-		}
-		String box = switch (primitive.kind()) {
-			case BYTE -> "Byte";
-			case SHORT -> "Short";
-			case INT -> "Integer";
-			case LONG -> "Long";
-			case FLOAT -> "Float";
-			case DOUBLE -> "Double";
-			case CHAR, BOOLEAN -> null; // maps to no SBE type; reported already
-		};
-		if (box == null) {
-			return;
-		}
-		String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
-		if (canBeAbsent(field, baseline) && !primitive.boxed()) {
-			problem(field, plain + " cannot hold null, but the field can be absent; use " + box);
-		}
-		if (!canBeAbsent(field, baseline) && primitive.boxed()) {
-			problems.add(
-					new Problem(
-							field, box + " is boxed although the field is never absent", Problem.Severity.WARNING
-					)
-			);
-		}
-	}
-
-	/**
-	 * A constant field takes its value from a {@code valueRef} or from a constant
-	 * type; sbe-tool's IR generator crashes on one with neither, past every parser
-	 * rule.
-	 */
-	private void constant(Annotated.Field field) {
-		Annotated.Type named = namedType(field);
-		boolean constantType = named != null && named.presence() == Presence.CONSTANT;
-		if (field.presence() == Presence.CONSTANT && field.valueRef().isEmpty() && !constantType) {
-			problem(field, "a constant field needs a valueRef or a constant type");
-		}
-	}
-
-	/**
-	 * Optional, or added above the body's baseline; a constant carries no bytes and
-	 * is never absent.
-	 */
-	private static boolean canBeAbsent(Annotated.Field field, int baseline) {
-		Presence presence = wirePresence(field);
-		return presence == Presence.OPTIONAL || field.sinceVersion() > baseline && presence != Presence.CONSTANT;
-	}
-
-	/**
-	 * A field left at the default takes its named type's presence, as sbe-tool
-	 * reads the document.
-	 */
-	private static Presence wirePresence(Annotated.Field field) {
-		if (field.presence() == Presence.REQUIRED && field.type() instanceof Annotated.Type named) {
-			return named.presence();
-		}
-		return field.presence();
-	}
-
-	/**
-	 * The one primitive the field is written as, when that is known: given as
-	 * {@code primitiveType}, or the encoding of a named type of length 1, whether
-	 * given as {@code type} or as the component's own type.
-	 */
-	private static uk.co.real_logic.sbe.@Nullable PrimitiveType wirePrimitive(Annotated.Field field) {
-		if (field.primitiveType() != PrimitiveType.NONE) {
-			return primitive(field.primitiveType());
-		}
-		Annotated.Type named = namedType(field);
-		if (named != null && length(named) == 1 && named.primitiveType() != PrimitiveType.NONE) {
-			return primitive(named.primitiveType());
-		}
-		return null;
 	}
 
 	/**
@@ -803,11 +404,11 @@ public final class Mapping {
 		)) {
 			members.add(switch (member) {
 				case Annotated.Type type -> {
-					memberFace(type);
+					faces.member(type);
 					yield type(type);
 				}
 				case Annotated.Ref ref -> {
-					refFace(ref);
+					faces.ref(ref);
 					yield ref(ref);
 				}
 				case Annotated.Enum enumeration -> enumeration(enumeration);

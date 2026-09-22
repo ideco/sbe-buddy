@@ -69,7 +69,7 @@ The decisions that shaped the first code, so later code matches it.
 - A closed grammar is one file with a nested record per node: `Schema`
   for the XSD's elements, `Annotated` for the api's annotations and
   `CodecModel` for what a codec is made of. Nesting is for those three
-  only, not a habit: `SchemaXml`, `Mapping`, `Generator`, `CodecWalk`,
+  only, not a habit: `SchemaXml`, `Mapping`, `FaceRules`, `Generator`, `CodecWalk`,
   `CodecWriter` and `CodecTemplates` are their own files. Nested model
   types are used qualified, `Schema.Field`, `Annotated.Field`, and never
   imported: `Schema.Enum` and `Schema.Set` would shadow `java.lang` and

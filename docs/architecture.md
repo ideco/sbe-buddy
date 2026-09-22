@@ -126,7 +126,11 @@ Three layers, in the order a mistake meets them.
   declaration or binds a
   `J` that is not the component's type, a declaration that implements
   `TypeBinding`, and a `binding` on an unmapped field. Rules decidable from one node live in
-  `Mapping`: a component whose type maps to nothing (`char`, a class that
+  `Mapping`, and those between a component's Java type and its face, the
+  type the wire hands it, in `FaceRules`, which `Mapping` runs on every
+  field, composite member and ref: one face computed per component, one
+  check that the component is it or binds to it, one rule for what cannot
+  be optional and one for boxing. Together they refuse a component whose type maps to nothing (`char`, a class that
   is neither a declared type nor a default mapping), `type` and
   `primitiveType` together,
   `@SbeGroup` not on a `List` of a record, `@SbeData` not on `String` or
