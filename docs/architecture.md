@@ -463,8 +463,16 @@ Reflection is banned in main code and free in tests.
   `presence`, `length`, `byteOrder`, reaches the model as absent and the
   XML omits it, the same document to any XSD-aware reader and the same
   IR from sbe-tool; the oracles are written that way.
-* **The rules** are unit tests over `Annotated` or `Schema` inputs: build
-  the mistake, assert the `Problem` and the node it names.
+* **The rules** are tested as the source a user writes. The mapping's,
+  in the processor's `AnnotationMistakesTest`: each test is the
+  declaration as it would be typed, around a shared package, imports and
+  enclosing record, compiled through the processor with `codecs = false`,
+  asserting every diagnostic with the line it lands on and that nothing
+  was written, and where a rule allows something, that it compiles clean.
+  The rules that compare nodes, in `GeneratorTest`, over a hand-built
+  `Schema`, since discovery and the mapping never produce the mistake.
+  What the mapping guarantees and no diagnostic can show, that every
+  schema node knows its annotated node, stays in `MappingTest`.
 * **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
   generator's tests: whitespace and comments ignored; both documents
   parsed with `sbe.xsd` attached, so the XSD's defaults are filled and an
@@ -511,8 +519,8 @@ Reflection is banned in main code and free in tests.
   is where generated code meets javac. The corpus tests above; one negative snippet per rule
   layer, discovery, `Mapping`, `Generator.validate`, sbe-tool and the codec
   emitter, asserting the diagnostic's element and line and that nothing
-  was written, which proves placement and the all-or-nothing rule while
-  the rules themselves are tested in the generator, and one warning
+  was written, which proves placement and the all-or-nothing rule for
+  each layer, and one warning
   snippet asserting the same placement with everything written; and one
   snippet
   resolving a declared type across a package boundary. Resolution from a

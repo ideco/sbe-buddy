@@ -100,9 +100,10 @@ The decisions that shaped the first code, so later code matches it.
   parameterized tests over an explicit list, never classpath scanning,
   except the tests module, which finds its schema cases on its own
   classpath so a new schema needs no registration;
-  method names are sentences in camelCase. The corpus DSL in `Fixtures` is
-  the only builder code in the repository; a corpus case holds its oracle
-  as a text block beside the model that must write it.
+  method names are sentences in camelCase. `Fixtures` holds plain
+  factories for the few models the generator's tests build by hand, the
+  fixed defaults inside them; a test builds a node once and passes it to
+  its parent. A rule a user can break is tested as the source they write.
 - Imports, never fully qualified names in code. Spotless removes unused
   imports and orders them; nothing adds an import for you. The one exception is a
   type that collides with one of ours in the same file, such as
