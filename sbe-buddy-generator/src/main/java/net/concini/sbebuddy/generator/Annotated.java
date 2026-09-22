@@ -83,6 +83,13 @@ public record Annotated(
 	public record SetOf(Declaration declaration) implements JavaType {
 	}
 
+	/**
+	 * No type at all: the field of an {@code unmapped} entry, which no component
+	 * carries.
+	 */
+	public record Unmapped() implements JavaType {
+	}
+
 	/** Anything else, named for the message that rejects it. */
 	public record Other(String javaName) implements JavaType {
 	}
@@ -210,11 +217,18 @@ public record Annotated(
 	) {
 	}
 
-	/** {@code @SbeMessage}. */
+	/**
+	 * {@code @SbeMessage}; {@code unmapped} are the fields no component carries,
+	 * each with {@link Unmapped} for its type and its {@code name} for its Java
+	 * name, and {@code layout} the body's order by name, empty for declaration
+	 * order.
+	 */
 	public record Message(
 			String javaName,
 			int id,
 			List<Component> components,
+			List<Field> unmapped,
+			List<String> layout,
 			String name,
 			int blockLength,
 			String semanticType,
@@ -225,6 +239,8 @@ public record Annotated(
 
 		public Message {
 			components = List.copyOf(components);
+			unmapped = List.copyOf(unmapped);
+			layout = List.copyOf(layout);
 		}
 	}
 
@@ -248,12 +264,17 @@ public record Annotated(
 	) implements Component {
 	}
 
-	/** {@code @SbeGroup}, with the components of the list's record. */
+	/**
+	 * {@code @SbeGroup}, with the components of the list's record; {@code unmapped}
+	 * and {@code layout} as on a message.
+	 */
 	public record Group(
 			String javaName,
 			JavaType javaType,
 			int id,
 			List<Component> components,
+			List<Field> unmapped,
+			List<String> layout,
 			Composite dimensionType,
 			String name,
 			int blockLength,
@@ -265,6 +286,8 @@ public record Annotated(
 
 		public Group {
 			components = List.copyOf(components);
+			unmapped = List.copyOf(unmapped);
+			layout = List.copyOf(layout);
 		}
 	}
 

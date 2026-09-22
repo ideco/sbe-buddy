@@ -79,8 +79,10 @@ never imported.
   an annotation cannot carry: the Java name of the thing annotated, its
   Java type as a small sealed descriptor (a primitive, `String`,
   `byte[]`, a `List` of a record, a `Set` of an `@SbeSet` enum, a declared
-  type), for an enum or a set the qualified name code uses, and references
-  to other declarations by identity rather than by `Class`. It is the Java face: the
+  type, or none for a field no component carries), for an enum or a set
+  the qualified name code uses, for a message or a group its `layout` and
+  its `unmapped` fields, and references to other declarations by identity
+  rather than by `Class`. It is the Java face: the
   codec emitter reads it beside the IR, related to `Schema` by name, which
   is unique per message.
 * **Both are values.** Neither carries a position. `Discovery` returns its
@@ -124,7 +126,10 @@ Three layers, in the order a mistake meets them.
   absent, and the one warning, a box on a field that never is
   (`type-mappings.md`, absence), a field of an enum whose component is
   not that enum, a field of a set whose component is not a `Set` of that
-  enum, and `presence = OPTIONAL` on a set field, which has no null value.
+  enum, `presence = OPTIONAL` on a set field, which has no null value, an
+  unmapped field without a `name` or a type, unmapped fields without a
+  `layout`, and a `layout` that misses a name, repeats one or names
+  nothing, or a name that is both a component's and an unmapped field's.
   Rules that compare nodes
   live in `Generator.validate`: duplicate field ids and names in a message
   or group, duplicate message names and ids, two declarations with one
@@ -222,6 +227,15 @@ Three layers, in the order a mistake meets them.
   field, boxed primitive, enum or set. The only literals in generated
   code are the schema's own declarations: the baseline, the valid values'
   text and the choices' bits.
+- A body's wire order is its `layout` when it gives one, declaration order
+  otherwise; `Mapping` orders the fields, groups and data before every
+  rule that reads the order, so `SchemaXml` and sbe-tool see one document
+  whichever way the record was written. A field no component carries is
+  written as its null value, `<field>NullValue()`, `NULL_VAL` or `clear()`,
+  and never read. The codec's encode statements follow the wire order it
+  walks; the constructor call's arguments follow the record's component
+  order, which the canonical constructor takes, and fixed-block addressing
+  makes the two independent.
 * The emitter is templates. Every construct it emits is a Java text block
   with named placeholders, beside the method that fills it and named after
   the construct, filled through `Template`: names and values in, a failure

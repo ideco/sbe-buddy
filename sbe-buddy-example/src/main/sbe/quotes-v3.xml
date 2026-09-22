@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The oracle for com.example.quotes: the schema the annotated records must
-     produce, written by hand as a person would write it. -->
+<!-- Version 3 of com.example.quotes, frozen: never edited again. The
+     reference flyweights in com.example.quotes.xmlref.v3 come from it. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="com.example.quotes"
                    id="92"
-                   version="4"
+                   version="3"
                    description="Top of book quotes">
     <types>
         <composite name="messageHeader">
@@ -36,7 +36,7 @@
         <field name="bidSize" id="4" type="uint32"/>
         <field name="askSize" id="5" type="uint32"/>
         <field name="sequence" id="6" type="uint64" sinceVersion="1" description="The sequence number of the update"/>
-        <field name="tradeCount" id="7" type="uint32" sinceVersion="2" deprecated="4" description="Trades of the session so far"/>
+        <field name="tradeCount" id="7" type="uint32" sinceVersion="2" description="Trades of the session so far"/>
         <field name="vwap" id="8" type="double" presence="optional" sinceVersion="2" description="The volume-weighted average price of the session, absent until the instrument has traded"/>
         <field name="venue" id="9" type="Venue" sinceVersion="3" description="The venue the quote comes from"/>
         <field name="state" id="10" type="MarketState" sinceVersion="3" description="The state of the instrument's market"/>

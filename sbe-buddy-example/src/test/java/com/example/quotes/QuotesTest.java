@@ -43,7 +43,7 @@ final class QuotesTest {
 	void aQuoteRoundTripsThroughItsCodec() {
 		assertRoundTrip(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
 						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED)
 				)
 		);
@@ -52,30 +52,15 @@ final class QuotesTest {
 	@Test
 	void aQuoteWithoutAVwapAndWithoutFlagsRoundTrips() {
 		assertRoundTrip(
-				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 0L, null, Venue.XLON, MarketState.CLOSED, Set.of()
-				)
+				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of())
 		);
-	}
-
-	@Test
-	void aNullTradeCountIsRefused() {
-		QuoteCodec codec = new QuoteCodec();
-		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		Quote quote = new Quote(
-				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, Venue.XNAS, MarketState.OPEN, Set.of()
-		);
-
-		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
-				.isInstanceOf(IllegalArgumentException.class)
-				.hasMessage("tradeCount is required");
 	}
 
 	@Test
 	void aNullVenueIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		Quote quote = new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, null, null, MarketState.OPEN, Set.of());
+		Quote quote = new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of());
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -87,7 +72,7 @@ final class QuotesTest {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
-				42, 10_050, 10_075, 4_000_000_000L, 250, 7, 3L, null, Venue.OTHER, MarketState.OPEN, Set.of()
+				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of()
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
@@ -99,7 +84,7 @@ final class QuotesTest {
 	void anotherTemplateIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		codec.encode(new Quote(1, 2, 3, 4, 5, 6, 7L, null, Venue.XNAS, MarketState.OPEN, Set.of()), buffer, 0);
+		codec.encode(new Quote(1, 2, 3, 4, 5, 6, null, Venue.XNAS, MarketState.OPEN, Set.of()), buffer, 0);
 		new MessageHeaderEncoder().wrap(buffer, 0).templateId(99);
 
 		assertThatThrownBy(() -> codec.decode(buffer, 0))

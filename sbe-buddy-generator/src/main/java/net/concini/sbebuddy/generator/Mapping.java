@@ -2,10 +2,13 @@ package net.concini.sbebuddy.generator;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
@@ -88,7 +91,7 @@ public final class Mapping {
 	}
 
 	private Schema.Message message(Annotated.Message message) {
-		Body body = body(message.components());
+		Body body = body(message, message.components(), message.unmapped(), message.layout());
 		Schema.Message result = new Schema.Message(
 				name(message, message.name(), message.javaName()),
 				id(message, message.id()),
@@ -110,13 +113,16 @@ public final class Mapping {
 
 	/**
 	 * Fields, then groups, then data: the XSD orders them, so a component out of
-	 * order is a problem.
+	 * order is a problem. The order is the layout when there is one, declaration
+	 * order otherwise.
 	 */
-	private Body body(List<Annotated.Component> components) {
+	private Body body(
+			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout
+	) {
 		List<Schema.Field> fields = new ArrayList<>();
 		List<Schema.Group> groups = new ArrayList<>();
 		List<Schema.Data> data = new ArrayList<>();
-		for (Annotated.Component component : components) {
+		for (Annotated.Component component : order(node, components, unmapped, layout)) {
 			switch (component) {
 				case Annotated.Field field -> {
 					if (!groups.isEmpty() || !data.isEmpty()) {
@@ -136,7 +142,62 @@ public final class Mapping {
 		return new Body(fields, groups, data);
 	}
 
+	/**
+	 * The body in wire order: the layout's names resolved, a component by its Java
+	 * name and an unmapped field by its wire name, each named once and none
+	 * missing; without a layout, the components as declared, and no unmapped field
+	 * has a place.
+	 */
+	private List<Annotated.Component> order(
+			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout
+	) {
+		if (layout.isEmpty()) {
+			if (!unmapped.isEmpty()) {
+				problem(node, "unmapped fields need a layout to take their place in");
+			}
+			return components;
+		}
+		Map<String, Annotated.Component> byName = new LinkedHashMap<>();
+		for (Annotated.Component component : components) {
+			byName.put(javaName(component), component);
+		}
+		for (Annotated.Field field : unmapped) {
+			if (byName.put(wireName(field.name(), field.javaName()), field) != null) {
+				problem(node, "\"" + field.name() + "\" is both a component and an unmapped field");
+			}
+		}
+		List<Annotated.Component> ordered = new ArrayList<>();
+		Set<String> seen = new HashSet<>();
+		for (String name : layout) {
+			Annotated.Component component = byName.get(name);
+			if (component == null) {
+				problem(node, "the layout names nothing called \"" + name + "\"");
+			} else if (!seen.add(name)) {
+				problem(node, "the layout names \"" + name + "\" twice");
+			} else {
+				ordered.add(component);
+			}
+		}
+		for (String name : byName.keySet()) {
+			if (!seen.contains(name)) {
+				problem(node, "the layout misses \"" + name + "\"");
+			}
+		}
+		return ordered;
+	}
+
+	private static String javaName(Annotated.Component component) {
+		return switch (component) {
+			case Annotated.Field field -> field.javaName();
+			case Annotated.Group group -> group.javaName();
+			case Annotated.Data data -> data.javaName();
+		};
+	}
+
 	private Schema.Field field(Annotated.Field field) {
+		if (field.javaType() instanceof Annotated.Unmapped && field.name().isEmpty()) {
+			problem(field, "an unmapped field needs a name");
+		}
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
 		face(field);
 		declaredFace(field);
@@ -164,7 +225,7 @@ public final class Mapping {
 			problem(group, "a group must be a List of a record");
 		}
 		String dimensionType = declare(group.dimensionType());
-		Body body = body(group.components());
+		Body body = body(group, group.components(), group.unmapped(), group.layout());
 		Schema.Group result = new Schema.Group(
 				name(group, group.name(), group.javaName()),
 				id(group, group.id()),
@@ -224,6 +285,10 @@ public final class Mapping {
 		return switch (javaType) {
 			case Annotated.Declared declared -> declare(declared.declaration());
 			case Annotated.SetOf set -> declare(set.declaration());
+			case Annotated.Unmapped none -> {
+				problem(node, "an unmapped field needs a type or a primitiveType");
+				yield "?";
+			}
 			case Annotated.Primitive primitive -> defaultMapping(node, primitive.kind());
 			case Annotated.Text text -> unmappable(node, "String");
 			case Annotated.Bytes bytes -> unmappable(node, "byte[]");
@@ -262,7 +327,7 @@ public final class Mapping {
 	 */
 	private void face(Annotated.Field field) {
 		uk.co.real_logic.sbe.PrimitiveType wire = wirePrimitive(field);
-		if (wire == null) {
+		if (wire == null || field.javaType() instanceof Annotated.Unmapped) {
 			return;
 		}
 		String face = JavaUtil.javaTypeName(wire);
@@ -272,6 +337,7 @@ public final class Mapping {
 			case Annotated.Bytes bytes -> "byte[]";
 			case Annotated.Declared declared -> "a declared type";
 			case Annotated.SetOf set -> "Set";
+			case Annotated.Unmapped none -> "unmapped";
 			case Annotated.ListOfRecord list -> "List";
 			case Annotated.Other other -> other.javaName();
 		};
@@ -285,6 +351,9 @@ public final class Mapping {
 	 * set's enum, and a set has no null value to be optional with.
 	 */
 	private void declaredFace(Annotated.Field field) {
+		if (field.javaType() instanceof Annotated.Unmapped) {
+			return;
+		}
 		Annotated.Declaration wire = field.type() != null ? field.type() : declarationOf(field.javaType());
 		if (wire instanceof Annotated.Enum enumeration
 				&& !(field.javaType() instanceof Annotated.Declared declared
@@ -305,6 +374,7 @@ public final class Mapping {
 		return switch (javaType) {
 			case Annotated.Declared declared -> declared.declaration();
 			case Annotated.SetOf set -> set.declaration();
+			case Annotated.Unmapped none -> null;
 			case Annotated.Primitive primitive -> null;
 			case Annotated.Text text -> null;
 			case Annotated.Bytes bytes -> null;

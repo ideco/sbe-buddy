@@ -100,7 +100,7 @@ The processor checks the Java-to-wire type mapping. The record codec does not ad
 
 ## Layout and metadata
 
-Fields appear in record component order. Field IDs identify fields; they do not determine byte offsets.
+Fields appear in record component order, unless the message states a `layout`; see [Retire a field](../how-to/retire-a-field.md). Field IDs identify fields; they do not determine byte offsets.
 
 SBE calculates the layout, with explicit `offset` and message `blockLength` available where needed. Byte order belongs to the schema.
 

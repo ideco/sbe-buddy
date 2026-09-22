@@ -30,4 +30,19 @@ public @interface SbeGroup {
 	int sinceVersion() default 0;
 
 	int deprecated() default 0;
+
+	/**
+	 * The body's components and unmapped fields in wire order, by name: a component
+	 * by its Java name, an unmapped field by its {@code name}. Empty, the order is
+	 * declaration order. The Java side; contributes nothing to the schema.
+	 */
+	String[] layout() default {};
+
+	/**
+	 * Fields of the body no component carries, each complete with its {@code name}
+	 * and its type: the codec writes the null value and skips them on the way back,
+	 * so a record can retire a field the schema keeps. They take their place
+	 * through {@link #layout()}. The Java side; contributes nothing to the schema.
+	 */
+	SbeField[] unmapped() default {};
 }

@@ -18,6 +18,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 ## How-to
 
 * Evolve a message — add a field without breaking existing readers
+* [Retire a field](how-to/retire-a-field.md) — deprecate it, drop it from the record, keep the wire layout
 * Use flyweights directly — work on the buffer where the record is not the right fit
 
 ## Concepts
