@@ -1,6 +1,7 @@
 package com.example.quotes;
 
 import static net.concini.sbebuddy.Presence.OPTIONAL;
+import static net.concini.sbebuddy.PrimitiveType.INT64;
 import static net.concini.sbebuddy.PrimitiveType.UINT32;
 import static net.concini.sbebuddy.PrimitiveType.UINT64;
 
@@ -32,8 +33,8 @@ import net.concini.sbebuddy.SbeMessage;
 		"bidDepth"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
 public record Quote(
 		@SbeField(id = 1) long instrumentId,
-		@SbeField(id = 2, binding = Price.class) BigDecimal bid,
-		@SbeField(id = 3, binding = Price.class) BigDecimal ask,
+		@SbeField(id = 2, primitiveType = INT64, binding = Price.class) BigDecimal bid,
+		@SbeField(id = 3, primitiveType = INT64, binding = Price.class) BigDecimal ask,
 		@SbeField(id = 4, primitiveType = UINT32) long bidSize,
 		@SbeField(id = 5, primitiveType = UINT32) long askSize,
 		@SbeField(id = 6, primitiveType = UINT64, sinceVersion = 1, description = "The sequence number of the update") long sequence,

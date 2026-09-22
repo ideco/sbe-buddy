@@ -50,11 +50,11 @@ A binding is a class of its own. A declaration, an `@SbeType`, `@SbeComposite`, 
 
 ## Naming it on the field
 
-`binding` on `@SbeField` names the binding, beside `primitiveType` or `type`:
+`binding` on `@SbeField` names the binding, beside `primitiveType` or `type`, which still say what the wire holds, since a `BigDecimal` component decides nothing by itself:
 
 ```java
-@SbeField(id = 2, binding = Price.class) BigDecimal bid,
-@SbeField(id = 3, binding = Price.class) BigDecimal ask,
+@SbeField(id = 2, primitiveType = INT64, binding = Price.class) BigDecimal bid,
+@SbeField(id = 3, primitiveType = INT64, binding = Price.class) BigDecimal ask,
 ```
 
 The schema does not change: `bid` and `ask` are `int64` fields as before. The codec calls `toWire` before the flyweight's setter and `fromWire` after its getter, so the record reads `new BigDecimal("1.0050")` where the wire holds `10050`. Both fields share the codec's one `Price` instance.
