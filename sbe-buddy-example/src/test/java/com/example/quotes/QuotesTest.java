@@ -41,6 +41,8 @@ final class QuotesTest {
 
 	private static final long[] DEPTH = {4_000_000_000L, 900, 800, 700, 600};
 
+	private static final Trade TRADE = new Trade(10_060, 300);
+
 	@Test
 	void theSchemaInTheJarIsTheOracle() throws IOException {
 		try (InputStream schema = QuotesTest.class.getResourceAsStream(RESOURCE)) {
@@ -55,7 +57,7 @@ final class QuotesTest {
 		assertRoundTrip(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE
 				)
 		);
 	}
@@ -65,7 +67,7 @@ final class QuotesTest {
 		assertRoundTrip(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of(), "",
-						EXPONENT, new long[5]
+						EXPONENT, new long[5], new Trade(0, 0)
 				)
 		);
 	}
@@ -76,7 +78,7 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
-				DEPTH
+				DEPTH, TRADE
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
@@ -90,7 +92,7 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of(), "ACME",
-				EXPONENT, DEPTH
+				EXPONENT, DEPTH, TRADE
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
@@ -148,7 +150,7 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, new BigDecimal("1.00505"), ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN,
-				Set.of(), "ACME", EXPONENT, DEPTH
+				Set.of(), "ACME", EXPONENT, DEPTH, TRADE
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET)).isInstanceOf(ArithmeticException.class);
@@ -169,7 +171,7 @@ final class QuotesTest {
 	private static Quote quoteWith(String symbol, byte priceExponent, long[] bidDepth) {
 		return new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), symbol,
-				priceExponent, bidDepth
+				priceExponent, bidDepth, TRADE
 		);
 	}
 
