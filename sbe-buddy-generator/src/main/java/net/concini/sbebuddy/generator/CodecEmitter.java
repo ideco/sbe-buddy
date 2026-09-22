@@ -260,6 +260,29 @@ public final class CodecEmitter {
 
 	private static final Template BOUND_READ = Template.of("{name}.fromWire({read})");
 
+	// ---- a composite: a pair per composite type, over its own flyweights
+
+	private static final Template ENCODE_COMPOSITE_FIELD = Template
+			.of("write{composite}({source}, encoder.{property}());");
+
+	private static final Template DECODE_COMPOSITE_FIELD = Template.of("read{composite}(decoder.{property}())");
+
+	/**
+	 * The pair's parameters bear the message's names, so every field shape serves a
+	 * member as it is.
+	 */
+	private static final Template WRITE_COMPOSITE = Template.of("""
+			private static void write{composite}({record} value, {flyweights}.{composite}Encoder encoder) {
+				{members}
+			}""");
+
+	private static final Template READ_COMPOSITE = Template.of("""
+			private static {record} read{composite}({flyweights}.{composite}Decoder decoder) {
+				return new {record}(
+						{members}
+				);
+			}""");
+
 	// ---- the shapes over them
 
 	/** A component that may be null on a required field: null has no wire form. */
@@ -385,6 +408,14 @@ public final class CodecEmitter {
 	}
 
 	/**
+	 * Whose flyweight a token's accessors are on: the message's, whose decoder
+	 * guards by version, or a composite's, which never does; {@code prefix} keeps a
+	 * member's array pair apart from a field's of the same name.
+	 */
+	private record Owner(String flyweightClass, String prefix, boolean guarded) {
+	}
+
+	/**
 	 * The codec's source, or null with a problem for a construct not covered yet.
 	 */
 	private @Nullable String codec(Annotated.Message message) {
@@ -414,6 +445,7 @@ public final class CodecEmitter {
 		Map<Annotated.Component, String> reads = new IdentityHashMap<>();
 		Map<String, String> helpers = new LinkedHashMap<>();
 		Map<String, String> bindings = new LinkedHashMap<>();
+		Owner owner = new Owner(messageClass, "", true);
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
 			Token type = fields.get(i + 1);
@@ -425,9 +457,13 @@ public final class CodecEmitter {
 			List<Token> typeTokens = fields.subList(i + 1, i + 1 + type.componentTokenCount());
 			Annotated.Field component = component(message, field);
 			if (component == null) {
+				if (type.signal() == Signal.BEGIN_COMPOSITE) {
+					return refuse(message, "an unmapped field of a composite");
+				}
 				if (!constant(field)) {
-					encodeFields
-							.add(encodeUnmapped(unmapped(message, field), type, flyweights, messageClass, property));
+					encodeFields.add(
+							encodeUnmapped(unmapped(message, field).name(), type, flyweights, messageClass, property)
+					);
 				}
 				continue;
 			}
@@ -445,25 +481,10 @@ public final class CodecEmitter {
 			String source = bindingName == null
 					? SOURCE.fill("component", component.javaName())
 					: BOUND_SOURCE.fill("name", bindingName, "component", component.javaName());
-			Access access;
-			if (constant(field)) {
-				access = constantAccess(
-						field, typeTokens, component, flyweights, messageClass, property, source, helpers
-				);
-			} else {
-				access = switch (type.signal()) {
-					case ENCODING -> encodingAccess(
-							type, flyweights, messageClass, property, component.javaName(), source, helpers
-					);
-					case BEGIN_ENUM -> enumAccess(
-							typeTokens, enumOf(component), flyweights, messageClass, property, component.javaName(),
-							helpers
-					);
-					case BEGIN_SET ->
-						setAccess(typeTokens, setOf(component), flyweights, property, component.javaName(), helpers);
-					default -> throw new IllegalStateException("a field of " + type.signal());
-				};
-			}
+			Access access = access(
+					field, typeTokens, component.javaName(), component.javaType(), declarationOf(component), source,
+					owner, flyweights, helpers
+			);
 			if (bindingName != null) {
 				// The null value and the version are decided before the binding is called.
 				access = new Access(
@@ -471,8 +492,8 @@ public final class CodecEmitter {
 						BOUND_READ.fill("name", bindingName, "read", access.decode()), access.isNull()
 				);
 			}
-			encodeFields.add(encodeField(field, component, access));
-			reads.put(component, decodeField(field, flyweights, messageClass, property, access));
+			encodeFields.add(encodeField(field, component.javaName(), component.javaType(), access));
+			reads.put(component, decodeField(field, flyweights, owner, property, access));
 		}
 		// The canonical constructor takes the components as declared, which the
 		// layout may order differently from the wire; the block is addressed by
@@ -504,18 +525,16 @@ public final class CodecEmitter {
 	}
 
 	/** A field no component carries is written as its null value and never read. */
-	private static String encodeUnmapped(
-			Annotated.Field unmapped, Token type, String flyweights, String messageClass, String property
-	) {
+	private static String encodeUnmapped(String name, Token type, String flyweights, String owner, String property) {
 		return switch (type.signal()) {
-			case ENCODING -> ENCODE_UNMAPPED_FIELD
-					.fill("property", property, "flyweights", flyweights, "message", messageClass);
+			case ENCODING ->
+				ENCODE_UNMAPPED_FIELD.fill("property", property, "flyweights", flyweights, "message", owner);
 			case BEGIN_ENUM -> ENCODE_UNMAPPED_ENUM_FIELD.fill(
 					"property", property, "flyweights", flyweights,
 					"enum", JavaUtil.formatClassName(type.applicableTypeName())
 			);
 			case BEGIN_SET -> ENCODE_UNMAPPED_SET_FIELD.fill("property", property);
-			default -> throw new IllegalStateException(unmapped.name() + " is a field of " + type.signal());
+			default -> throw new IllegalStateException(name + " is a field of " + type.signal());
 		};
 	}
 
@@ -523,25 +542,26 @@ public final class CodecEmitter {
 	 * The encode side is decided from the component: an optional field takes the
 	 * null value for null, any other component that may be null refuses it.
 	 */
-	private static String encodeField(Token field, Annotated.Field component, Access access) {
+	private static String encodeField(Token field, String javaName, Annotated.JavaType javaType, Access access) {
 		if (optional(field)) {
 			if (access.encodeOptional() == null) {
-				throw new IllegalStateException(component.javaName() + " is optional without a null value");
+				throw new IllegalStateException(javaName + " is optional without a null value");
 			}
 			return access.encodeOptional();
 		}
-		if (component.javaType() instanceof Annotated.Primitive primitive && !primitive.boxed()) {
+		if (javaType instanceof Annotated.Primitive primitive && !primitive.boxed()) {
 			return access.encode();
 		}
-		return ENCODE_CHECKED_FIELD.fill("component", component.javaName(), "call", access.encode());
+		return ENCODE_CHECKED_FIELD.fill("component", javaName, "call", access.encode());
 	}
 
 	/**
 	 * The decode side is decided from the wire: the null value for an optional
 	 * field, whatever its version, since below the acting version the getter
-	 * returns it; the version for a required field added above the baseline.
+	 * returns it; the version for a required field added above the baseline, which
+	 * only a message's flyweight guards.
 	 */
-	private String decodeField(Token field, String flyweights, String messageClass, String property, Access access) {
+	private String decodeField(Token field, String flyweights, Owner owner, String property, Access access) {
 		if (constant(field)) {
 			return access.decode();
 		}
@@ -551,12 +571,132 @@ public final class CodecEmitter {
 			}
 			return DECODE_OPTIONAL_FIELD.fill("isNull", access.isNull(), "read", access.decode());
 		}
-		if (field.version() > annotated.baselineVersion()) {
+		if (owner.guarded() && field.version() > annotated.baselineVersion()) {
 			return DECODE_ADDED_FIELD.fill(
-					"flyweights", flyweights, "message", messageClass, "property", property, "read", access.decode()
+					"flyweights", flyweights, "message", owner.flyweightClass(), "property", property, "read",
+					access.decode()
 			);
 		}
 		return access.decode();
+	}
+
+	/**
+	 * How one token reaches the wire, by its type: a constant checked and read, a
+	 * primitive, an enum, a set or a composite through its own shape.
+	 */
+	private Access access(
+			Token field, List<Token> typeTokens, String javaName, Annotated.JavaType javaType,
+			Annotated.@Nullable Declaration declaration, String source, Owner owner, String flyweights,
+			Map<String, String> helpers
+	) {
+		Token type = typeTokens.get(0);
+		String property = JavaUtil.formatPropertyName(field.name());
+		if (constant(field)) {
+			return constantAccess(
+					field, typeTokens, javaName, declaration, flyweights, owner, property, source, helpers
+			);
+		}
+		return switch (type.signal()) {
+			case ENCODING -> encodingAccess(type, flyweights, owner, property, javaName, source, helpers);
+			case BEGIN_ENUM -> enumAccess(
+					typeTokens, declared(declaration, Annotated.Enum.class, javaName), flyweights,
+					owner.flyweightClass(), property, javaName, helpers
+			);
+			case BEGIN_SET -> setAccess(
+					typeTokens, declared(declaration, Annotated.Set.class, javaName), flyweights, property, javaName,
+					helpers
+			);
+			case BEGIN_COMPOSITE -> compositeAccess(
+					typeTokens, declared(declaration, Annotated.Composite.class, javaName), flyweights, property,
+					source, helpers
+			);
+			default -> throw new IllegalStateException("a field of " + type.signal());
+		};
+	}
+
+	/** The declaration the face rule saw to, in the shape the token says. */
+	private static <D extends Annotated.Declaration> D declared(
+			Annotated.@Nullable Declaration declaration, Class<D> shape, String javaName
+	) {
+		if (shape.isInstance(declaration)) {
+			return shape.cast(declaration);
+		}
+		throw new IllegalStateException(javaName + " is not a field of " + shape.getSimpleName());
+	}
+
+	/**
+	 * A composite field or member goes through the pair of its type, declared on
+	 * first use after the pairs it nests, which register while it is built.
+	 */
+	private Access compositeAccess(
+			List<Token> typeTokens, Annotated.Composite composite, String flyweights, String property, String source,
+			Map<String, String> helpers
+	) {
+		String compositeClass = JavaUtil.formatClassName(typeTokens.get(0).applicableTypeName());
+		String key = "type " + typeTokens.get(0).applicableTypeName();
+		if (!helpers.containsKey(key)) {
+			helpers.put(key, compositePair(typeTokens, composite, flyweights, compositeClass, helpers));
+		}
+		return new Access(
+				ENCODE_COMPOSITE_FIELD.fill("composite", compositeClass, "source", source, "property", property),
+				null,
+				DECODE_COMPOSITE_FIELD.fill("composite", compositeClass, "property", property),
+				null
+		);
+	}
+
+	/**
+	 * The composite's members with the shapes a field has, over the composite's
+	 * flyweight; the record's constructor takes its components as declared, where
+	 * the layout may order the wire otherwise.
+	 */
+	private String compositePair(
+			List<Token> typeTokens, Annotated.Composite composite, String flyweights, String compositeClass,
+			Map<String, String> helpers
+	) {
+		Owner owner = new Owner(compositeClass, compositeClass, false);
+		List<String> encodes = new ArrayList<>();
+		Map<Annotated.Member, String> reads = new IdentityHashMap<>();
+		for (int i = 1; i < typeTokens.size() - 1; i += typeTokens.get(i).componentTokenCount()) {
+			Token member = typeTokens.get(i);
+			List<Token> memberTokens = typeTokens.subList(i, i + member.componentTokenCount());
+			String property = JavaUtil.formatPropertyName(member.name());
+			Annotated.Member annotated = member(composite, member.name());
+			if (annotated == null) {
+				if (!constant(member)) {
+					String name = unmappedMember(composite, member.name()).name();
+					encodes.add(encodeUnmapped(name, member, flyweights, compositeClass, property));
+				}
+				continue;
+			}
+			String javaName = javaName(annotated);
+			Annotated.JavaType javaType = javaTypeOf(annotated);
+			Access access = access(
+					member, memberTokens, javaName, javaType, declarationOf(annotated),
+					SOURCE.fill("component", javaName), owner, flyweights, helpers
+			);
+			encodes.add(encodeField(member, javaName, javaType, access));
+			reads.put(annotated, decodeField(member, flyweights, owner, property, access));
+		}
+		List<String> arguments = new ArrayList<>();
+		for (Annotated.Member member : composite.members()) {
+			String read = reads.get(member);
+			if (read == null) {
+				throw new IllegalStateException(composite.javaName() + " has no member for a component");
+			}
+			arguments.add(read);
+		}
+		return String.join(
+				"\n\n",
+				WRITE_COMPOSITE.fill(
+						"composite", compositeClass, "record", composite.qualifiedName(), "flyweights", flyweights,
+						"members", String.join("\n", encodes)
+				),
+				READ_COMPOSITE.fill(
+						"record", composite.qualifiedName(), "composite", compositeClass, "flyweights", flyweights,
+						"members", String.join(",\n", arguments)
+				)
+		);
 	}
 
 	/**
@@ -565,27 +705,27 @@ public final class CodecEmitter {
 	 * through its accessor.
 	 */
 	private static Access encodingAccess(
-			Token type, String flyweights, String messageClass, String property, String component, String source,
+			Token type, String flyweights, Owner owner, String property, String javaName, String source,
 			Map<String, String> helpers
 	) {
 		if (type.arrayLength() <= 1) {
-			return primitiveAccess(type, flyweights, messageClass, property, component, source);
+			return primitiveAccess(type, flyweights, owner.flyweightClass(), property, javaName, source);
 		}
 		if (type.encoding().primitiveType() == PrimitiveType.CHAR) {
 			helpers.computeIfAbsent("ascii", name -> ASCII.fill());
 			return new Access(
 					ENCODE_STRING_FIELD.fill(
-							"property", property, "source", source, "component", component, "flyweights", flyweights,
-							"message", messageClass
+							"property", property, "source", source, "component", javaName, "flyweights", flyweights,
+							"message", owner.flyweightClass()
 					),
 					null,
 					DECODE_FIELD.fill("property", property),
 					null
 			);
 		}
-		String field = Generators.toUpperFirstChar(property);
+		String field = owner.prefix() + Generators.toUpperFirstChar(property);
 		helpers.computeIfAbsent(
-				"field " + property, name -> arrayPair(type, flyweights, messageClass, property, field, component)
+				"field " + field, name -> arrayPair(type, flyweights, owner.flyweightClass(), property, field, javaName)
 		);
 		return new Access(
 				ENCODE_ARRAY_FIELD.fill("field", field, "source", source),
@@ -631,8 +771,8 @@ public final class CodecEmitter {
 	 * valueRef names, and decode reads the constant as any field.
 	 */
 	private Access constantAccess(
-			Token field, List<Token> typeTokens, Annotated.Field component, String flyweights, String messageClass,
-			String property, String source, Map<String, String> helpers
+			Token field, List<Token> typeTokens, String javaName, Annotated.@Nullable Declaration declaration,
+			String flyweights, Owner owner, String property, String source, Map<String, String> helpers
 	) {
 		Token type = typeTokens.get(0);
 		return switch (type.signal()) {
@@ -642,23 +782,22 @@ public final class CodecEmitter {
 						&& encoding.constValue().byteArrayValue(PrimitiveType.CHAR).length > 1;
 				Template check = string ? CHECK_CONSTANT_STRING_FIELD : CHECK_CONSTANT_FIELD;
 				yield new Access(
-						check.fill("source", source, "component", component.javaName(), "property", property),
+						check.fill("source", source, "component", javaName, "property", property),
 						null,
 						DECODE_FIELD.fill("property", property),
 						null
 				);
 			}
 			case BEGIN_ENUM -> {
-				Annotated.Enum enumeration = enumOf(component);
+				Annotated.Enum enumeration = declared(declaration, Annotated.Enum.class, javaName);
 				Access plain = enumAccess(
-						typeTokens, enumeration, flyweights, messageClass, property, component.javaName(), helpers
+						typeTokens, enumeration, flyweights, owner.flyweightClass(), property, javaName, helpers
 				);
 				String reference = field.encoding().constValue().toString();
 				String constant = validValue(enumeration, reference.substring(reference.indexOf('.') + 1)).javaName();
 				yield new Access(
 						CHECK_CONSTANT_ENUM_FIELD.fill(
-								"component", component.javaName(), "javaEnum", enumeration.qualifiedName(),
-								"constant", constant
+								"component", javaName, "javaEnum", enumeration.qualifiedName(), "constant", constant
 						),
 						null,
 						plain.decode(),
@@ -845,12 +984,11 @@ public final class CodecEmitter {
 
 	/**
 	 * What the codec cannot do with the field's type yet, or null for a primitive,
-	 * an array, an ASCII string, an enum or a set.
+	 * an array, an ASCII string, an enum, a set or a composite.
 	 */
 	private static @Nullable String unsupported(Token type) {
 		return switch (type.signal()) {
-			case BEGIN_ENUM, BEGIN_SET -> null;
-			case BEGIN_COMPOSITE -> "a composite";
+			case BEGIN_ENUM, BEGIN_SET, BEGIN_COMPOSITE -> null;
 			case ENCODING -> encodingUnsupported(type);
 			default -> throw new IllegalStateException("a field of " + type.signal());
 		};
@@ -897,28 +1035,97 @@ public final class CodecEmitter {
 	}
 
 	/**
-	 * The field's enum, named by {@code type} or as the component's own type; the
-	 * face rule saw to it.
+	 * What a field is written as, named by {@code type} or as the component's own
+	 * type; null for a primitive.
 	 */
-	private static Annotated.Enum enumOf(Annotated.Field field) {
-		if (field.type() instanceof Annotated.Enum enumeration) {
-			return enumeration;
+	private static Annotated.@Nullable Declaration declarationOf(Annotated.Field field) {
+		if (field.type() != null) {
+			return field.type();
 		}
-		if (field.javaType() instanceof Annotated.Declared declared
-				&& declared.declaration() instanceof Annotated.Enum enumeration) {
-			return enumeration;
-		}
-		throw new IllegalStateException(field.javaName() + " is not a field of an enum");
+		return declarationOf(field.javaType());
 	}
 
-	private static Annotated.Set setOf(Annotated.Field field) {
-		if (field.type() instanceof Annotated.Set set) {
-			return set;
+	private static Annotated.@Nullable Declaration declarationOf(Annotated.JavaType javaType) {
+		if (javaType instanceof Annotated.Declared declared) {
+			return declared.declaration();
 		}
-		if (field.javaType() instanceof Annotated.SetOf setOf && setOf.declaration() instanceof Annotated.Set set) {
-			return set;
+		if (javaType instanceof Annotated.SetOf setOf) {
+			return setOf.declaration();
 		}
-		throw new IllegalStateException(field.javaName() + " is not a field of a set");
+		return null;
+	}
+
+	/** What a composite's member is written as; null for an inline type. */
+	private static Annotated.@Nullable Declaration declarationOf(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> null;
+			case Annotated.Ref ref -> ref.value() != null ? ref.value() : declarationOf(ref.javaType());
+			case Annotated.Enum enumeration -> enumeration;
+			case Annotated.Set set -> set;
+			case Annotated.Composite composite -> composite;
+		};
+	}
+
+	/** The component's type behind a member: an inline declaration is its own. */
+	private static Annotated.JavaType javaTypeOf(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> {
+				if (type.javaType() == null) {
+					throw new IllegalStateException(type.javaName() + " is a member without a component");
+				}
+				yield type.javaType();
+			}
+			case Annotated.Ref ref -> ref.javaType();
+			case Annotated.Enum enumeration -> new Annotated.Declared(enumeration);
+			case Annotated.Set set -> new Annotated.SetOf(set);
+			case Annotated.Composite composite -> new Annotated.Declared(composite);
+		};
+	}
+
+	private static String javaName(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> type.javaName();
+			case Annotated.Ref ref -> ref.javaName();
+			case Annotated.Enum enumeration -> enumeration.javaName();
+			case Annotated.Set set -> set.javaName();
+			case Annotated.Composite composite -> composite.javaName();
+		};
+	}
+
+	/**
+	 * The member the token came from, by wire name; null for one no component
+	 * carries.
+	 */
+	private static Annotated.@Nullable Member member(Annotated.Composite composite, String wireName) {
+		for (Annotated.Member member : composite.members()) {
+			if (wireName(member).equals(wireName)) {
+				return member;
+			}
+		}
+		return null;
+	}
+
+	private static Annotated.Type unmappedMember(Annotated.Composite composite, String wireName) {
+		for (Annotated.Type member : composite.unmapped()) {
+			if (wireName(member.name(), member.javaName()).equals(wireName)) {
+				return member;
+			}
+		}
+		throw new IllegalStateException(composite.javaName() + " has no component for member " + wireName);
+	}
+
+	private static String wireName(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> wireName(type.name(), type.javaName());
+			case Annotated.Ref ref -> wireName(ref.name(), ref.javaName());
+			case Annotated.Enum enumeration -> wireName(enumeration.name(), enumeration.javaName());
+			case Annotated.Set set -> wireName(set.name(), set.javaName());
+			case Annotated.Composite composite -> wireName(composite.name(), composite.javaName());
+		};
+	}
+
+	private static String wireName(String name, String javaName) {
+		return name.isEmpty() ? javaName : name;
 	}
 
 	private static Annotated.ValidValue validValue(Annotated.Enum enumeration, String wireName) {
