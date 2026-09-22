@@ -82,8 +82,9 @@ never imported.
   an `@SbeSet` enum, a declared
   type, or none for a field no component carries), for an enum or a set
   the qualified name code uses, for a message or a group its `layout` and
-  its `unmapped` fields, and references to other declarations by identity
-  rather than by `Class`. It is the Java face: the
+  its `unmapped` fields, for a field its `binding` as the class code names
+  and the `W` it hands the flyweight, and references to other declarations
+  by identity rather than by `Class`. It is the Java face: the
   codec emitter reads it beside the IR, related to `Schema` by name, which
   is unique per message.
 * **Both are values.** Neither carries a position. `Discovery` returns its
@@ -116,7 +117,11 @@ Three layers, in the order a mistake meets them.
   on anything but an enum constant, `@SbeChoice` outside a set, `@UnknownValue` beside
   `@SbeEnumValue`, twice in one enum or on a set's constant, a `Class`
   member naming a type that carries no declaration annotation, a `List<E>`
-  whose `E` is not a record. Rules decidable from one node live in
+  whose `E` is not a record, a `binding` that is no `TypeBinding`, is
+  abstract, has no no-arg constructor the schema package can call, is a
+  declaration or binds a
+  `J` that is not the component's type, a declaration that implements
+  `TypeBinding`, and a `binding` on an unmapped field. Rules decidable from one node live in
   `Mapping`: a component whose type maps to nothing (`char`, a class that
   is neither a declared type nor a default mapping), `type` and
   `primitiveType` together,
@@ -131,7 +136,9 @@ Three layers, in the order a mistake meets them.
   component that is not the face of a type with a length, `String` for
   `char` and the element's array otherwise, `presence = OPTIONAL` on a
   field of such a type, a constant field with neither a `valueRef` nor a
-  constant type, which sbe-tool's IR generator crashes on, an
+  constant type, which sbe-tool's IR generator crashes on, a binding whose
+  `W` is not the face of the field's wire type, boxed, or on a field of an
+  enum or a set, an
   unmapped field without a `name` or a type, unmapped fields without a
   `layout`, and a `layout` that misses a name, repeats one or names
   nothing, or a name that is both a component's and an unmapped field's.
@@ -253,6 +260,17 @@ Three layers, in the order a mistake meets them.
   tested for an added string or array, since the flyweight answers `""` or
   the null value below it. The enum and set pairs, the array pairs and
   `ascii` follow the codec's own methods in order of first use.
+* A field's binding is one private final field per binding class the codec
+  uses, `priceBinding` for `Price`, after the flyweight fields in order of
+  first use; two classes with one simple name in one codec are a problem
+  naming the message. On encode, the value the flyweight is handed is
+  `priceBinding.toWire(value.bid())` wherever a shape wrote
+  `value.bid()` as the written or compared value, while the `null` tests
+  stay on the component; on decode, the read is
+  `priceBinding.fromWire(...)` around the getter or the array's
+  `read<Field>`, inside the optional and added shapes, so the null value
+  and the version are decided before the binding is called, which is how
+  absence passes through without it.
 - A body's wire order is its `layout` when it gives one, declaration order
   otherwise; `Mapping` orders the fields, groups and data before every
   rule that reads the order, so `SchemaXml` and sbe-tool see one document

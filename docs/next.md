@@ -15,7 +15,8 @@ a `char` string's and an array's; composite faces come with composites.
 
 ## Settled before it started
 
-- A binding is stateless, has a public no-arg constructor, and the codec
+- A binding is stateless, has a no-arg constructor the schema package can
+  call, and the codec
   holds one instance of each binding class it uses. Absence passes through
   as `null` without calling the binding; whatever the binding throws
   passes through unwrapped (`type-mappings.md`, bindings and the codec
@@ -47,7 +48,8 @@ a `char` string's and an array's; composite faces come with composites.
   javac can compare it with the component; the corpus DSL gains
   `binding(name, wire)` on its field builder.
 - **The rules in `Discovery`,** on the component: the class implements
-  `TypeBinding`, is not abstract and has a public no-arg constructor; it
+  `TypeBinding`, is not abstract and has a no-arg constructor the schema
+  package can call; it
   carries no declaration annotation, `Cents is a type; a binding is a class
   of its own`, and the reverse on the declaration, an `@SbeType`,
   `@SbeComposite`, `@SbeEnum` or `@SbeSet` class that implements
