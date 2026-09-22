@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
@@ -151,36 +152,47 @@ public final class Mapping {
 	private List<Annotated.Component> order(
 			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout
 	) {
+		return order(node, components, unmapped, layout, Mapping::javaName);
+	}
+
+	/**
+	 * The same for a composite's members, an unmapped member's Java name being its
+	 * wire name as an unmapped field's is.
+	 */
+	private <T> List<T> order(
+			Object node, List<T> components, List<? extends T> unmapped, List<String> layout,
+			Function<T, String> name
+	) {
 		if (layout.isEmpty()) {
 			if (!unmapped.isEmpty()) {
 				problem(node, "unmapped fields need a layout to take their place in");
 			}
 			return components;
 		}
-		Map<String, Annotated.Component> byName = new LinkedHashMap<>();
-		for (Annotated.Component component : components) {
-			byName.put(javaName(component), component);
+		Map<String, T> byName = new LinkedHashMap<>();
+		for (T component : components) {
+			byName.put(name.apply(component), component);
 		}
-		for (Annotated.Field field : unmapped) {
-			if (byName.put(wireName(field.name(), field.javaName()), field) != null) {
-				problem(node, "\"" + field.name() + "\" is both a component and an unmapped field");
+		for (T field : unmapped) {
+			if (byName.put(name.apply(field), field) != null) {
+				problem(node, "\"" + name.apply(field) + "\" is both a component and an unmapped field");
 			}
 		}
-		List<Annotated.Component> ordered = new ArrayList<>();
+		List<T> ordered = new ArrayList<>();
 		Set<String> seen = new HashSet<>();
-		for (String name : layout) {
-			Annotated.Component component = byName.get(name);
+		for (String entry : layout) {
+			T component = byName.get(entry);
 			if (component == null) {
-				problem(node, "the layout names nothing called \"" + name + "\"");
-			} else if (!seen.add(name)) {
-				problem(node, "the layout names \"" + name + "\" twice");
+				problem(node, "the layout names nothing called \"" + entry + "\"");
+			} else if (!seen.add(entry)) {
+				problem(node, "the layout names \"" + entry + "\" twice");
 			} else {
 				ordered.add(component);
 			}
 		}
-		for (String name : byName.keySet()) {
-			if (!seen.contains(name)) {
-				problem(node, "the layout misses \"" + name + "\"");
+		for (String entry : byName.keySet()) {
+			if (!seen.contains(entry)) {
+				problem(node, "the layout misses \"" + entry + "\"");
 			}
 		}
 		return ordered;
@@ -191,6 +203,16 @@ public final class Mapping {
 			case Annotated.Field field -> field.javaName();
 			case Annotated.Group group -> group.javaName();
 			case Annotated.Data data -> data.javaName();
+		};
+	}
+
+	private static String javaName(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> type.javaName();
+			case Annotated.Ref ref -> ref.javaName();
+			case Annotated.Enum enumeration -> enumeration.javaName();
+			case Annotated.Set set -> set.javaName();
+			case Annotated.Composite composite -> composite.javaName();
 		};
 	}
 
@@ -365,7 +387,7 @@ public final class Mapping {
 			if (!boundName(binding.wire()).equals(face)) {
 				problem(
 						field, bindsTheWireAs(binding) + ", but the face of " + wire.primitiveName() + " is " + face
-								+ "; implement TypeBinding.Of" + box(face)
+								+ "; implement TypeBinding.Of" + specialization(face)
 				);
 			}
 		} else if (!javaTypeName(field.javaType()).equals(face)) {
@@ -404,17 +426,24 @@ public final class Mapping {
 		return javaTypeName(javaType);
 	}
 
-	/** The specialization's name for a face, {@code Int} for {@code int}. */
+	/** The box of a primitive face. */
 	private static String box(String primitive) {
 		return switch (primitive) {
 			case "byte" -> "Byte";
 			case "short" -> "Short";
-			case "int" -> "Int";
+			case "int" -> "Integer";
 			case "long" -> "Long";
 			case "float" -> "Float";
 			case "double" -> "Double";
 			default -> primitive;
 		};
+	}
+
+	/**
+	 * The specialization's name for a primitive face, {@code Int} for {@code int}.
+	 */
+	private static String specialization(String primitive) {
+		return primitive.equals("int") ? "Int" : box(primitive);
 	}
 
 	private static String javaTypeName(Annotated.JavaType javaType) {
@@ -423,7 +452,7 @@ public final class Mapping {
 			case Annotated.Text text -> "String";
 			case Annotated.Bytes bytes -> "byte[]";
 			case Annotated.Array array -> array.kind().name().toLowerCase(Locale.ROOT) + "[]";
-			case Annotated.Declared declared -> "a declared type";
+			case Annotated.Declared declared -> declarationName(declared.declaration());
 			case Annotated.SetOf set -> "Set";
 			case Annotated.Unmapped none -> "unmapped";
 			case Annotated.ListOfRecord list -> "List";
@@ -469,8 +498,106 @@ public final class Mapping {
 	}
 
 	/**
+	 * A composite's inline type as a field of that type would be: the component is
+	 * the face, boxed when the member is optional, and a constant carries a value.
+	 */
+	private void memberFace(Annotated.Type member) {
+		Annotated.JavaType javaType = member.javaType();
+		if (javaType == null) {
+			return;
+		}
+		if (javaType instanceof Annotated.Unmapped) {
+			if (member.name().isEmpty()) {
+				problem(member, "an unmapped member needs a name");
+			}
+			return;
+		}
+		if (member.presence() == Presence.CONSTANT && member.value().isEmpty() && member.valueRef().isEmpty()) {
+			problem(member, "a constant member needs a value or a valueRef");
+		}
+		if (member.primitiveType() == PrimitiveType.NONE) {
+			return;
+		}
+		String face = faceOf(member);
+		if (!javaTypeName(javaType).equals(face)) {
+			problem(
+					member, javaTypeName(javaType) + " is not the face of " + wireName(member.name(), member.javaName())
+							+ ", which is " + face
+			);
+		}
+		boolean optional = member.presence() == Presence.OPTIONAL;
+		if (optional && length(member) > 1) {
+			problem(member, wireName(member.name(), member.javaName()) + " has a length; it cannot be optional");
+		}
+		if (javaType instanceof Annotated.Primitive primitive && primitive.kind() != Annotated.JavaPrimitive.CHAR
+				&& primitive.kind() != Annotated.JavaPrimitive.BOOLEAN) {
+			if (optional && !primitive.boxed()) {
+				problem(
+						member, javaTypeName(javaType) + " cannot hold null, but the member can be absent; use "
+								+ box(javaTypeName(javaType))
+				);
+			}
+			if (!optional && primitive.boxed()) {
+				problems.add(
+						new Problem(
+								member, box(javaTypeName(javaType)) + " is boxed although the member is never absent",
+								Problem.Severity.WARNING
+						)
+				);
+			}
+		}
+	}
+
+	/**
+	 * The face of a named type: its primitive's, its array's where it has a length,
+	 * and for {@code length = 0}, the variable-length member of a var-data
+	 * encoding, a {@code String} for {@code char} and {@code byte[]} otherwise.
+	 */
+	private static String faceOf(Annotated.Type type) {
+		uk.co.real_logic.sbe.PrimitiveType primitive = primitive(type.primitiveType());
+		if (type.length() == 0) {
+			return primitive == uk.co.real_logic.sbe.PrimitiveType.CHAR ? "String" : "byte[]";
+		}
+		return length(type) > 1 ? arrayFace(primitive) : JavaUtil.javaTypeName(primitive);
+	}
+
+	/**
+	 * A ref's component is the face of what it refers to: the record of a
+	 * composite, the enum, a {@code Set} of the set's enum, or a type's face.
+	 */
+	private void refFace(Annotated.Ref ref) {
+		Annotated.Declaration target = ref.value();
+		if (target == null && ref.javaType() instanceof Annotated.Declared declared) {
+			target = declared.declaration();
+		}
+		if (target == null) {
+			return;
+		}
+		String targetName = declarationName(target);
+		boolean fits = switch (target) {
+			case Annotated.Composite composite ->
+				ref.javaType() instanceof Annotated.Declared declared && declared.declaration() == composite;
+			case Annotated.Enum enumeration ->
+				ref.javaType() instanceof Annotated.Declared declared && declared.declaration() == enumeration;
+			case Annotated.Set set -> ref.javaType() instanceof Annotated.SetOf setOf && setOf.declaration() == set;
+			case Annotated.Type type -> type.primitiveType() == PrimitiveType.NONE
+					|| javaTypeName(ref.javaType()).equals(faceOf(type));
+		};
+		if (!fits) {
+			String face = switch (target) {
+				case Annotated.Composite composite -> targetName;
+				case Annotated.Enum enumeration -> targetName;
+				case Annotated.Set set -> "Set<" + targetName + ">";
+				case Annotated.Type type -> faceOf(type);
+			};
+			problem(ref, javaTypeName(ref.javaType()) + " is not the face of " + targetName + ", which is " + face);
+		}
+	}
+
+	/**
 	 * The face of an enum is the enum, the face of a set is a {@code Set} of the
-	 * set's enum, and a set has no null value to be optional with.
+	 * set's enum, the face of a composite is its record, and neither a set nor a
+	 * composite has a null value to be optional with.
 	 */
 	private void declaredFace(Annotated.Field field) {
 		if (field.javaType() instanceof Annotated.Unmapped) {
@@ -492,6 +619,23 @@ public final class Mapping {
 			}
 			if (wirePresence(field) == Presence.OPTIONAL) {
 				problem(field, "a set has no null value; a set field cannot be optional");
+			}
+		}
+		if (wire instanceof Annotated.Composite composite) {
+			Annotated.Binding binding = field.binding();
+			if (binding != null) {
+				if (!(binding.wire() instanceof Annotated.Declared declared && declared.declaration() == composite)) {
+					problem(
+							field, bindsTheWireAs(binding) + ", but the face of " + composite.javaName() + " is "
+									+ composite.javaName() + "; implement TypeBinding over " + composite.javaName()
+					);
+				}
+			} else if (!(field.javaType() instanceof Annotated.Declared declared
+					&& declared.declaration() == composite)) {
+				problem(field, composite.javaName() + " is a composite; use " + composite.javaName());
+			}
+			if (wirePresence(field) == Presence.OPTIONAL) {
+				problem(field, composite.javaName() + " is a composite; a field of it cannot be optional");
 			}
 		}
 	}
@@ -646,10 +790,18 @@ public final class Mapping {
 
 	private Schema.Composite composite(Annotated.Composite composite) {
 		List<Schema.Member> members = new ArrayList<>();
-		for (Annotated.Member member : composite.members()) {
+		for (Annotated.Member member : order(
+				composite, composite.members(), composite.unmapped(), composite.layout(), Mapping::javaName
+		)) {
 			members.add(switch (member) {
-				case Annotated.Type type -> type(type);
-				case Annotated.Ref ref -> ref(ref);
+				case Annotated.Type type -> {
+					memberFace(type);
+					yield type(type);
+				}
+				case Annotated.Ref ref -> {
+					refFace(ref);
+					yield ref(ref);
+				}
 				case Annotated.Enum enumeration -> enumeration(enumeration);
 				case Annotated.Set set -> set(set);
 				case Annotated.Composite nested -> composite(nested);

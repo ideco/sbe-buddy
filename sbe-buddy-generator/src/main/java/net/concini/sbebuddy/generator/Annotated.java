@@ -98,9 +98,13 @@ public record Annotated(
 	public record Other(String javaName) implements JavaType {
 	}
 
-	/** {@code @SbeType}. */
+	/**
+	 * {@code @SbeType}; {@code javaType} is the component's when the type is a
+	 * composite's member, and null for a declaration on a class.
+	 */
 	public record Type(
 			String javaName,
+			@Nullable JavaType javaType,
 			PrimitiveType primitiveType,
 			String name,
 			String value,
@@ -119,10 +123,16 @@ public record Annotated(
 	) implements Declaration, Member {
 	}
 
-	/** {@code @SbeComposite}. */
+	/**
+	 * {@code @SbeComposite}; {@code qualifiedName} is the record's name as code
+	 * names it, {@code unmapped} and {@code layout} as on a message.
+	 */
 	public record Composite(
 			String javaName,
+			String qualifiedName,
 			List<Member> members,
+			List<Type> unmapped,
+			List<String> layout,
 			String name,
 			int offset,
 			String semanticType,
@@ -133,6 +143,8 @@ public record Annotated(
 
 		public Composite {
 			members = List.copyOf(members);
+			unmapped = List.copyOf(unmapped);
+			layout = List.copyOf(layout);
 		}
 	}
 

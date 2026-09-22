@@ -824,21 +824,23 @@ public final class Fixtures {
 	 * identity.
 	 */
 	public static final Annotated.Composite MESSAGE_HEADER = annotatedComposite("MessageHeader")
+			.qualifiedName("net.concini.sbebuddy.MessageHeader")
 			.name("messageHeader")
 			.members(
-					annotatedType("blockLength", PrimitiveType.UINT16),
-					annotatedType("templateId", PrimitiveType.UINT16),
-					annotatedType("schemaId", PrimitiveType.UINT16),
-					annotatedType("version", PrimitiveType.UINT16)
+					annotatedType("blockLength", PrimitiveType.UINT16).javaType(primitive(Annotated.JavaPrimitive.INT)),
+					annotatedType("templateId", PrimitiveType.UINT16).javaType(primitive(Annotated.JavaPrimitive.INT)),
+					annotatedType("schemaId", PrimitiveType.UINT16).javaType(primitive(Annotated.JavaPrimitive.INT)),
+					annotatedType("version", PrimitiveType.UINT16).javaType(primitive(Annotated.JavaPrimitive.INT))
 			)
 			.build();
 
 	/** The api's {@code GroupSizeEncoding}, one instance. */
 	public static final Annotated.Composite GROUP_SIZE_ENCODING = annotatedComposite("GroupSizeEncoding")
+			.qualifiedName("net.concini.sbebuddy.GroupSizeEncoding")
 			.name("groupSizeEncoding")
 			.members(
-					annotatedType("blockLength", PrimitiveType.UINT16),
-					annotatedType("numInGroup", PrimitiveType.UINT16)
+					annotatedType("blockLength", PrimitiveType.UINT16).javaType(primitive(Annotated.JavaPrimitive.INT)),
+					annotatedType("numInGroup", PrimitiveType.UINT16).javaType(primitive(Annotated.JavaPrimitive.INT))
 			)
 			.build();
 
@@ -1022,6 +1024,7 @@ public final class Fixtures {
 
 		private final String javaName;
 		private final PrimitiveType primitiveType;
+		private Annotated.@Nullable JavaType javaType;
 		private String name = "";
 		private String value = "";
 		private int length = 1;
@@ -1113,11 +1116,17 @@ public final class Fixtures {
 			return this;
 		}
 
+		/** The component's type, for a composite's member. */
+		public AnnotatedTypeBuilder javaType(Annotated.JavaType javaType) {
+			this.javaType = javaType;
+			return this;
+		}
+
 		@Override
 		public Annotated.Type build() {
 			if (built == null) {
 				built = new Annotated.Type(
-						javaName, apiPrimitive(primitiveType), name, value, length, characterEncoding,
+						javaName, javaType, apiPrimitive(primitiveType), name, value, length, characterEncoding,
 						apiPresence(presence), valueRef, nullValue, minValue, maxValue, offset, semanticType,
 						description, sinceVersion, deprecated
 				);
@@ -1130,6 +1139,9 @@ public final class Fixtures {
 
 		private final String javaName;
 		private final List<Annotated.Member> members = new ArrayList<>();
+		private final List<Annotated.Type> unmapped = new ArrayList<>();
+		private final List<String> layout = new ArrayList<>();
+		private String qualifiedName;
 		private String name = "";
 		private int offset;
 		private String semanticType = "";
@@ -1140,12 +1152,30 @@ public final class Fixtures {
 
 		private AnnotatedCompositeBuilder(String javaName) {
 			this.javaName = javaName;
+			this.qualifiedName = javaName;
 		}
 
 		public AnnotatedCompositeBuilder members(AnnotatedMemberBuilder... builders) {
 			for (AnnotatedMemberBuilder builder : builders) {
 				members.add(builder.build());
 			}
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder qualifiedName(String qualifiedName) {
+			this.qualifiedName = qualifiedName;
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder unmapped(AnnotatedTypeBuilder... builders) {
+			for (AnnotatedTypeBuilder builder : builders) {
+				unmapped.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedCompositeBuilder layout(String... names) {
+			layout.addAll(List.of(names));
 			return this;
 		}
 
@@ -1183,7 +1213,7 @@ public final class Fixtures {
 		public Annotated.Composite build() {
 			if (built == null) {
 				built = new Annotated.Composite(
-						javaName, members, name, offset, semanticType, description,
+						javaName, qualifiedName, members, unmapped, layout, name, offset, semanticType, description,
 						sinceVersion, deprecated
 				);
 			}

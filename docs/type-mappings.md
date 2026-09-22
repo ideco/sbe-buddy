@@ -56,7 +56,7 @@ primitive it is the default mapping below; anything else is an error.
 | XSD | Java | Members |
 | --- | --- | --- |
 | `type` | `@SbeType` on a `final` class, or on a component of an `@SbeComposite` record (an inline element) | `name`, `primitiveType`, `length` (1), `characterEncoding`, `nullValue`, `minValue`, `maxValue`, `presence`, `value` (the constant), `valueRef`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
-| `composite` | `@SbeComposite` on a record | `name`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
+| `composite` | `@SbeComposite` on a record | `name`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` and `unmapped` for its inline `type` members, as on a message |
 | `ref` | `@SbeRef` on a component of an `@SbeComposite` record | `value` (the declared type's class; omitted when the component type is itself the `@SbeEnum`, `@SbeSet` or `@SbeComposite`), `name`, `offset`, `sinceVersion`, `deprecated` |
 | `enum` | `@SbeEnum` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `validValue` | `@SbeEnumValue` on each constant | `value`, `name`, `description`, `sinceVersion`, `deprecated` |
@@ -127,8 +127,13 @@ type's, as sbe-tool reads the document.
 A set field cannot be optional: a set has no null value, and an empty set is
 a value; the compiler rejects `presence = OPTIONAL` on one. Nor can a field
 of a type with a `length`, a string or an array: SBE gives an array no null
-value and sbe-tool's flyweight reads none. A field of an enum, a set, a
-string or an array is absent below the acting version like any other.
+value and sbe-tool's flyweight reads none. Nor can a field of a composite,
+which has no null value either; a composite's inline `type` member may be,
+with a `nullValue`, and decodes to `null` as a field's would, while a
+member's `sinceVersion` describes the schema and never makes the member
+absent, since sbe-tool's composite flyweights carry no version guard. A
+field of an enum, a set, a string, an array or a composite is absent below
+the acting version like any other.
 
 A field *can be absent* when it is optional, or when its `sinceVersion` is
 above the schema's `baselineVersion` and it is not a constant. A primitive
@@ -191,7 +196,10 @@ decides the interface: a primitive face takes its specialization,
 `int64`, `uint64` and `uint32`, `OfInt` for `int32` and `uint16`, `OfShort`
 for `int16` and `uint8`, `OfByte` for `int8` and `char`, `OfFloat` and
 `OfDouble`, so nothing is boxed on the way; a reference face, a `String` or
-an array, takes `TypeBinding<J, W>` with the face as `W`. A binding is a
+an array, takes `TypeBinding<J, W>` with the face as `W`; a composite face
+takes its record as `W`, so a binding over a composite goes through the
+face record, one built per call on either side, which is the only form a
+binding shipped in the api can take. A binding is a
 class of its own: a declaration never implements `TypeBinding`, and a binding never
 carries a declaration annotation, so what is schema and what is Java stay
 apart, and the field alone says which binding it wants over which wire. A

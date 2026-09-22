@@ -1,5 +1,6 @@
 package net.concini.sbebuddy.generator.corpus;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
@@ -105,14 +106,15 @@ final class Header {
 		// The package declares its header like any other composite, and names it as
 		// the schema's; both reach the one instance, which is declared once.
 		AnnotatedCompositeBuilder applicationHeader = annotatedComposite("ApplicationHeader")
+				.qualifiedName("corpus.header.ApplicationHeader")
 				.name("applicationHeader")
 				.description("The standard header and a sequence number")
 				.members(
-						annotatedType("blockLength", UINT16),
-						annotatedType("templateId", UINT16),
-						annotatedType("schemaId", UINT16),
-						annotatedType("version", UINT16),
-						annotatedType("sequenceNumber", UINT32)
+						annotatedType("blockLength", UINT16).javaType(primitive(INT)),
+						annotatedType("templateId", UINT16).javaType(primitive(INT)),
+						annotatedType("schemaId", UINT16).javaType(primitive(INT)),
+						annotatedType("version", UINT16).javaType(primitive(INT)),
+						annotatedType("sequenceNumber", UINT32).javaType(primitive(LONG))
 				);
 		return annotatedSchema("corpus.header", 1, 0).codecs(false)
 				.headerType(applicationHeader)

@@ -1,6 +1,8 @@
 package net.concini.sbebuddy.generator.corpus;
 
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.SHORT;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
@@ -156,22 +158,25 @@ final class VarData {
 
 	static Annotated annotated() {
 		AnnotatedCompositeBuilder varStringEncoding = annotatedComposite("VarStringEncoding")
+				.qualifiedName("corpus.vardata.VarStringEncoding")
 				.name("varStringEncoding")
 				.members(
-						annotatedType("length", UINT16),
-						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
+						annotatedType("length", UINT16).javaType(primitive(INT)),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8").javaType(text())
 				);
 		AnnotatedCompositeBuilder varBlobEncoding = annotatedComposite("VarBlobEncoding")
+				.qualifiedName("corpus.vardata.VarBlobEncoding")
 				.name("varBlobEncoding")
 				.members(
-						annotatedType("length", UINT32).maxValue("1073741824"),
-						annotatedType("varData", UINT8).length(0)
+						annotatedType("length", UINT32).maxValue("1073741824").javaType(primitive(LONG)),
+						annotatedType("varData", UINT8).length(0).javaType(bytes())
 				);
 		AnnotatedCompositeBuilder varByteEncoding = annotatedComposite("VarByteEncoding")
+				.qualifiedName("corpus.vardata.VarByteEncoding")
 				.name("varByteEncoding")
 				.members(
-						annotatedType("length", UINT8),
-						annotatedType("varData", UINT8).length(0)
+						annotatedType("length", UINT8).javaType(primitive(SHORT)),
+						annotatedType("varData", UINT8).length(0).javaType(bytes())
 				);
 		return annotatedSchema("corpus.vardata", 1, 0).codecs(false)
 				.types(varBlobEncoding, varByteEncoding, varStringEncoding)

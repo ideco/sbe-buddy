@@ -140,7 +140,11 @@ Three layers, in the order a mistake meets them.
   constant type, which sbe-tool's IR generator crashes on, a binding whose
   interface is not the face's, the primitive specialization for a
   primitive face and the generic interface for a reference one, or on a
-  field of an enum or a set, an
+  field of an enum or a set, a composite's member that is not the face of
+  its type, a primitive component on an optional member and the box
+  warning, a constant member without a value, a `ref` whose component is
+  not the face of its target, a field of a composite whose component is
+  not the record or that is optional, an
   unmapped field without a `name` or a type, unmapped fields without a
   `layout`, and a `layout` that misses a name, repeats one or names
   nothing, or a name that is both a component's and an unmapped field's.
@@ -273,6 +277,20 @@ Three layers, in the order a mistake meets them.
   `read<Field>`, inside the optional and added shapes, so the null value
   and the version are decided before the binding is called, which is how
   absence passes through without it.
+* A composite is a pair of private static methods per composite type,
+  `write<Composite>(<Record> value, <Composite>Encoder encoder)` and
+  `read<Composite>(<Composite>Decoder decoder)`, keyed by wire name beside
+  the enum and set pairs and declared after the pairs it nests, which
+  register while it is built. Its parameters bear the message's names, so
+  every field shape serves a member unchanged over the composite's
+  flyweight, with the composite's class where a shape names the message's
+  for a static meta method, and a member's array pair carrying the
+  composite's name so a field's of the same name stays apart; a nested
+  composite or a `ref` goes through its own pair. Inside a composite no
+  shape tests the version, since the flyweight does not. A composite field
+  encodes as `write<Composite>(value.<field>(), encoder.<field>())` under
+  the checked shape and decodes as `read<Composite>(decoder.<field>())`
+  under the added shape, and a binding wraps both.
 - A body's wire order is its `layout` when it gives one, declaration order
   otherwise; `Mapping` orders the fields, groups and data before every
   rule that reads the order, so `SchemaXml` and sbe-tool see one document

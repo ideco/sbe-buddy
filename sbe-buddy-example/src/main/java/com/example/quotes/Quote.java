@@ -25,12 +25,14 @@ import net.concini.sbebuddy.SbeMessage;
  * so the {@code layout} says where it lies. Version 5 appended the symbol, a
  * fixed-length string, the depth of the bid side, a fixed-length array, and the
  * price exponent, a constant of the schema that a message of any version
- * decodes to.
+ * decodes to. Version 6 appended the last trade, a composite held as its
+ * record.
  */
 @SbeMessage(id = 1, description = "The best bid and offer of one instrument", layout = {
 		"instrumentId", "bid", "ask", "bidSize", "askSize", "sequence", "tradeCount", "vwap", "venue", "state",
 		"flags", "symbol", "priceExponent",
-		"bidDepth"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
+		"bidDepth",
+		"lastTrade"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
 public record Quote(
 		@SbeField(id = 1) long instrumentId,
 		@SbeField(id = 2, primitiveType = INT64, binding = Price.class) BigDecimal bid,
@@ -44,6 +46,7 @@ public record Quote(
 		@SbeField(id = 11, sinceVersion = 3, description = "What the quote says about itself") @Nullable Set<QuoteFlag> flags,
 		@SbeField(id = 12, type = Symbol.class, sinceVersion = 5, description = "The instrument's symbol") @Nullable String symbol,
 		@SbeField(id = 13, type = PriceExponent.class, sinceVersion = 5, description = "The exponent of bid, ask and vwap") byte priceExponent,
-		@SbeField(id = 14, type = Depth.class, sinceVersion = 5, description = "The bid sizes at the five best levels") long @Nullable [] bidDepth
+		@SbeField(id = 14, type = Depth.class, sinceVersion = 5, description = "The bid sizes at the five best levels") long @Nullable [] bidDepth,
+		@SbeField(id = 15, sinceVersion = 6, description = "The last trade of the instrument") @Nullable Trade lastTrade
 ) {
 }
