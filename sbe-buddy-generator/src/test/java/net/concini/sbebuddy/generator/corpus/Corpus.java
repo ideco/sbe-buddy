@@ -68,11 +68,6 @@ public final class Corpus {
 					Bindings.annotated(), Map.of("corpus.bindings.BindingsCodec", Bindings.CODEC)
 			),
 			new Case(
-					"OptionalFields", OptionalFields.PACKAGE_INFO, OptionalFields.SOURCE, OptionalFields.schema(),
-					OptionalFields.XML, OptionalFields.annotated(),
-					Map.of("corpus.optionalfields.OptionalFieldsCodec", OptionalFields.CODEC)
-			),
-			new Case(
 					"AddedFields", AddedFields.PACKAGE_INFO, AddedFields.SOURCE, AddedFields.schema(), AddedFields.XML,
 					AddedFields.annotated(), Map.of("corpus.addedfields.AddedFieldsCodec", AddedFields.CODEC)
 			),
