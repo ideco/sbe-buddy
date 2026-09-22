@@ -1,130 +1,128 @@
-# Increment 11: Codec: bindings
+# Increment 12: Codec: composites
 
 ## Goal
 
-A record may hold a field as a type of its own rather than as the wire's
-face: `@SbeField(binding = X.class)` names a `TypeBinding<J, W>`, and the
-codec maps through it, `toWire` before the flyweight's setter and
-`fromWire` after its getter. A named type stays what it is, a wire encoding
-the schema declares, and a binding stays Java: it contributes nothing to
-the schema, another reader never sees it, no class is both, and the field
-alone says which binding it wants over which wire, so one domain type may
-arrive over different encodings and one encoding may reach different
-types. The increment covers the faces the block has so far, a primitive's,
-a `char` string's and an array's; composite faces come with composites.
+A field of a composite reaches the record as the `@SbeComposite` record
+itself, its members mapped by the rules fields already follow: a primitive
+member as its face, a string or an array as theirs, an enum, a set or a
+nested composite as the record's own types, a `ref` as the record it names,
+a constant filled in and checked. The composite record is the named type and
+its own face, so the usual case, one Java shape per composite, costs no
+second class; a field that wants another shape names a binding over the
+face record, `TypeBinding<J, Price>`, which the increment 11 wrap already
+serves. After it, every field of the fixed block has a codec, and what the
+emitter still refuses is a group, a var-data field, a header of the
+schema's own and big-endian byte order.
 
 ## Settled before it started
 
-- A binding is stateless, has a no-arg constructor the schema package can
-  call, and the codec
-  holds one instance of each binding class it uses. Absence passes through
-  as `null` without calling the binding; whatever the binding throws
-  passes through unwrapped (`type-mappings.md`, bindings and the codec
-  contract).
-- The binding is a member of `@SbeField`, `binding`, beside `type`, the
-  way `layout` and `unmapped` sit on `@SbeMessage`: the Java side of the
-  annotation, contributing nothing to the schema, and no annotation of its
-  own. `@SbeData` gets the same member with var-data, and a composite's
-  members none until a schema asks.
-- A declaration never implements `TypeBinding`. The "type that is its own
-  binding" form is dropped: it welds a Java type to one encoding, where
-  the field should decide, and it blurs what is schema and what is Java.
-  `type-mappings.md`, its running example and `intent.md` change in this
+- sbe-tool's message flyweights expose a composite field as a flyweight of
+  its own: the decoder's `<field>()` wraps a `<Composite>Decoder` at the
+  field's offset and returns it, `null` below the acting version; the
+  encoder's `<field>()` wraps a `<Composite>Encoder` and never guards.
+  Inside a composite flyweight the members are generated as a message's
+  fields are, primitives, arrays, strings, enums with `<member>Raw()`, sets
+  and nested composites, but with no version guard of any kind: a member's
+  `sinceVersion` changes nothing in the flyweight. A `ref` is a nested
+  composite property wrapping the referenced composite's flyweight.
+  (`JavaGenerator.generateCompositeProperty`, `generateComposite` and
+  `generatePropertyNotPresentCondition`, read 2026-09-22; to `notes.md`.)
+- A composite has no null value, so a composite field cannot be optional;
+  its members may be, an inline `type` with `presence = OPTIONAL` and a
+  `nullValue`, and absent decodes to `null` as a field's would. Absence by
+  version inside a composite is increment 16's, since the flyweight cannot
+  express it; a member's `sinceVersion` is schema documentation to the
+  codec until then.
+- A binding over a composite face goes through the face record: decoding
+  builds the record and hands it to `fromWire`, encoding takes the record
+  `toWire` returns apart. One short-lived record per bound field per
+  call, and the only form a binding shipped in the api can take, since the
+  flyweights live in the user's package. A user who cannot afford it makes
+  the composite record the domain type.
+- `layout` and `unmapped` on `@SbeComposite`, deferred from increment 9,
+  land here for the members a composite writes inline: `layout` names the
+  members in wire order, and `unmapped` holds complete `@SbeType` members
+  no component carries, written as their null value and never read. A
+  `ref`, an inline enum, set or composite cannot be unmapped in this
   increment.
-- The face decides the interface. A primitive face takes a specialization
-  with primitive signatures, `TypeBinding.OfLong<J>` and the five others,
-  so no binding boxes on the way, which escape analysis would otherwise
-  have to remove and does not promise to; the generic `TypeBinding<J, W>`
-  serves the reference faces, a `String` or an array. The generated code
-  is the same either way.
-- javac resolves a class's `TypeBinding` arguments through
-  `Types.asMemberOf` on the interface's methods: the parameter type of
-  `toWire` is J and its return type W, with the class's own type arguments
-  substituted. To be verified by the spike and recorded in `notes.md`.
 
 ## What gets built
 
-- **The api.** `TypeBinding<J, W>` with `W toWire(J value)` and
-  `J fromWire(W wire)`, and nested in it `OfByte`, `OfShort`, `OfInt`,
-  `OfLong`, `OfFloat` and `OfDouble`, each with the primitive in place of
-  `W`; documented as the contract: stateless, a no-arg constructor the
-  schema package can call, never handed `null`. `Class<?> binding()
-  default void.class` on `@SbeField`, documented as the Java side.
-- **`Annotated`.** `Field` gains `binding`, a nullable `Binding(String
-  qualifiedName, JavaType wire)`: the class code names, and W as the Java
-  type descriptor the face rule compares. J is not carried, because only
-  javac can compare it with the component; the corpus DSL gains
-  `binding(name, wire)` on its field builder.
-- **The rules in `Discovery`,** on the component: the class implements
-  `TypeBinding` or one of its specializations, is not abstract and has a
-  no-arg constructor the schema package can call; it
-  carries no declaration annotation, `Cents is a type; a binding is a class
-  of its own`, and the reverse on the declaration, an `@SbeType`,
-  `@SbeComposite`, `@SbeEnum` or `@SbeSet` class that implements
-  `TypeBinding`; J is the component's type, where a primitive component
-  matches its box, `CentsBinding binds BigDecimal, not long`. An unmapped
-  field's `binding` is a problem too: nothing is read or written for it.
-- **The rules in `Mapping`.** The binding's interface is the face's: the
-  specialization of the primitive face, `long` for `int64`, or the generic
-  interface over the reference face, `String` for a `char` type with a
-  length, `byte[]` for a `uint8` array: `CentsBinding binds the wire as
-  long, but the face of int32 is int; implement TypeBinding.OfInt`. A binding on a field of an enum or a set is a problem, since
-  their faces are the user's types already. The boxing rule reads the
-  component as before, so a primitive J on a field that can be absent is
-  refused as any primitive is; the face rule on the component yields to
-  the binding's rule, since the component is J.
-- **The codec emitter.** One private final field per binding class a codec
-  uses, `private final com.example.Price priceBinding = new
-  com.example.Price();`, named after the class's simple name, after the
-  flyweight fields in order of first use; two binding classes with one
-  simple name in one codec are a problem naming the message, rather than a
-  mangled name. On encode, the expression the flyweight is handed becomes
-  `priceBinding.toWire(value.bid())` wherever a template wrote
-  `value.bid()` as the written or compared value, in the plain, optional,
-  string, array and constant shapes alike, while the `null` tests stay on
-  the component; on decode, the read becomes `priceBinding.fromWire(...)`
-  around the flyweight's getter or the array's `read<Field>`, inside the
-  optional and added shapes, so the null value and the version are decided
-  before the binding is called.
-- **The corpus.** A new case, `Bindings`, whose oracle is what the same
-  schema writes without a binding, which is the point: `Cents`, an
-  `@SbeType` of `int64`, and `CentsBinding`, a `TypeBinding<BigDecimal,
-  Long>`, on a field through `type` and `binding`; the same binding on a
-  field with `primitiveType = INT64`, sharing the instance; an optional
-  field through it, `@Nullable BigDecimal`; `Symbol`, a `char` type of
-  length 6, bound to a wrapper record `Ticker(String value)` by
-  `TickerBinding`; and `Rgb`, a `uint8` array, bound to a record `Colour`.
-  Its codec view shows the binding fields, the wrap on each side, and the
-  null value decided before the binding.
-- **The example.** `com.example.quotes` binds `bid` and `ask` to
-  `BigDecimal` through one `Price` binding, a mantissa scaled by the
-  schema's constant exponent, so the record reads `new BigDecimal("1.0050")`
-  where the wire holds `10050`; the oracle does not change, and the version
-  stays `5`. `symbol` stays the face, a `String`. The tests: the round trip
-  with prices as decimals; the reference decoder reading the mantissas the
-  binding wrote; the reference encoder's mantissas decoding to the
-  decimals; a price with more than four decimals refused by the binding's
-  own `ArithmeticException`, passing through the codec unwrapped.
-- **The guide.** A reference page, `docs/guide/reference/bindings.md`:
-  the interface and its contract, `binding` over a primitive and over a
-  named type, a wrapper record, absence, what the binding may throw; the
-  index links it, and the named-types page's coverage section points to
-  it.
-- **The documents.** `type-mappings.md`'s bindings section says the member
-  and the separation, and its running example gives `Cents` a
-  `CentsBinding` beside it; `intent.md` rewords increment 11 and ticks it;
-  `architecture.md`'s models, rules and generation sections follow;
-  `notes.md` takes the javac fact.
+- **The api.** `String[] layout() default {}` and `SbeType[] unmapped()
+  default {}` on `@SbeComposite`, the Java side, contributing nothing to the
+  schema.
+- **`Annotated`.** `Type` gains a nullable `javaType`, the component's Java
+  type when the type is a composite's member and `null` for a declaration
+  on a class, and `Composite` gains `layout` and `unmapped`. `Discovery`
+  fills them; the corpus DSL gains `javaType` on its type builder and
+  `layout` and `unmapped` on its composite builder.
+- **The rules, in `Mapping`,** the field rules applied to a composite's
+  members, each blamed on the member: the face of an inline type, a
+  primitive's, a string's or an array's, and the boxing rule over its
+  presence, `Integer` where the member is optional; a `ref`'s component is
+  the record it refers to, or the enum or the `Set` of the enum, as a
+  field's would be; an inline enum, set or composite's component is the
+  nested type, which `Discovery` already assures; a constant member takes
+  a `valueRef` or a constant value. On the field: `presence = OPTIONAL` on
+  a field of a composite is a problem, `Price is a composite; a field of
+  it cannot be optional`, as a set's is; a binding on it takes the generic
+  interface over the record, `TypeBinding<J, Price>`, which the face rule
+  compares by the record's qualified name. The composite's `layout` and
+  `unmapped` follow the message's rules, each naming the composite.
+- **The codec emitter.** A composite is a pair of private static methods
+  per composite type, keyed by wire name beside the enum and set pairs,
+  `write<Composite>(<Record> value, <Composite>Encoder wire)` and
+  `<Record> read<Composite>(<Composite>Decoder wire)`, in order of first
+  use, a nested composite's or a `ref`'s pair declared when first reached
+  inside another's. The pair maps each member with the shapes a field
+  has, over the composite flyweight instead of the message's: the plain,
+  optional, string, array and constant shapes, the enum and set pairs,
+  `write<Nested>(value.stamp(), wire.stamp())` for a nested composite or a
+  `ref`, and an unmapped member as its null value; the arguments of the
+  record's constructor follow its components, as a message's do. A
+  composite field encodes as `write<Composite>(value.<field>(),
+  encoder.<field>())` under the checked shape, `null` refused, and
+  decodes as `read<Composite>(decoder.<field>())`, under the added shape
+  when appended above the baseline, since the flyweight answers `null`
+  below the version. A binding wraps both as it wraps an array's pair.
+  `unsupported` stops naming a composite.
+- **The corpus.** `Composites` turns codecs on and gains its `CODEC` view,
+  which covers the `ref`, the inline enum, set and composite, and the
+  offsets sbe-tool honours without the codec knowing; it gains an optional
+  member with a `nullValue` and a constant member, so both shapes show
+  inside a composite, and a second field, `Decimal` bound to `BigDecimal`
+  by `DecimalBinding`, a `TypeBinding<BigDecimal, Decimal>`, so the
+  face-record form of a binding is proved. Its oracle grows with the
+  members and the field, as the rule allows.
+- **The example.** `com.example.quotes` goes to `version = 6` and appends
+  `lastTrade`, a `Trade` composite of `int64 price` and `uint32 size`,
+  `@Nullable Trade` since it is above the baseline; `quotes-v5.xml` is
+  frozen with `xmlref.v5`. The tests: the round trip with a last trade;
+  the reference decoder reading the composite's members where the codec
+  wrote them; a version 5 message decoding with `null` for the trade; a
+  version 5 reader reading a current message whole. `com.example.trading`
+  stays on `codecs = false` for its group and var-data.
+- **The guide.** The reference page the index promises, `reference/
+  composites.md`: `@SbeComposite` on a record, inline types, `@SbeRef`,
+  nested enums, sets and composites, a composite as a field, absence, the
+  binding over the face record and when to make the record the domain
+  type instead, `layout` and `unmapped`; the bindings page's coverage
+  section points to it.
+- **The documents.** `type-mappings.md`'s composite row takes `layout` and
+  `unmapped`, its absence section the rule on composite fields and
+  members, its bindings section the face-record form; `architecture.md`'s
+  models, rules and generation sections follow; `notes.md` takes the facts
+  above; `intent.md` ticks 12.
 
 ## Criteria
 
-- `Bindings`' emitted codec equals its `codecs` view exactly, its oracle
-  parses, and every other case is untouched.
-- The quotes example round trips with decimal prices against the reference
-  flyweights, in the real build, with the oracle unchanged.
+- `Composites`' emitted codec equals its `codecs` view exactly, its oracle
+  parses, and every other case's view is untouched.
+- The quotes example round trips with a last trade against the reference
+  flyweights, in the real build, and decodes a version 5 message without
+  one.
 - Each rule above has a test that builds the mistake and asserts the
-  `Problem` and the node; the `Discovery` rules as processor snippets
-  asserting the element.
+  `Problem` and the node.
 - The guide's reference page compiles as written: its snippets are the
   example's and the corpus's.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
@@ -132,9 +130,9 @@ a `char` string's and an array's; composite faces come with composites.
 
 ## Out of scope
 
-Bindings over composite faces, which go through the face record,
-increment 12, and over var-data, increment 14. The built-in bindings,
-`Uuid` and the time encodings, increment 18. A wrapper record taken as its
-own binding without a class, a convention to revisit once the FIX schema
-of increment 19 shows how often the case occurs. A binding with state, or
-one constructed with arguments.
+Groups and var-data, increments 13 and 14, and a header type of the
+schema's own, increment 15. Absence by `sinceVersion` inside a composite,
+increment 16, which the flyweight cannot express today. An unmapped `ref`,
+enum, set or nested composite. A binding that reads the composite flyweight
+directly, without the face record, which the api's built-ins could never
+ship.
