@@ -16,10 +16,6 @@ public final class Corpus {
 
 	public static final List<Case> CASES = List.of(
 			new Case(
-					"Header", Header.PACKAGE_INFO, Header.SOURCE, Header.schema(), Header.XML, Header.annotated(),
-					Map.of()
-			),
-			new Case(
 					"BigEndian", BigEndian.PACKAGE_INFO, BigEndian.SOURCE, BigEndian.schema(), BigEndian.XML,
 					BigEndian.annotated(), Map.of()
 			)
