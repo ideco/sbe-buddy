@@ -112,7 +112,7 @@ the block, one at a time.
 **Variable length.** `encodedLength` has to earn its keep.
 
 * [x] 13. Codec: groups, nested
-* [ ] 14. The tests module: the corpus compiled by the real build, one schema case per package run against the generated flyweights and codecs; the generator's twins and codec views retire as each case moves
+* [x] 14. The tests module: the corpus compiled by the real build, one schema case per package run against the generated flyweights and codecs; the generator's twins and codec views retire as each case moves
 * [ ] 15. Codec: var-data, and the built-in var-data encodings
 
 **The rest of `sbe.xsd`.**

@@ -453,32 +453,6 @@ Reflection is banned in main code and free in tests.
   primitive. `XsdCoverageTest` lives here too, over every oracle. Surefire
   reports each check by its phrase, the case's description, "checks", the
   check's.
-* **The corpus, in the generator, until every case has moved.** Each case
-  still there is one class holding four views of one schema: the Java source as text blocks, `PACKAGE_INFO` and
-  `SOURCE`; `annotated()` and `schema()`, built through the `Fixtures` DSL
-  so the case reads like the oracle; and the hand-written oracle `XML`. In
-  the generator, per case: `Mapping.map(annotated())` equals `schema()` by
-  record equality; `SchemaXml.of(schema())` is equivalent to the oracle;
-  and the oracle parses through `XmlSchemaParser` with no error and no
-  warning, so a wrong oracle cannot agree with a wrong writer. In the
-  processor, which takes the corpus from the generator's test jar: the
-  source discovers to `annotated()` by record equality, and compiles
-  through the real processor to a `schema.xml` equivalent to the oracle.
-  One corpus, source to XML. A
-  model says what an annotation can say: a String member is absent only
-  when empty, so `epoch="unix"` written is `epoch="unix"` emitted, while an
-  enum or int member left at the XSD's default, `presence`, `length`,
-  `byteOrder`, reaches the model as absent and the XML omits it, the same
-  document to any XSD-aware reader and the same IR from sbe-tool. Once
-  over the corpus: every element and attribute `sbe.xsd` declares occurs
-  in some oracle, except an explicit list of attributes the XSD declares
-  and sbe-tool ignores, so completeness is a test, not a claim. One case
-  per XSD feature and one per shape worth taking from sbe-tool's own test
-  schemas, written fresh and never copied. No javac. A case moves to the
-  tests module as `docs/next.md` says, and its twins and its codec view go
-  with it: the round trips prove as behaviour what the view proved as
-  text, and the real build proves what the twins proved by record
-  equality.
 * **The rules** are unit tests over `Annotated` or `Schema` inputs: build
   the mistake, assert the `Problem` and the node it names.
 * **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
@@ -489,14 +463,6 @@ Reflection is banned in main code and free in tests.
   sequence, because offsets follow declaration order and a moved field is
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
-* **The codec's view of the corpus.** A case the codec covers holds the
-  expected source of each of its codecs by qualified name, as a text block
-  or a file in the test resources once it outgrows a screen; the emitter's
-  output must equal it exactly, so a change to generated code shows as a
-  diff of Java. A case the codec does not cover yet holds none and sets
-  `codecs = false` in its source, and the test asserts the emitter names
-  the construct it lacks, which is the work list the codec increments
-  shrink. No javac. Retires with the case's move.
 * **The example, as integration.** Realistic schemas a user would write,
   `com.example.trading` and `com.example.quotes`, which grows a construct
   per increment and carries a group since version 7,

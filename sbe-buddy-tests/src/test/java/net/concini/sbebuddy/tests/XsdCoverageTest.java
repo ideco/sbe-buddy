@@ -23,12 +23,9 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
-import net.concini.sbebuddy.generator.corpus.Corpus;
-
 /**
  * Every element and attribute sbe.xsd declares occurs in at least one oracle,
- * so completeness is a test. The oracles are every case's on this classpath
- * and, until the last one moves here, every case's still in the generator.
+ * so completeness is a test over every case's oracle on this classpath.
  */
 final class XsdCoverageTest {
 
@@ -50,9 +47,6 @@ final class XsdCoverageTest {
 	void everyElementAndAttributeOccursInSomeOracle() throws Exception {
 		Set<String> uncovered = declaredByXsd();
 		uncovered.removeAll(IGNORED_BY_SBE_TOOL);
-		for (Corpus.Case aCase : Corpus.CASES) {
-			uncovered.removeAll(usedBy(aCase.oracle()));
-		}
 		for (SchemaCase aCase : Cases.discover()) {
 			uncovered.removeAll(usedBy(aCase.oracle()));
 		}

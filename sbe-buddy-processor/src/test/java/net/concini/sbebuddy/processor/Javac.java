@@ -21,8 +21,6 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
-import net.concini.sbebuddy.generator.corpus.Corpus;
-
 /**
  * javac in memory: sources as strings, the test classpath so the api is
  * visible, {@code -proc:only}, one processor, and everything the processor
@@ -47,20 +45,6 @@ public final class Javac {
 	}
 
 	private Javac() {
-	}
-
-	/** A corpus case's two units, compiled with the given processor. */
-	public static Result compile(Corpus.Case aCase, Processor processor) {
-		String packageInfo = aCase.packageInfo();
-		String source = aCase.source();
-		if (packageInfo == null || source == null) {
-			throw new IllegalArgumentException(aCase.name() + " has no source");
-		}
-		String directory = aCase.annotated().packageName().replace('.', '/');
-		return compile(
-				List.of(unit(directory + "/package-info.java", packageInfo), unit(directory + "/Source.java", source)),
-				processor
-		);
 	}
 
 	public static Result compile(List<JavaFileObject> units, Processor processor) {
