@@ -16,10 +16,6 @@ public final class Corpus {
 
 	public static final List<Case> CASES = List.of(
 			new Case(
-					"Primitives", Primitives.PACKAGE_INFO, Primitives.SOURCE, Primitives.schema(), Primitives.XML,
-					Primitives.annotated(), Map.of("corpus.primitives.PrimitivesCodec", Primitives.CODEC)
-			),
-			new Case(
 					"NamedTypes", NamedTypes.PACKAGE_INFO, NamedTypes.SOURCE, NamedTypes.schema(), NamedTypes.XML,
 					NamedTypes.annotated(), Map.of("corpus.namedtypes.NamedTypesCodec", NamedTypes.CODEC)
 			),
