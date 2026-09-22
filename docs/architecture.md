@@ -90,14 +90,8 @@ Three layers, in the order a mistake meets them.
 * **Flyweights** come from `JavaGenerator` with sbe-tool's default
   configuration into `<schema package>.sbe`; the schema goes into the jar as
   `<schema package>/schema.xml`.
-* **Codecs** are made in two steps. `CodecWalk` walks the IR the way
-  `JavaGenerator` does and names every flyweight member through `JavaUtil`,
-  so a codec calls what was generated; it builds a `CodecModel`, collecting
-  a problem for anything the codec does not cover yet. `CodecWriter`
-  renders the model through the text blocks in `CodecTemplates`, each
-  filled from the model node it writes. Templates hold no logic; what
-  varies is decided in Java. Generated code holds no wire numbers, only the
-  flyweights' constants.
+* **Codecs** are walked from the IR into a `CodecModel` and written from it,
+  so a codec calls what sbe-tool generated and holds no wire numbers.
 
 ## The codec contract
 
@@ -119,26 +113,16 @@ may grow.
 
 ## Testing
 
-* **The tests module** holds the corpus: one schema package per case with a
-  `<Name>Test implements SchemaCase` beside it, giving its oracle and its
-  round trips. `SchemaCasesTest` finds every case on the module's classpath
-  and checks the written `schema.xml` against the oracle and each round trip
-  against the codec contract; a case's own tests hold its refusals.
-  `XsdCoverageTest` proves every element and attribute of `sbe.xsd` occurs
-  in some oracle.
-* **The processor's tests** write each rule as the source a user types,
-  compiled in memory, and assert the diagnostic and the line it lands on;
-  one test compiles real directories to prove incremental builds.
-* **The generator's tests** cover what no source can reach: the rules that
-  compare nodes over a hand-built `Schema`, the pipeline's all-or-nothing
-  rule, `Template` and `SchemaXmlAssert`.
+Each layer is tested where it lives; the module's own `AGENTS.md` says how.
+
+* **sbe-buddy-tests** holds the corpus: one schema package per case, its
+  oracle and its round trips, run against the generated code.
+* **The processor** tests every rule a user can break as the source they
+  write.
+* **The generator** tests what no source can reach: the rules that compare
+  nodes, the all-or-nothing pipeline, `Template` and `SchemaXmlAssert`.
 * **The example** proves the wiring on realistic schemas and interop with
-  sbe-tool: reference flyweights generated from each oracle and each frozen
-  version, `quotes-v0.xml` onwards, encode what our codecs decode and the
-  reverse.
-* **Oracles** are hand-written and grow only with the change that needs
-  them; a frozen version is never edited. Equivalence is XMLUnit's, in
-  `SchemaXmlAssert`, with the XSD's defaults filled in.
+  sbe-tool's own flyweights across frozen versions.
 
 ## Build
 

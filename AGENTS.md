@@ -20,6 +20,8 @@ sbe-buddy-tests        the corpus compiled by the real build: a schema package, 
 reference/             sbe-tool's sources as a git submodule, for reading only
 ```
 
+Each module has its own `AGENTS.md` with what holds only there.
+
 Build: `./mvnw verify` on JDK 21. The docs are listed in order of authority,
 and a change that alters behaviour updates the ones describing it in the same
 commit.
