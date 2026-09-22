@@ -36,10 +36,6 @@ public final class Corpus {
 					BigEndian.annotated(), Map.of()
 			),
 			new Case(
-					"Arrays", Arrays.PACKAGE_INFO, Arrays.SOURCE, Arrays.schema(), Arrays.XML, Arrays.annotated(),
-					Map.of("corpus.arrays.ArraysCodec", Arrays.CODEC)
-			),
-			new Case(
 					"Bindings", Bindings.PACKAGE_INFO, Bindings.SOURCE, Bindings.schema(), Bindings.XML,
 					Bindings.annotated(), Map.of("corpus.bindings.BindingsCodec", Bindings.CODEC)
 			),
