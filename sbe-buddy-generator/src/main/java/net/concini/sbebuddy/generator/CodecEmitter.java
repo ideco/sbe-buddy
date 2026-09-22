@@ -14,6 +14,7 @@ import org.agrona.generation.DynamicPackageOutputManager;
 import org.jspecify.annotations.Nullable;
 
 import uk.co.real_logic.sbe.PrimitiveType;
+import uk.co.real_logic.sbe.generation.Generators;
 import uk.co.real_logic.sbe.generation.java.JavaUtil;
 import uk.co.real_logic.sbe.ir.Encoding;
 import uk.co.real_logic.sbe.ir.GenerationUtil;
@@ -89,7 +90,7 @@ public final class CodecEmitter {
 							headerDecoder.wrap(buffer, offset);
 							return {flyweights}.{header}Decoder.ENCODED_LENGTH + headerDecoder.blockLength();
 						}
-						{declaredTypes}
+						{helpers}
 					}
 					"""
 	);
@@ -156,6 +157,96 @@ public final class CodecEmitter {
 			.of("encoder.{property}({flyweights}.{enum}.NULL_VAL);");
 
 	private static final Template ENCODE_UNMAPPED_SET_FIELD = Template.of("encoder.{property}().clear();");
+
+	// ---- a char string: the flyweight's own String form, checked first
+
+	private static final Template ENCODE_STRING_FIELD = Template.of(
+			"encoder.{property}(ascii(value.{component}(), {flyweights}.{message}Encoder.{property}Length(), \"{component}\"));"
+	);
+
+	/**
+	 * The flyweight writes a char above 127 as '?' and throws its own exception
+	 * over the length; the codec refuses both first.
+	 */
+	private static final Template ASCII = Template.of("""
+			private static String ascii(String value, int length, String field) {
+				if (value.length() > length) {
+					throw new IllegalArgumentException(field + " is longer than " + length + ": " + value);
+				}
+				for (int i = 0; i < value.length(); i++) {
+					if (value.charAt(i) > 127) {
+						throw new IllegalArgumentException(field + " is not ASCII: " + value);
+					}
+				}
+				return value;
+			}""");
+
+	// ---- a fixed-length array: a pair per field, over the index accessors
+
+	private static final Template ENCODE_ARRAY_FIELD = Template.of("write{field}(value.{component}(), encoder);");
+
+	private static final Template DECODE_ARRAY_FIELD = Template.of("read{field}(decoder)");
+
+	private static final Template WRITE_ARRAY = Template.of(
+			"""
+					private static void write{field}({face}[] value, {flyweights}.{message}Encoder encoder) {
+						if (value.length != {flyweights}.{message}Encoder.{property}Length()) {
+							throw new IllegalArgumentException(
+									"{component} must be " + {flyweights}.{message}Encoder.{property}Length() + " long, not " + value.length);
+						}
+						for (int i = 0; i < value.length; i++) {
+							encoder.{property}(i, value[i]);
+						}
+					}"""
+	);
+
+	private static final Template READ_ARRAY = Template.of("""
+			private static {face}[] read{field}({flyweights}.{message}Decoder decoder) {
+				{face}[] value = new {face}[{flyweights}.{message}Decoder.{property}Length()];
+				for (int i = 0; i < value.length; i++) {
+					value[i] = decoder.{property}(i);
+				}
+				return value;
+			}""");
+
+	/**
+	 * A uint8 array has bulk accessors over byte[], where its index accessors widen
+	 * to short.
+	 */
+	private static final Template WRITE_BYTES = Template.of(
+			"""
+					private static void write{field}(byte[] value, {flyweights}.{message}Encoder encoder) {
+						if (value.length != {flyweights}.{message}Encoder.{property}Length()) {
+							throw new IllegalArgumentException(
+									"{component} must be " + {flyweights}.{message}Encoder.{property}Length() + " long, not " + value.length);
+						}
+						encoder.put{field}(value, 0, value.length);
+					}"""
+	);
+
+	private static final Template READ_BYTES = Template.of("""
+			private static byte[] read{field}({flyweights}.{message}Decoder decoder) {
+				byte[] value = new byte[{flyweights}.{message}Decoder.{property}Length()];
+				decoder.get{field}(value, 0, value.length);
+				return value;
+			}""");
+
+	// ---- a constant: no bytes; the record must agree with the schema
+
+	private static final Template CHECK_CONSTANT_FIELD = Template.of("""
+			if (value.{component}() != encoder.{property}()) {
+				throw new IllegalArgumentException("{component} is the constant " + encoder.{property}());
+			}""");
+
+	private static final Template CHECK_CONSTANT_STRING_FIELD = Template.of("""
+			if (!encoder.{property}().equals(value.{component}())) {
+				throw new IllegalArgumentException("{component} is the constant " + encoder.{property}());
+			}""");
+
+	private static final Template CHECK_CONSTANT_ENUM_FIELD = Template.of("""
+			if (value.{component}() != {javaEnum}.{constant}) {
+				throw new IllegalArgumentException("{component} is the constant {constant}");
+			}""");
 
 	// ---- the shapes over them
 
@@ -309,13 +400,10 @@ public final class CodecEmitter {
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		List<String> encodeFields = new ArrayList<>();
 		Map<Annotated.Component, String> reads = new IdentityHashMap<>();
-		Map<String, String> declaredTypes = new LinkedHashMap<>();
+		Map<String, String> helpers = new LinkedHashMap<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
 			Token type = fields.get(i + 1);
-			if (field.encoding().presence() == Encoding.Presence.CONSTANT) {
-				return refuse(message, "a constant");
-			}
 			String unsupported = unsupported(type);
 			if (unsupported != null) {
 				return refuse(message, unsupported);
@@ -324,19 +412,30 @@ public final class CodecEmitter {
 			List<Token> typeTokens = fields.subList(i + 1, i + 1 + type.componentTokenCount());
 			Annotated.Field component = component(message, field);
 			if (component == null) {
-				encodeFields.add(encodeUnmapped(unmapped(message, field), type, flyweights, messageClass, property));
+				if (!constant(field)) {
+					encodeFields
+							.add(encodeUnmapped(unmapped(message, field), type, flyweights, messageClass, property));
+				}
 				continue;
 			}
-			Access access = switch (type.signal()) {
-				case ENCODING -> primitiveAccess(type, flyweights, messageClass, property, component.javaName());
-				case BEGIN_ENUM -> enumAccess(
-						typeTokens, enumOf(component), flyweights, messageClass, property, component.javaName(),
-						declaredTypes
+			Access access;
+			if (constant(field)) {
+				access = constantAccess(
+						field, typeTokens, component, flyweights, messageClass, property, helpers
 				);
-				case BEGIN_SET ->
-					setAccess(typeTokens, setOf(component), flyweights, property, component.javaName(), declaredTypes);
-				default -> throw new IllegalStateException("a field of " + type.signal());
-			};
+			} else {
+				access = switch (type.signal()) {
+					case ENCODING ->
+						encodingAccess(type, flyweights, messageClass, property, component.javaName(), helpers);
+					case BEGIN_ENUM -> enumAccess(
+							typeTokens, enumOf(component), flyweights, messageClass, property, component.javaName(),
+							helpers
+					);
+					case BEGIN_SET ->
+						setAccess(typeTokens, setOf(component), flyweights, property, component.javaName(), helpers);
+					default -> throw new IllegalStateException("a field of " + type.signal());
+				};
+			}
 			encodeFields.add(encodeField(field, component, access));
 			reads.put(component, decodeField(field, flyweights, messageClass, property, access));
 		}
@@ -364,7 +463,7 @@ public final class CodecEmitter {
 						? ""
 						: REFUSE_BELOW_BASELINE.fill("message", messageClass, "baseline", String.valueOf(baseline)),
 				"decodeFields", String.join(",\n", decodeFields),
-				"declaredTypes", declaredTypes.isEmpty() ? "" : "\n" + String.join("\n\n", declaredTypes.values())
+				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers.values())
 		);
 	}
 
@@ -407,6 +506,9 @@ public final class CodecEmitter {
 	 * returns it; the version for a required field added above the baseline.
 	 */
 	private String decodeField(Token field, String flyweights, String messageClass, String property, Access access) {
+		if (constant(field)) {
+			return access.decode();
+		}
 		if (optional(field)) {
 			if (access.isNull() == null) {
 				throw new IllegalStateException(field.name() + " is optional without a null value");
@@ -419,6 +521,116 @@ public final class CodecEmitter {
 			);
 		}
 		return access.decode();
+	}
+
+	/**
+	 * A char string goes through the flyweight's own String form, checked by
+	 * {@code ascii} first; any other array through a pair per field; a scalar
+	 * through its accessor.
+	 */
+	private static Access encodingAccess(
+			Token type, String flyweights, String messageClass, String property, String component,
+			Map<String, String> helpers
+	) {
+		if (type.arrayLength() <= 1) {
+			return primitiveAccess(type, flyweights, messageClass, property, component);
+		}
+		if (type.encoding().primitiveType() == PrimitiveType.CHAR) {
+			helpers.computeIfAbsent("ascii", name -> ASCII.fill());
+			return new Access(
+					ENCODE_STRING_FIELD.fill(
+							"property", property, "component", component, "flyweights", flyweights, "message",
+							messageClass
+					),
+					null,
+					DECODE_FIELD.fill("property", property),
+					null
+			);
+		}
+		String field = Generators.toUpperFirstChar(property);
+		helpers.computeIfAbsent(
+				"field " + property, name -> arrayPair(type, flyweights, messageClass, property, field, component)
+		);
+		return new Access(
+				ENCODE_ARRAY_FIELD.fill("field", field, "component", component),
+				null,
+				DECODE_ARRAY_FIELD.fill("field", field),
+				null
+		);
+	}
+
+	private static String arrayPair(
+			Token type, String flyweights, String messageClass, String property, String field, String component
+	) {
+		PrimitiveType primitive = type.encoding().primitiveType();
+		if (primitive == PrimitiveType.UINT8) {
+			return String.join(
+					"\n\n",
+					WRITE_BYTES.fill(
+							"field", field, "flyweights", flyweights, "message", messageClass, "property", property,
+							"component", component
+					),
+					READ_BYTES.fill(
+							"field", field, "flyweights", flyweights, "message", messageClass, "property", property
+					)
+			);
+		}
+		String face = JavaUtil.javaTypeName(primitive);
+		return String.join(
+				"\n\n",
+				WRITE_ARRAY.fill(
+						"field", field, "face", face, "flyweights", flyweights, "message", messageClass, "property",
+						property, "component", component
+				),
+				READ_ARRAY.fill(
+						"field", field, "face", face, "flyweights", flyweights, "message", messageClass, "property",
+						property
+				)
+		);
+	}
+
+	/**
+	 * A constant carries no bytes: encode checks the component against the
+	 * flyweight's own constant, or for an enum against the record's constant the
+	 * valueRef names, and decode reads the constant as any field.
+	 */
+	private Access constantAccess(
+			Token field, List<Token> typeTokens, Annotated.Field component, String flyweights, String messageClass,
+			String property, Map<String, String> helpers
+	) {
+		Token type = typeTokens.get(0);
+		return switch (type.signal()) {
+			case ENCODING -> {
+				Encoding encoding = type.encoding();
+				boolean string = encoding.primitiveType() == PrimitiveType.CHAR
+						&& encoding.constValue().byteArrayValue(PrimitiveType.CHAR).length > 1;
+				Template check = string ? CHECK_CONSTANT_STRING_FIELD : CHECK_CONSTANT_FIELD;
+				yield new Access(
+						check.fill("component", component.javaName(), "property", property),
+						null,
+						DECODE_FIELD.fill("property", property),
+						null
+				);
+			}
+			case BEGIN_ENUM -> {
+				Annotated.Enum enumeration = enumOf(component);
+				Access plain = enumAccess(
+						typeTokens, enumeration, flyweights, messageClass, property, component.javaName(), helpers
+				);
+				String reference = field.encoding().constValue().toString();
+				String constant = validValue(enumeration, reference.substring(reference.indexOf('.') + 1)).javaName();
+				yield new Access(
+						CHECK_CONSTANT_ENUM_FIELD.fill(
+								"component", component.javaName(), "javaEnum", enumeration.qualifiedName(),
+								"constant", constant
+						),
+						null,
+						plain.decode(),
+						null
+				);
+			}
+			default -> throw new IllegalStateException("a constant field of " + type.signal());
+		};
 	}
 
 	private static Access primitiveAccess(
@@ -563,9 +775,13 @@ public final class CodecEmitter {
 		return field.encoding().presence() == Encoding.Presence.OPTIONAL;
 	}
 
+	private static boolean constant(Token field) {
+		return field.encoding().presence() == Encoding.Presence.CONSTANT;
+	}
+
 	/**
 	 * What the codec cannot do with the field's type yet, or null for a primitive,
-	 * an enum or a set.
+	 * an array, an ASCII string, an enum or a set.
 	 */
 	private static @Nullable String unsupported(Token type) {
 		return switch (type.signal()) {
@@ -576,12 +792,14 @@ public final class CodecEmitter {
 		};
 	}
 
+	/**
+	 * The flyweight's String form of a char array is ASCII-checked only for ASCII.
+	 */
 	private static @Nullable String encodingUnsupported(Token type) {
-		if (type.arrayLength() > 1) {
-			return "an array";
-		}
-		if (type.encoding().presence() == Encoding.Presence.CONSTANT) {
-			return "a constant";
+		Encoding encoding = type.encoding();
+		if (type.arrayLength() > 1 && encoding.primitiveType() == PrimitiveType.CHAR
+				&& !JavaUtil.isAsciiEncoding(encoding.characterEncoding())) {
+			return "a string in " + encoding.characterEncoding();
 		}
 		return null;
 	}

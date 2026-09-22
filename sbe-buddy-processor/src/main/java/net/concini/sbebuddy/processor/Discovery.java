@@ -19,7 +19,6 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
@@ -587,10 +586,17 @@ public final class Discovery {
 				return new Annotated.Primitive(Annotated.JavaPrimitive.BOOLEAN, false);
 			}
 			case ARRAY -> {
-				if (((ArrayType) type).getComponentType().getKind() == TypeKind.BYTE) {
-					return new Annotated.Bytes();
-				}
-				return new Annotated.Other(type.toString());
+				return switch (((ArrayType) type).getComponentType().getKind()) {
+					case BYTE -> new Annotated.Bytes();
+					case SHORT -> new Annotated.Array(Annotated.JavaPrimitive.SHORT);
+					case INT -> new Annotated.Array(Annotated.JavaPrimitive.INT);
+					case LONG -> new Annotated.Array(Annotated.JavaPrimitive.LONG);
+					case FLOAT -> new Annotated.Array(Annotated.JavaPrimitive.FLOAT);
+					case DOUBLE -> new Annotated.Array(Annotated.JavaPrimitive.DOUBLE);
+					case CHAR -> new Annotated.Array(Annotated.JavaPrimitive.CHAR);
+					case BOOLEAN -> new Annotated.Array(Annotated.JavaPrimitive.BOOLEAN);
+					default -> new Annotated.Other(type.toString());
+				};
 			}
 			case DECLARED -> {
 				return declaredJavaType(type);

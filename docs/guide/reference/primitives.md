@@ -108,4 +108,4 @@ Attributes such as `semanticType`, `epoch` and `timeUnit` describe the field in 
 
 ## Coverage
 
-This page describes scalar primitive fields. Fixed-length arrays, strings and constants have additional mapping rules and separate codec support.
+This page describes scalar primitive fields. Fixed-length strings and arrays, constants, and encodings declared once and named by their fields are [named types](named-types.md).

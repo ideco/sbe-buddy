@@ -8,6 +8,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 
 * Schemas — schema and message declarations
 * [Primitives](reference/primitives.md) — scalar primitive fields, their Java types and absence
+* [Named types](reference/named-types.md) — `@SbeType`, fixed-length strings and arrays, constants
 * [Enums](reference/enums.md) — `@SbeEnum`, explicit wire values and unknown values
 * [Sets](reference/sets.md) — `@SbeSet`, bit choices and `Set` components
 * Composites — composites and refs

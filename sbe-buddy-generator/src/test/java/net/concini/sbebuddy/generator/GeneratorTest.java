@@ -5,6 +5,7 @@ import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
@@ -14,8 +15,10 @@ import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
+import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.INT64;
 
 import java.util.List;
@@ -170,6 +173,32 @@ final class GeneratorTest {
 
 		assertThat(problems).containsExactly(
 				new Problem(annotated.messages().get(0), "no codec for a group yet; set codecs = false on @SbeSchema")
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aStringInAnEncodingThatIsNotAsciiIsAConstructTheCodecLacks() {
+		// The flyweight's String form goes through String.getBytes there, and
+		// what the codec would check is not settled.
+		Fixtures.AnnotatedTypeBuilder name = annotatedType("Name", CHAR).length(8).characterEncoding("UTF-8");
+		Schema schema = messageSchema("p", 1, 0)
+				.types(messageHeader(), type("Name", CHAR).length(8).characterEncoding("UTF-8"))
+				.messages(message("M", 1).fields(field("name", 1, "Name")))
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.types(name)
+				.messages(annotatedMessage("M", 1).components(annotatedField("name", 1, text()).type(name)))
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).containsExactly(
+				new Problem(
+						annotated.messages().get(0),
+						"no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"
+				)
 		);
 		assertThat(output.getSources()).isEmpty();
 	}

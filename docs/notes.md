@@ -155,6 +155,56 @@ alternatives considered.
   and write the fields of a block in any order; only groups and var-data
   are sequential. (The generated `QuoteDecoder` and the `Layout` corpus
   case, 2026-09-22.)
+* A `char` type without `characterEncoding` is `US-ASCII`. For a `char`
+  type of length N the decoder has `String <field>()`, the bytes up to the
+  first NUL in the type's charset, `byte <field>(int index)`,
+  `get<Field>(byte[] dst, int dstOffset)` copying N bytes, and the static
+  `<field>Length()` and `<field>CharacterEncoding()`; below the acting
+  version they return `""`, the null value and `0`. The encoder has
+  `<field>(String)`, which pads with NUL, takes `null` as empty and throws
+  `IndexOutOfBoundsException` over N, and `put<Field>(byte[] src, int
+  srcOffset)` copying exactly N. For an ASCII encoding,
+  `JavaUtil.isAsciiEncoding`, the string form goes through Agrona's
+  `putStringWithoutLengthAscii`; for any other through `String.getBytes`.
+  (`EncodedDataType.java` and `JavaGenerator.java`,
+  `generatePrimitiveArrayPropertyDecode` and
+  `generateCharArrayEncodeMethods`, read 2026-09-22.)
+* Agrona's `putStringWithoutLengthAscii(int, String)` writes `?` for a char
+  above 127. (`javap -c` of `AbstractMutableDirectBuffer` in the 2.6.1 jar,
+  which compares each char with 127 and stores 63 otherwise, 2026-09-22.)
+* For an array of any other primitive the decoder has `<face> <field>(int
+  index)` and the encoder `<field>(int index, <face> value)`, both bounds
+  checked, with the static `<field>Length()`; `uint8` alone adds
+  `get<Field>(byte[] dst, int dstOffset, int length)`, copying at most N,
+  and `put<Field>(byte[] src, int srcOffset, int length)`, zero-padding and
+  throwing `IllegalStateException` over N; lengths 2 to 4 add
+  `put<Field>(v0, v1, ...)`. Below the acting version the index getter
+  returns the null value and the bulk getter copies nothing.
+  (`JavaGenerator.java`, `generatePrimitiveArrayPropertyEncode` and
+  `generateByteArrayEncodeMethods`, read 2026-09-22.)
+* A constant field's type token has size 0, so it is outside
+  `BLOCK_LENGTH`, and `constValue`, the type's own or the `valueRef`'s
+  valid value. Both flyweights carry the getter and the encoder no setter:
+  `<face> <field>()` returning the literal; for `char` of length 1 a
+  `byte`; for `char` longer, `constValue().byteArrayValue(CHAR).length > 1`,
+  a `String` beside the index getter, `get<Field>(byte[], int, int)` and
+  `<field>Length()`. A constant `char` value longer than one character
+  without a `length` takes the value's length. A constant enum field has
+  `<field>Raw()` returning `<Enum>.<Value>.value()` and `<field>()`
+  returning the flyweight's constant, and no encoder method. The field
+  token of a `valueRef` constant carries the reference's text, `Side.Sell`,
+  as a `char` value. (`JavaGenerator.java`, `generateConstPropertyMethods`,
+  `generateEnumDecoder` and `generateEnumEncoder`, `IrGenerator.java`,
+  `addFieldSignal`, and `EncodedDataType.java`, `processConstantChar`, read
+  2026-09-22.)
+* A field with `presence="constant"` whose type is not constant and that
+  has no `valueRef` passes every parser rule and throws
+  `IllegalStateException("type is not of constant presence")` from
+  `EncodedDataType.constVal()` inside `IrGenerator`. (`IrGenerator.java`,
+  `add(EncodedDataType, int, Field)`, read 2026-09-22.)
+* A field named `range` draws `name is not valid for Golang: range`, a
+  warning, which `warningsFatal` makes an error. (The `Arrays` corpus case,
+  2026-09-22.)
 * `SbeTool.main` takes schema files as arguments, reads `sbe.output.dir`,
   `sbe.target.namespace`, `sbe.validation.stop.on.error` and
   `sbe.validation.warnings.fatal` from system properties, writes Java

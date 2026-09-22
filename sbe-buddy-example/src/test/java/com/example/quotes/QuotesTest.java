@@ -22,13 +22,18 @@ import com.example.quotes.sbe.MessageHeaderEncoder;
  * The codec seen working in the real build: a record goes onto the wire through
  * the generated codec and comes back equal, at an offset, with every length the
  * contract promises agreeing, with and without its optional field; what it
- * refuses, it refuses with the exception the contract names.
+ * refuses, it refuses with the exception the contract names: a string that does
+ * not fit, an array of the wrong length, a constant the record disagrees with.
  */
 final class QuotesTest {
 
 	private static final String RESOURCE = "/com/example/quotes/schema.xml";
 
 	private static final int OFFSET = 16;
+
+	private static final byte EXPONENT = -4;
+
+	private static final long[] DEPTH = {4_000_000_000L, 900, 800, 700, 600};
 
 	@Test
 	void theSchemaInTheJarIsTheOracle() throws IOException {
@@ -44,7 +49,7 @@ final class QuotesTest {
 		assertRoundTrip(
 				new Quote(
 						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED)
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH
 				)
 		);
 	}
@@ -52,7 +57,10 @@ final class QuotesTest {
 	@Test
 	void aQuoteWithoutAVwapAndWithoutFlagsRoundTrips() {
 		assertRoundTrip(
-				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of())
+				new Quote(
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of(), "",
+						EXPONENT, new long[5]
+				)
 		);
 	}
 
@@ -60,7 +68,10 @@ final class QuotesTest {
 	void aNullVenueIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		Quote quote = new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of());
+		Quote quote = new Quote(
+				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
+				DEPTH
+		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -72,7 +83,8 @@ final class QuotesTest {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
-				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of()
+				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of(), "ACME",
+				EXPONENT, DEPTH
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
@@ -81,15 +93,66 @@ final class QuotesTest {
 	}
 
 	@Test
+	void aSymbolLongerThanItsFieldIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = quoteWith("LONGNAME1", EXPONENT, DEPTH);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("symbol is longer than 8: LONGNAME1");
+	}
+
+	@Test
+	void aSymbolOutsideAsciiIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = quoteWith("ACMÉ", EXPONENT, DEPTH);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("symbol is not ASCII: ACMÉ");
+	}
+
+	@Test
+	void aDepthOfTheWrongLengthIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = quoteWith("ACME", EXPONENT, new long[4]);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("bidDepth must be 5 long, not 4");
+	}
+
+	@Test
+	void anExponentOtherThanTheConstantIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = quoteWith("ACME", (byte) -2, DEPTH);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("priceExponent is the constant -4");
+	}
+
+	@Test
 	void anotherTemplateIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
-		codec.encode(new Quote(1, 2, 3, 4, 5, 6, null, Venue.XNAS, MarketState.OPEN, Set.of()), buffer, 0);
+		codec.encode(quoteWith("ACME", EXPONENT, DEPTH), buffer, 0);
 		new MessageHeaderEncoder().wrap(buffer, 0).templateId(99);
 
 		assertThatThrownBy(() -> codec.decode(buffer, 0))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("templateId 99");
+	}
+
+	private static Quote quoteWith(String symbol, byte priceExponent, long[] bidDepth) {
+		return new Quote(
+				42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), symbol,
+				priceExponent, bidDepth
+		);
 	}
 
 	private static void assertRoundTrip(Quote quote) {
@@ -100,7 +163,8 @@ final class QuotesTest {
 
 		assertThat(written).isEqualTo(codec.encodedLength(quote));
 		assertThat(codec.decodedLength(buffer, OFFSET)).isEqualTo(written);
-		assertThat(codec.decode(buffer, OFFSET)).isEqualTo(quote);
+		// An array component compares by identity in a record's own equals.
+		assertThat(codec.decode(buffer, OFFSET)).usingRecursiveComparison().isEqualTo(quote);
 		assertThat(codec.lastDecodedLength()).isEqualTo(written);
 	}
 }
