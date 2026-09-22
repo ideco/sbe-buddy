@@ -450,9 +450,19 @@ Reflection is banned in main code and free in tests.
   `<field>EncodingOffset()` and never a literal offset. The values are the
   edge cases, listed by hand: the null value on an optional field, an
   empty group and an empty set, a full-length string, the bounds of a
-  primitive. `XsdCoverageTest` lives here too, over every oracle. Surefire
-  reports each check by its phrase, the case's description, "checks", the
-  check's.
+  primitive. One case per XSD feature and one per shape worth taking from
+  sbe-tool's own test schemas, written fresh and never copied; once over
+  them, `XsdCoverageTest` asserts that every element and attribute
+  `sbe.xsd` declares occurs in some oracle, except an explicit list of
+  attributes the XSD declares and sbe-tool ignores, so completeness is a
+  test, not a claim. Surefire reports each check by its phrase, the
+  case's description, "checks", the check's.
+* **The model says what an annotation can say.** A String member is
+  absent only when empty, so `epoch="unix"` written is `epoch="unix"`
+  emitted, while an enum or int member left at the XSD's default,
+  `presence`, `length`, `byteOrder`, reaches the model as absent and the
+  XML omits it, the same document to any XSD-aware reader and the same
+  IR from sbe-tool; the oracles are written that way.
 * **The rules** are unit tests over `Annotated` or `Schema` inputs: build
   the mistake, assert the `Problem` and the node it names.
 * **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
