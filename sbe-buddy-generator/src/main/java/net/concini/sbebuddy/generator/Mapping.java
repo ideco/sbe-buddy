@@ -333,20 +333,22 @@ public final class Mapping {
 		if (field.javaType() instanceof Annotated.Unmapped) {
 			return;
 		}
+		Annotated.Binding binding = field.binding();
 		Annotated.Type named = namedType(field);
 		if (named != null && named.primitiveType() != PrimitiveType.NONE && length(named) > 1) {
 			String face = arrayFace(primitive(named.primitiveType()));
-			if (!javaTypeName(field.javaType()).equals(face)) {
+			String wireName = wireName(named.name(), named.javaName());
+			if (binding != null) {
+				if (!boxedName(binding.wire()).equals(face)) {
+					problem(field, bindsTheWireAs(binding) + ", but the face of " + wireName + " is " + face);
+				}
+			} else if (!javaTypeName(field.javaType()).equals(face)) {
 				problem(
-						field, javaTypeName(field.javaType()) + " is not the face of "
-								+ wireName(named.name(), named.javaName()) + ", which is " + face
+						field, javaTypeName(field.javaType()) + " is not the face of " + wireName + ", which is " + face
 				);
 			}
 			if (wirePresence(field) == Presence.OPTIONAL) {
-				problem(
-						field, wireName(named.name(), named.javaName())
-								+ " has a length; a field of it cannot be optional"
-				);
+				problem(field, wireName + " has a length; a field of it cannot be optional");
 			}
 			return;
 		}
@@ -355,13 +357,56 @@ public final class Mapping {
 			return;
 		}
 		String face = JavaUtil.javaTypeName(wire);
-		if (!javaTypeName(field.javaType()).equals(face)) {
+		if (binding != null) {
+			// A type argument is a reference type, so the binding sees the box.
+			if (!boxedName(binding.wire()).equals(box(face))) {
+				problem(
+						field,
+						bindsTheWireAs(binding) + ", but the face of " + wire.primitiveName() + " is " + box(face)
+				);
+			}
+		} else if (!javaTypeName(field.javaType()).equals(face)) {
 			problem(
 					field,
 					javaTypeName(field.javaType()) + " is not the face of " + wire.primitiveName() + ", which is "
 							+ face
 			);
 		}
+	}
+
+	private static String declarationName(Annotated.Declaration declaration) {
+		return switch (declaration) {
+			case Annotated.Type type -> type.javaName();
+			case Annotated.Composite composite -> composite.javaName();
+			case Annotated.Enum enumeration -> enumeration.javaName();
+			case Annotated.Set set -> set.javaName();
+		};
+	}
+
+	private static String bindsTheWireAs(Annotated.Binding binding) {
+		String simpleName = binding.qualifiedName().substring(binding.qualifiedName().lastIndexOf('.') + 1);
+		return simpleName + " binds the wire as " + boxedName(binding.wire());
+	}
+
+	/** A binding's {@code W} as code names it: a primitive by its box. */
+	private static String boxedName(Annotated.JavaType javaType) {
+		return javaType instanceof Annotated.Primitive primitive
+				? box(primitive.kind().name().toLowerCase(Locale.ROOT))
+				: javaTypeName(javaType);
+	}
+
+	private static String box(String primitive) {
+		return switch (primitive) {
+			case "byte" -> "Byte";
+			case "short" -> "Short";
+			case "int" -> "Integer";
+			case "long" -> "Long";
+			case "float" -> "Float";
+			case "double" -> "Double";
+			case "char" -> "Character";
+			case "boolean" -> "Boolean";
+			default -> primitive;
+		};
 	}
 
 	private static String javaTypeName(Annotated.JavaType javaType) {
@@ -424,6 +469,10 @@ public final class Mapping {
 			return;
 		}
 		Annotated.Declaration wire = field.type() != null ? field.type() : declarationOf(field.javaType());
+		if ((wire instanceof Annotated.Enum || wire instanceof Annotated.Set) && field.binding() != null) {
+			String kind = wire instanceof Annotated.Enum ? "an enum" : "a set";
+			problem(field, declarationName(wire) + " is " + kind + "; a field of it takes no binding");
+		}
 		if (wire instanceof Annotated.Enum enumeration
 				&& !(field.javaType() instanceof Annotated.Declared declared
 						&& declared.declaration() == enumeration)) {

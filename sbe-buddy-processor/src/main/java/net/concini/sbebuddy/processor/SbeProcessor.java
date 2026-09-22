@@ -84,7 +84,8 @@ public final class SbeProcessor extends AbstractProcessor {
 			}
 			return;
 		}
-		Discovery.Discovered discovered = Discovery.discover(schemaPackage, processingEnv.getElementUtils());
+		Discovery.Discovered discovered = Discovery
+				.discover(schemaPackage, processingEnv.getElementUtils(), processingEnv.getTypeUtils());
 		if (!discovered.problems().isEmpty()) {
 			report(discovered.problems(), discovered, null, schemaPackage);
 			return;

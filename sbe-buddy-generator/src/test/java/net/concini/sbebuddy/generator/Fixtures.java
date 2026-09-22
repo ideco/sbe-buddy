@@ -1284,6 +1284,7 @@ public final class Fixtures {
 		private String description = "";
 		private int sinceVersion;
 		private int deprecated;
+		private Annotated.@Nullable Binding binding;
 		private Annotated.@Nullable Field built;
 
 		private AnnotatedFieldBuilder(String javaName, int id, Annotated.JavaType javaType) {
@@ -1352,13 +1353,18 @@ public final class Fixtures {
 			return this;
 		}
 
+		public AnnotatedFieldBuilder binding(String qualifiedName, Annotated.JavaType wire) {
+			this.binding = new Annotated.Binding(qualifiedName, wire);
+			return this;
+		}
+
 		@Override
 		public Annotated.Field build() {
 			if (built == null) {
 				built = new Annotated.Field(
 						javaName, javaType, id, type, apiPrimitive(primitiveType), name,
 						apiPresence(presence), valueRef,
-						offset, epoch, timeUnit, semanticType, description, sinceVersion, deprecated
+						offset, epoch, timeUnit, semanticType, description, sinceVersion, deprecated, binding
 				);
 			}
 			return built;

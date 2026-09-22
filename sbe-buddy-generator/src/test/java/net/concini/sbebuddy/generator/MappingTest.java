@@ -16,6 +16,7 @@ import static net.concini.sbebuddy.generator.Fixtures.array;
 import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.bytes;
 import static net.concini.sbebuddy.generator.Fixtures.declared;
+import static net.concini.sbebuddy.generator.Fixtures.other;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.setOf;
 import static net.concini.sbebuddy.generator.Fixtures.text;
@@ -323,6 +324,41 @@ final class MappingTest {
 				.containsExactly(new Problem(bare.build(), "a constant field needs a valueRef or a constant type"));
 		assertThat(problemsOf(referring)).isEmpty();
 		assertThat(problemsOf(typed)).isEmpty();
+	}
+
+	@Test
+	void aBindingHandsTheFlyweightTheFaceBoxed() {
+		Fixtures.AnnotatedFieldBuilder narrow = annotatedField("fee", 1, other("java.math.BigDecimal"))
+				.primitiveType(PrimitiveType.INT32)
+				.binding("p.CentsBinding", boxed(LONG));
+		Fixtures.AnnotatedFieldBuilder symbol = annotatedField("symbol", 1, other("p.Ticker"))
+				.type(annotatedType("Symbol", PrimitiveType.CHAR).length(6))
+				.binding("p.CentsBinding", boxed(LONG));
+		Fixtures.AnnotatedFieldBuilder fee = annotatedField("fee", 1, other("java.math.BigDecimal"))
+				.primitiveType(PrimitiveType.INT64)
+				.binding("p.CentsBinding", boxed(LONG));
+		Fixtures.AnnotatedFieldBuilder colour = annotatedField("colour", 1, other("p.Colour"))
+				.type(annotatedType("Rgb", PrimitiveType.UINT8).length(3))
+				.binding("p.ColourBinding", bytes());
+
+		assertThat(problemsOf(narrow)).containsExactly(
+				new Problem(narrow.build(), "CentsBinding binds the wire as Long, but the face of int32 is Integer")
+		);
+		assertThat(problemsOf(symbol)).containsExactly(
+				new Problem(symbol.build(), "CentsBinding binds the wire as Long, but the face of Symbol is String")
+		);
+		assertThat(problemsOf(fee)).isEmpty();
+		assertThat(problemsOf(colour)).isEmpty();
+	}
+
+	@Test
+	void aFieldOfAnEnumOrASetTakesNoBinding() {
+		Fixtures.AnnotatedEnumBuilder side = annotatedEnum("Side").primitiveType(PrimitiveType.UINT8);
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("side", 1, declared(side))
+				.binding("p.SideBinding", boxed(SHORT));
+
+		assertThat(problemsOf(field))
+				.containsExactly(new Problem(field.build(), "Side is an enum; a field of it takes no binding"));
 	}
 
 	@Test

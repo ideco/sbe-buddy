@@ -13,15 +13,19 @@ import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.RecordComponentElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
 
 import org.jspecify.annotations.Nullable;
 
@@ -70,18 +74,20 @@ public final class Discovery {
 	private static final String API_PACKAGE = "net.concini.sbebuddy";
 
 	private final Elements elements;
+	private final Types types;
 	private final List<Problem> problems = new ArrayList<>();
 	private final Map<Object, Element> origins = new IdentityHashMap<>();
 	private final Map<Object, AnnotationMirror> mirrors = new IdentityHashMap<>();
 	private final Map<TypeElement, Annotated.Declaration> declarations = new HashMap<>();
 
-	private Discovery(Elements elements) {
+	private Discovery(Elements elements, Types types) {
 		this.elements = elements;
+		this.types = types;
 	}
 
 	/** The package must carry {@code @SbeSchema}; the processor checks first. */
-	public static Discovered discover(PackageElement schemaPackage, Elements elements) {
-		Discovery discovery = new Discovery(elements);
+	public static Discovered discover(PackageElement schemaPackage, Elements elements, Types types) {
+		Discovery discovery = new Discovery(elements, types);
 		Annotated annotated = discovery.schema(schemaPackage);
 		return new Discovered(
 				annotated, List.copyOf(discovery.problems), Collections.unmodifiableMap(discovery.origins),
@@ -182,6 +188,13 @@ public final class Discovery {
 			return known;
 		}
 		String javaName = type.getSimpleName().toString();
+		if (isDeclaration(type) && toWire(type) != null) {
+			problem(
+					type,
+					type.getQualifiedName()
+							+ " declares a type and implements TypeBinding; a binding is a class of its own"
+			);
+		}
 		Annotated.Declaration declaration;
 		if (has(type, SbeType.class)) {
 			declaration = type(type, javaName);
@@ -509,10 +522,95 @@ public final class Discovery {
 				field.string("semanticType"),
 				field.string("description"),
 				field.integer("sinceVersion"),
-				field.integer("deprecated")
+				field.integer("deprecated"),
+				binding(field, javaType, at)
 		);
 		remember(result, at, field.mirror);
 		return result;
+	}
+
+	/**
+	 * The field's binding, checked as far as javac can: a class of its own, not a
+	 * declaration, concrete, constructible without arguments from the schema
+	 * package, a {@code TypeBinding} whose {@code J} is the component's type, where
+	 * a primitive component matches its box. {@code W} goes down as a Java type for
+	 * the face rule.
+	 */
+	private Annotated.@Nullable Binding binding(Members field, Annotated.JavaType javaType, Element at) {
+		TypeElement type = field.type("binding");
+		if (type == null) {
+			return null;
+		}
+		String name = type.getQualifiedName().toString();
+		if (javaType instanceof Annotated.Unmapped) {
+			problem(at, "an unmapped field has no component to bind");
+			return null;
+		}
+		if (isDeclaration(type)) {
+			problem(at, name + " is a declaration; a binding is a class of its own");
+			return null;
+		}
+		ExecutableType toWire = toWire(type);
+		if (toWire == null) {
+			problem(at, name + " does not implement TypeBinding");
+			return null;
+		}
+		if (type.getModifiers().contains(Modifier.ABSTRACT)) {
+			problem(at, name + " is abstract");
+		}
+		if (!constructible(type, at)) {
+			problem(at, name + " needs a no-arg constructor the schema package can call");
+		}
+		TypeMirror bound = toWire.getParameterTypes().get(0);
+		TypeMirror component = at.asType();
+		// javac's PrimitiveType, qualified beside the api's.
+		boolean boxed = component.getKind().isPrimitive()
+				&& types.isSameType(bound, types.boxedClass((javax.lang.model.type.PrimitiveType) component).asType());
+		if (!types.isSameType(bound, component) && !boxed) {
+			problem(at, name + " binds " + bound + ", not " + component);
+		}
+		return new Annotated.Binding(name, javaType(toWire.getReturnType()));
+	}
+
+	/**
+	 * {@code TypeBinding.toWire} as the class implements it, its type arguments
+	 * substituted, or null for a class that is no {@code TypeBinding}.
+	 */
+	private @Nullable ExecutableType toWire(TypeElement type) {
+		TypeElement typeBinding = elements.getTypeElement(API_PACKAGE + ".TypeBinding");
+		if (typeBinding == null) {
+			throw new IllegalStateException("the api's TypeBinding is not on the classpath");
+		}
+		if (!types.isSubtype(types.erasure(type.asType()), types.erasure(typeBinding.asType()))) {
+			return null;
+		}
+		for (ExecutableElement method : ElementFilter.methodsIn(typeBinding.getEnclosedElements())) {
+			if (method.getSimpleName().contentEquals("toWire")) {
+				return (ExecutableType) types.asMemberOf((DeclaredType) type.asType(), method);
+			}
+		}
+		throw new IllegalStateException("the api's TypeBinding has no toWire");
+	}
+
+	/**
+	 * The codec, in the schema package, says {@code new X()}: a no-arg constructor
+	 * that is not private, and public with its class when the class lives
+	 * elsewhere.
+	 */
+	private boolean constructible(TypeElement type, Element at) {
+		boolean samePackage = elements.getPackageOf(type).equals(elements.getPackageOf(at));
+		if (!samePackage && !type.getModifiers().contains(Modifier.PUBLIC)) {
+			return false;
+		}
+		for (ExecutableElement constructor : ElementFilter.constructorsIn(type.getEnclosedElements())) {
+			if (!constructor.getParameters().isEmpty() || constructor.getModifiers().contains(Modifier.PRIVATE)) {
+				continue;
+			}
+			if (samePackage || constructor.getModifiers().contains(Modifier.PUBLIC)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private Annotated.Group group(RecordComponentElement component) {

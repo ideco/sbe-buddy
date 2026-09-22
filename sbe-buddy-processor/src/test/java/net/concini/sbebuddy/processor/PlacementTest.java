@@ -161,6 +161,103 @@ final class PlacementTest {
 	}
 
 	@Test
+	void discoveryNamesTheComponentWhoseBindingIsNoTypeBinding() {
+		String source = """
+				package placement;
+
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+
+				final class NotABinding {
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1, binding = NotABinding.class) long price
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(result, source, "long price", "placement.NotABinding does not implement TypeBinding");
+	}
+
+	@Test
+	void discoveryNamesTheComponentWhoseBindingBindsAnotherType() {
+		String source = """
+				package placement;
+
+				import java.math.BigDecimal;
+
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.TypeBinding;
+
+				final class CentsBinding implements TypeBinding<BigDecimal, Long> {
+
+					public Long toWire(BigDecimal value) {
+						return value.movePointRight(2).longValueExact();
+					}
+
+					public BigDecimal fromWire(Long wire) {
+						return BigDecimal.valueOf(wire, 2);
+					}
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1, binding = CentsBinding.class) long price
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(result, source, "long price", "placement.CentsBinding binds java.math.BigDecimal, not long");
+	}
+
+	@Test
+	void discoveryNamesTheDeclarationThatImplementsTypeBinding() {
+		String source = """
+				package placement;
+
+				import static net.concini.sbebuddy.PrimitiveType.INT64;
+
+				import java.math.BigDecimal;
+
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.SbeType;
+				import net.concini.sbebuddy.TypeBinding;
+
+				@SbeType(primitiveType = INT64) final class Cents implements TypeBinding<BigDecimal, Long> {
+
+					public Long toWire(BigDecimal value) {
+						return value.movePointRight(2).longValueExact();
+					}
+
+					public BigDecimal fromWire(Long wire) {
+						return BigDecimal.valueOf(wire, 2);
+					}
+				}
+
+				@SbeMessage(id = 1)
+				record Order(
+						@SbeField(id = 1, type = Cents.class) long price
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(
+				result, source, "final class Cents",
+				"placement.Cents declares a type and implements TypeBinding; a binding is a class of its own"
+		);
+	}
+
+	@Test
 	void mappingNamesTheComponentWhoseTypeMapsToNothing() {
 		String source = """
 				package placement;
