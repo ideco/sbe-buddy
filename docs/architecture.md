@@ -117,7 +117,8 @@ Three layers, in the order a mistake meets them.
   on anything but an enum constant, `@SbeChoice` outside a set, `@UnknownValue` beside
   `@SbeEnumValue`, twice in one enum or on a set's constant, a `Class`
   member naming a type that carries no declaration annotation, a `List<E>`
-  whose `E` is not a record, a `binding` that is no `TypeBinding`, is
+  whose `E` is not a record, a `binding` that is neither a `TypeBinding`
+  nor one of its primitive specializations, is
   abstract, has no no-arg constructor the schema package can call, is a
   declaration or binds a
   `J` that is not the component's type, a declaration that implements
@@ -137,8 +138,9 @@ Three layers, in the order a mistake meets them.
   `char` and the element's array otherwise, `presence = OPTIONAL` on a
   field of such a type, a constant field with neither a `valueRef` nor a
   constant type, which sbe-tool's IR generator crashes on, a binding whose
-  `W` is not the face of the field's wire type, boxed, or on a field of an
-  enum or a set, an
+  interface is not the face's, the primitive specialization for a
+  primitive face and the generic interface for a reference one, or on a
+  field of an enum or a set, an
   unmapped field without a `name` or a type, unmapped fields without a
   `layout`, and a `layout` that misses a name, repeats one or names
   nothing, or a name that is both a component's and an unmapped field's.

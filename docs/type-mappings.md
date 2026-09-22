@@ -185,9 +185,14 @@ public interface TypeBinding<J, W> { W toWire(J value); J fromWire(W wire); }
 
 `@SbeField(binding = X.class)` names a stateless binding with a no-arg
 constructor the schema package can call, public when the class lives
-elsewhere; `J` is the component type, `W` the face of the field's
-SBE type, boxed where the face is a primitive. A binding is a class of its
-own: a declaration never implements `TypeBinding`, and a binding never
+elsewhere; `J` is the component type, and the face of the field's SBE type
+decides the interface: a primitive face takes its specialization,
+`TypeBinding.OfLong<J>` with `long toWire(J)` and `J fromWire(long)` for
+`int64`, `uint64` and `uint32`, `OfInt` for `int32` and `uint16`, `OfShort`
+for `int16` and `uint8`, `OfByte` for `int8` and `char`, `OfFloat` and
+`OfDouble`, so nothing is boxed on the way; a reference face, a `String` or
+an array, takes `TypeBinding<J, W>` with the face as `W`. A binding is a
+class of its own: a declaration never implements `TypeBinding`, and a binding never
 carries a declaration annotation, so what is schema and what is Java stay
 apart, and the field alone says which binding it wants over which wire. A
 binding may check a schema attribute it depends on (`timeUnit`,
@@ -279,8 +284,8 @@ final class Symbol {}
 @SbeType(primitiveType = INT64)
 final class Cents {}
 
-final class CentsBinding implements TypeBinding<BigDecimal, Long> {
-    public Long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
-    public BigDecimal fromWire(Long wire) { return BigDecimal.valueOf(wire, 2); }
+final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
+    public long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
+    public BigDecimal fromWire(long wire) { return BigDecimal.valueOf(wire, 2); }
 }
 ```

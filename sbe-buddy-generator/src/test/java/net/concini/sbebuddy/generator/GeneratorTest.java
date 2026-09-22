@@ -7,7 +7,6 @@ import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
-import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
@@ -217,9 +216,9 @@ final class GeneratorTest {
 				.messages(
 						annotatedMessage("M", 1).components(
 								annotatedField("fee", 1, other("java.math.BigDecimal")).primitiveType(INT64)
-										.binding("a.Cents", boxed(LONG)),
+										.binding("a.Cents", primitive(LONG)),
 								annotatedField("tax", 2, other("java.math.BigDecimal")).primitiveType(INT64)
-										.binding("b.Cents", boxed(LONG))
+										.binding("b.Cents", primitive(LONG))
 						)
 				)
 				.build();

@@ -532,9 +532,10 @@ public final class Discovery {
 	/**
 	 * The field's binding, checked as far as javac can: a class of its own, not a
 	 * declaration, concrete, constructible without arguments from the schema
-	 * package, a {@code TypeBinding} whose {@code J} is the component's type, where
-	 * a primitive component matches its box. {@code W} goes down as a Java type for
-	 * the face rule.
+	 * package, a {@code TypeBinding} or one of its specializations whose {@code J}
+	 * is the component's type, where a primitive component matches its box. The
+	 * face it binds goes down as a Java type for the face rule, a primitive unboxed
+	 * for a specialization.
 	 */
 	private Annotated.@Nullable Binding binding(Members field, Annotated.JavaType javaType, Element at) {
 		TypeElement type = field.type("binding");
@@ -552,7 +553,7 @@ public final class Discovery {
 		}
 		ExecutableType toWire = toWire(type);
 		if (toWire == null) {
-			problem(at, name + " does not implement TypeBinding");
+			problem(at, name + " implements neither TypeBinding nor one of its specializations");
 			return null;
 		}
 		if (type.getModifiers().contains(Modifier.ABSTRACT)) {
@@ -572,24 +573,34 @@ public final class Discovery {
 		return new Annotated.Binding(name, javaType(toWire.getReturnType()));
 	}
 
+	private static final List<String> BINDING_INTERFACES = List.of(
+			"TypeBinding", "TypeBinding.OfByte", "TypeBinding.OfShort", "TypeBinding.OfInt", "TypeBinding.OfLong",
+			"TypeBinding.OfFloat", "TypeBinding.OfDouble"
+	);
+
 	/**
-	 * {@code TypeBinding.toWire} as the class implements it, its type arguments
-	 * substituted, or null for a class that is no {@code TypeBinding}.
+	 * {@code toWire} as the class implements it, from whichever of
+	 * {@code TypeBinding} and its specializations the class implements, its type
+	 * arguments substituted: the parameter is {@code J}, the return type the face
+	 * it binds; null for a class that implements none.
 	 */
 	private @Nullable ExecutableType toWire(TypeElement type) {
-		TypeElement typeBinding = elements.getTypeElement(API_PACKAGE + ".TypeBinding");
-		if (typeBinding == null) {
-			throw new IllegalStateException("the api's TypeBinding is not on the classpath");
-		}
-		if (!types.isSubtype(types.erasure(type.asType()), types.erasure(typeBinding.asType()))) {
-			return null;
-		}
-		for (ExecutableElement method : ElementFilter.methodsIn(typeBinding.getEnclosedElements())) {
-			if (method.getSimpleName().contentEquals("toWire")) {
-				return (ExecutableType) types.asMemberOf((DeclaredType) type.asType(), method);
+		for (String name : BINDING_INTERFACES) {
+			TypeElement binding = elements.getTypeElement(API_PACKAGE + "." + name);
+			if (binding == null) {
+				throw new IllegalStateException("the api's " + name + " is not on the classpath");
 			}
+			if (!types.isSubtype(types.erasure(type.asType()), types.erasure(binding.asType()))) {
+				continue;
+			}
+			for (ExecutableElement method : ElementFilter.methodsIn(binding.getEnclosedElements())) {
+				if (method.getSimpleName().contentEquals("toWire")) {
+					return (ExecutableType) types.asMemberOf((DeclaredType) type.asType(), method);
+				}
+			}
+			throw new IllegalStateException("the api's " + name + " has no toWire");
 		}
-		throw new IllegalStateException("the api's TypeBinding has no toWire");
+		return null;
 	}
 
 	/**

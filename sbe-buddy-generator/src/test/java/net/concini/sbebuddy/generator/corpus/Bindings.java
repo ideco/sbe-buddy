@@ -5,13 +5,13 @@ import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
-import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.bytes;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
 import static net.concini.sbebuddy.generator.Fixtures.other;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.text;
 import static net.concini.sbebuddy.generator.Fixtures.type;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
@@ -24,10 +24,11 @@ import net.concini.sbebuddy.generator.Fixtures.AnnotatedTypeBuilder;
 import net.concini.sbebuddy.generator.Schema;
 
 /**
- * Bindings between a record's own types and the wire's faces: a binding shared
- * by a named type and a bare primitive, one over an optional field, one to a
- * wrapper record over a string and one to a record over a byte array. The
- * oracle is what the same schema writes without any of them.
+ * Bindings between a record's own types and the wire's faces: a specialization
+ * over a primitive face, shared by a named type and a bare primitive and over
+ * an optional field, and the generic interface over a string, to a wrapper
+ * record, and over a byte array, to a record. The oracle is what the same
+ * schema writes without any of them.
  */
 final class Bindings {
 
@@ -57,13 +58,13 @@ final class Bindings {
 			final class Cents {
 			}
 
-			final class CentsBinding implements TypeBinding<BigDecimal, Long> {
+			final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
 
-				public Long toWire(BigDecimal value) {
+				public long toWire(BigDecimal value) {
 					return value.movePointRight(2).longValueExact();
 				}
 
-				public BigDecimal fromWire(Long wire) {
+				public BigDecimal fromWire(long wire) {
 					return BigDecimal.valueOf(wire, 2);
 				}
 			}
@@ -282,12 +283,12 @@ final class Bindings {
 				.messages(
 						annotatedMessage("Bindings", 1).components(
 								annotatedField("price", 1, other("java.math.BigDecimal")).type(cents)
-										.binding("corpus.bindings.CentsBinding", boxed(LONG)),
+										.binding("corpus.bindings.CentsBinding", primitive(LONG)),
 								annotatedField("fee", 2, other("java.math.BigDecimal")).primitiveType(INT64)
-										.binding("corpus.bindings.CentsBinding", boxed(LONG)),
+										.binding("corpus.bindings.CentsBinding", primitive(LONG)),
 								annotatedField("rebate", 3, other("java.math.BigDecimal")).primitiveType(INT64)
 										.presence(OPTIONAL)
-										.binding("corpus.bindings.CentsBinding", boxed(LONG)),
+										.binding("corpus.bindings.CentsBinding", primitive(LONG)),
 								annotatedField("symbol", 4, other("corpus.bindings.Ticker")).type(symbol)
 										.binding("corpus.bindings.TickerBinding", text()),
 								annotatedField("colour", 5, other("corpus.bindings.Colour")).type(rgb)

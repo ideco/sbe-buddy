@@ -180,7 +180,10 @@ final class PlacementTest {
 
 		Javac.Result result = compile(source);
 
-		assertOnlyError(result, source, "long price", "placement.NotABinding does not implement TypeBinding");
+		assertOnlyError(
+				result, source, "long price",
+				"placement.NotABinding implements neither TypeBinding nor one of its specializations"
+		);
 	}
 
 	@Test
@@ -194,13 +197,13 @@ final class PlacementTest {
 				import net.concini.sbebuddy.SbeMessage;
 				import net.concini.sbebuddy.TypeBinding;
 
-				final class CentsBinding implements TypeBinding<BigDecimal, Long> {
+				final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
 
-					public Long toWire(BigDecimal value) {
+					public long toWire(BigDecimal value) {
 						return value.movePointRight(2).longValueExact();
 					}
 
-					public BigDecimal fromWire(Long wire) {
+					public BigDecimal fromWire(long wire) {
 						return BigDecimal.valueOf(wire, 2);
 					}
 				}

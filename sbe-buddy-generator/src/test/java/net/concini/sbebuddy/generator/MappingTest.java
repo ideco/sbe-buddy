@@ -327,25 +327,40 @@ final class MappingTest {
 	}
 
 	@Test
-	void aBindingHandsTheFlyweightTheFaceBoxed() {
+	void theFaceDecidesTheBindingsInterface() {
 		Fixtures.AnnotatedFieldBuilder narrow = annotatedField("fee", 1, other("java.math.BigDecimal"))
 				.primitiveType(PrimitiveType.INT32)
+				.binding("p.CentsBinding", primitive(LONG));
+		Fixtures.AnnotatedFieldBuilder generic = annotatedField("fee", 1, other("java.math.BigDecimal"))
+				.primitiveType(PrimitiveType.INT64)
 				.binding("p.CentsBinding", boxed(LONG));
 		Fixtures.AnnotatedFieldBuilder symbol = annotatedField("symbol", 1, other("p.Ticker"))
 				.type(annotatedType("Symbol", PrimitiveType.CHAR).length(6))
-				.binding("p.CentsBinding", boxed(LONG));
+				.binding("p.CentsBinding", primitive(LONG));
 		Fixtures.AnnotatedFieldBuilder fee = annotatedField("fee", 1, other("java.math.BigDecimal"))
 				.primitiveType(PrimitiveType.INT64)
-				.binding("p.CentsBinding", boxed(LONG));
+				.binding("p.CentsBinding", primitive(LONG));
 		Fixtures.AnnotatedFieldBuilder colour = annotatedField("colour", 1, other("p.Colour"))
 				.type(annotatedType("Rgb", PrimitiveType.UINT8).length(3))
 				.binding("p.ColourBinding", bytes());
 
 		assertThat(problemsOf(narrow)).containsExactly(
-				new Problem(narrow.build(), "CentsBinding binds the wire as Long, but the face of int32 is Integer")
+				new Problem(
+						narrow.build(),
+						"CentsBinding binds the wire as long, but the face of int32 is int; implement TypeBinding.OfInt"
+				)
+		);
+		assertThat(problemsOf(generic)).containsExactly(
+				new Problem(
+						generic.build(),
+						"CentsBinding binds the wire as Long, but the face of int64 is long; implement TypeBinding.OfLong"
+				)
 		);
 		assertThat(problemsOf(symbol)).containsExactly(
-				new Problem(symbol.build(), "CentsBinding binds the wire as Long, but the face of Symbol is String")
+				new Problem(
+						symbol.build(),
+						"CentsBinding binds the wire as long, but the face of Symbol is String; implement TypeBinding over String"
+				)
 		);
 		assertThat(problemsOf(fee)).isEmpty();
 		assertThat(problemsOf(colour)).isEmpty();
@@ -355,7 +370,7 @@ final class MappingTest {
 	void aFieldOfAnEnumOrASetTakesNoBinding() {
 		Fixtures.AnnotatedEnumBuilder side = annotatedEnum("Side").primitiveType(PrimitiveType.UINT8);
 		Fixtures.AnnotatedFieldBuilder field = annotatedField("side", 1, declared(side))
-				.binding("p.SideBinding", boxed(SHORT));
+				.binding("p.SideBinding", primitive(SHORT));
 
 		assertThat(problemsOf(field))
 				.containsExactly(new Problem(field.build(), "Side is an enum; a field of it takes no binding"));

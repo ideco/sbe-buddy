@@ -2,7 +2,7 @@
 
 A binding lets a record hold a field as a type of its own rather than as the wire's face: a `BigDecimal` where the wire holds an `int64` mantissa, a `Ticker` record where it holds eight `char`. The binding is Java only. It contributes nothing to the schema, another reader never sees it, and the field alone says which binding it wants over which wire.
 
-## The interface
+## The interfaces
 
 ```java
 public interface TypeBinding<J, W> {
@@ -10,10 +10,21 @@ public interface TypeBinding<J, W> {
     W toWire(J value);
 
     J fromWire(W wire);
+
+    interface OfLong<J> {
+
+        long toWire(J value);
+
+        J fromWire(long wire);
+    }
+
+    // and OfByte, OfShort, OfInt, OfFloat, OfDouble in the same shape
 }
 ```
 
-`J` is the component's type. `W` is the face of the field's wire type, boxed where the face is a primitive, because a type argument is: `Long` for `int64`, `Integer` for `uint16`, `String` for a `char` type with a length, `byte[]` for a `uint8` array. A binding is stateless and has a no-arg constructor the schema package can call, public when the class lives elsewhere; the codec holds one instance of each binding class it uses.
+`J` is the component's type. The face of the field's wire type decides the interface. A primitive face takes its specialization, so nothing is boxed on the way: `OfLong` for `int64`, `uint64` and `uint32`, `OfInt` for `int32` and `uint16`, `OfShort` for `int16` and `uint8`, `OfByte` for `int8` and `char`, `OfFloat` and `OfDouble`. A reference face takes the generic interface with the face as `W`: `String` for a `char` type with a length, `byte[]` for a `uint8` array, `int[]` and the other arrays. An unsigned face is its bit pattern, as it is without a binding; the binding is where it becomes something else.
+
+A binding is stateless and has a no-arg constructor the schema package can call, public when the class lives elsewhere; the codec holds one instance of each binding class it uses.
 
 ## Declaring one
 
@@ -27,7 +38,7 @@ import java.math.RoundingMode;
 
 import net.concini.sbebuddy.TypeBinding;
 
-public final class Price implements TypeBinding<BigDecimal, Long> {
+public final class Price implements TypeBinding.OfLong<BigDecimal> {
 
     private static final int SCALE = 4;
 
@@ -35,12 +46,12 @@ public final class Price implements TypeBinding<BigDecimal, Long> {
     }
 
     @Override
-    public Long toWire(BigDecimal value) {
+    public long toWire(BigDecimal value) {
         return value.setScale(SCALE, RoundingMode.UNNECESSARY).unscaledValue().longValueExact();
     }
 
     @Override
-    public BigDecimal fromWire(Long wire) {
+    public BigDecimal fromWire(long wire) {
         return BigDecimal.valueOf(wire, SCALE);
     }
 }
@@ -100,9 +111,9 @@ The checks the codec makes on the wire's face still apply to what the binding ha
 
 ## What the compiler refuses
 
-* A `binding` class that does not implement `TypeBinding`, is abstract, or has no no-arg constructor the schema package can call.
+* A `binding` class that implements neither `TypeBinding` nor one of its specializations, is abstract, or has no no-arg constructor the schema package can call.
 * A `J` that is not the component's type. A primitive component matches its box.
-* A `W` that is not the face of the field's wire type: `CentsBinding binds the wire as Long, but the face of int32 is Integer`.
+* An interface that is not the face's: `Price binds the wire as int, but the face of int64 is long; implement TypeBinding.OfLong`, or the generic interface over a primitive face, which would box.
 * A binding on a field of an enum or a set, whose faces are the user's types already.
 * A binding on an `unmapped` field, which has no component to bind.
 * Two binding classes with one simple name in one message, since the codec names its instance after the class.

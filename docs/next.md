@@ -31,6 +31,12 @@ a `char` string's and an array's; composite faces come with composites.
   the field should decide, and it blurs what is schema and what is Java.
   `type-mappings.md`, its running example and `intent.md` change in this
   increment.
+- The face decides the interface. A primitive face takes a specialization
+  with primitive signatures, `TypeBinding.OfLong<J>` and the five others,
+  so no binding boxes on the way, which escape analysis would otherwise
+  have to remove and does not promise to; the generic `TypeBinding<J, W>`
+  serves the reference faces, a `String` or an array. The generated code
+  is the same either way.
 - javac resolves a class's `TypeBinding` arguments through
   `Types.asMemberOf` on the interface's methods: the parameter type of
   `toWire` is J and its return type W, with the class's own type arguments
@@ -39,28 +45,30 @@ a `char` string's and an array's; composite faces come with composites.
 ## What gets built
 
 - **The api.** `TypeBinding<J, W>` with `W toWire(J value)` and
-  `J fromWire(W wire)`, documented as the contract: stateless, a public
-  no-arg constructor, never handed `null`. `Class<?> binding() default
-  void.class` on `@SbeField`, documented as the Java side.
+  `J fromWire(W wire)`, and nested in it `OfByte`, `OfShort`, `OfInt`,
+  `OfLong`, `OfFloat` and `OfDouble`, each with the primitive in place of
+  `W`; documented as the contract: stateless, a no-arg constructor the
+  schema package can call, never handed `null`. `Class<?> binding()
+  default void.class` on `@SbeField`, documented as the Java side.
 - **`Annotated`.** `Field` gains `binding`, a nullable `Binding(String
   qualifiedName, JavaType wire)`: the class code names, and W as the Java
   type descriptor the face rule compares. J is not carried, because only
   javac can compare it with the component; the corpus DSL gains
   `binding(name, wire)` on its field builder.
 - **The rules in `Discovery`,** on the component: the class implements
-  `TypeBinding`, is not abstract and has a no-arg constructor the schema
-  package can call; it
+  `TypeBinding` or one of its specializations, is not abstract and has a
+  no-arg constructor the schema package can call; it
   carries no declaration annotation, `Cents is a type; a binding is a class
   of its own`, and the reverse on the declaration, an `@SbeType`,
   `@SbeComposite`, `@SbeEnum` or `@SbeSet` class that implements
   `TypeBinding`; J is the component's type, where a primitive component
   matches its box, `CentsBinding binds BigDecimal, not long`. An unmapped
   field's `binding` is a problem too: nothing is read or written for it.
-- **The rules in `Mapping`.** W is the face of the field's wire type, boxed
-  where the face is a primitive because a type argument is: `Long` for
-  `int64`, `String` for a `char` type with a length, `byte[]` for a `uint8`
-  array: `CentsBinding binds the wire as Long, but the face of int32 is
-  Integer`. A binding on a field of an enum or a set is a problem, since
+- **The rules in `Mapping`.** The binding's interface is the face's: the
+  specialization of the primitive face, `long` for `int64`, or the generic
+  interface over the reference face, `String` for a `char` type with a
+  length, `byte[]` for a `uint8` array: `CentsBinding binds the wire as
+  long, but the face of int32 is int; implement TypeBinding.OfInt`. A binding on a field of an enum or a set is a problem, since
   their faces are the user's types already. The boxing rule reads the
   component as before, so a primitive J on a field that can be absent is
   refused as any primitive is; the face rule on the component yields to

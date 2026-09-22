@@ -11,7 +11,7 @@ import net.concini.sbebuddy.TypeBinding;
  * with more decimals than the exponent allows has no wire form, which
  * {@link BigDecimal#setScale} refuses with its own {@link ArithmeticException}.
  */
-public final class Price implements TypeBinding<BigDecimal, Long> {
+public final class Price implements TypeBinding.OfLong<BigDecimal> {
 
 	private static final int SCALE = 4;
 
@@ -19,12 +19,12 @@ public final class Price implements TypeBinding<BigDecimal, Long> {
 	}
 
 	@Override
-	public Long toWire(BigDecimal value) {
+	public long toWire(BigDecimal value) {
 		return value.setScale(SCALE, RoundingMode.UNNECESSARY).unscaledValue().longValueExact();
 	}
 
 	@Override
-	public BigDecimal fromWire(Long wire) {
+	public BigDecimal fromWire(long wire) {
 		return BigDecimal.valueOf(wire, SCALE);
 	}
 }

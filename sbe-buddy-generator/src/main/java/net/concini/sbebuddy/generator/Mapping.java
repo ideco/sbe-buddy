@@ -339,8 +339,11 @@ public final class Mapping {
 			String face = arrayFace(primitive(named.primitiveType()));
 			String wireName = wireName(named.name(), named.javaName());
 			if (binding != null) {
-				if (!boxedName(binding.wire()).equals(face)) {
-					problem(field, bindsTheWireAs(binding) + ", but the face of " + wireName + " is " + face);
+				if (!boundName(binding.wire()).equals(face)) {
+					problem(
+							field, bindsTheWireAs(binding) + ", but the face of " + wireName + " is " + face
+									+ "; implement TypeBinding over " + face
+					);
 				}
 			} else if (!javaTypeName(field.javaType()).equals(face)) {
 				problem(
@@ -358,11 +361,11 @@ public final class Mapping {
 		}
 		String face = JavaUtil.javaTypeName(wire);
 		if (binding != null) {
-			// A type argument is a reference type, so the binding sees the box.
-			if (!boxedName(binding.wire()).equals(box(face))) {
+			// A primitive face takes its specialization, so nothing is boxed on the way.
+			if (!boundName(binding.wire()).equals(face)) {
 				problem(
-						field,
-						bindsTheWireAs(binding) + ", but the face of " + wire.primitiveName() + " is " + box(face)
+						field, bindsTheWireAs(binding) + ", but the face of " + wire.primitiveName() + " is " + face
+								+ "; implement TypeBinding.Of" + box(face)
 				);
 			}
 		} else if (!javaTypeName(field.javaType()).equals(face)) {
@@ -385,26 +388,31 @@ public final class Mapping {
 
 	private static String bindsTheWireAs(Annotated.Binding binding) {
 		String simpleName = binding.qualifiedName().substring(binding.qualifiedName().lastIndexOf('.') + 1);
-		return simpleName + " binds the wire as " + boxedName(binding.wire());
+		return simpleName + " binds the wire as " + boundName(binding.wire());
 	}
 
-	/** A binding's {@code W} as code names it: a primitive by its box. */
-	private static String boxedName(Annotated.JavaType javaType) {
-		return javaType instanceof Annotated.Primitive primitive
-				? box(primitive.kind().name().toLowerCase(Locale.ROOT))
-				: javaTypeName(javaType);
+	/**
+	 * What a binding hands the flyweight, as code names it: a primitive for a
+	 * specialization, its box for the generic interface, the reference type
+	 * otherwise.
+	 */
+	private static String boundName(Annotated.JavaType javaType) {
+		if (javaType instanceof Annotated.Primitive primitive) {
+			String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
+			return primitive.boxed() ? box(plain) : plain;
+		}
+		return javaTypeName(javaType);
 	}
 
+	/** The specialization's name for a face, {@code Int} for {@code int}. */
 	private static String box(String primitive) {
 		return switch (primitive) {
 			case "byte" -> "Byte";
 			case "short" -> "Short";
-			case "int" -> "Integer";
+			case "int" -> "Int";
 			case "long" -> "Long";
 			case "float" -> "Float";
 			case "double" -> "Double";
-			case "char" -> "Character";
-			case "boolean" -> "Boolean";
 			default -> primitive;
 		};
 	}
