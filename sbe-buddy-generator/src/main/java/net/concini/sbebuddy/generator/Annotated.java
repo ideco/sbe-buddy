@@ -71,6 +71,10 @@ public record Annotated(
 	public record Bytes() implements JavaType {
 	}
 
+	/** An array of any other Java primitive, {@code int[]}, {@code long[]}. */
+	public record Array(JavaPrimitive kind) implements JavaType {
+	}
+
 	/** A declared type. */
 	public record Declared(Declaration declaration) implements JavaType {
 	}

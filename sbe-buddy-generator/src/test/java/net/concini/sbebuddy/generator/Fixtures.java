@@ -909,6 +909,10 @@ public final class Fixtures {
 		return new Annotated.Bytes();
 	}
 
+	public static Annotated.JavaType array(Annotated.JavaPrimitive kind) {
+		return new Annotated.Array(kind);
+	}
+
 	public static Annotated.JavaType declared(AnnotatedDeclarationBuilder declaration) {
 		return new Annotated.Declared(declaration.build());
 	}

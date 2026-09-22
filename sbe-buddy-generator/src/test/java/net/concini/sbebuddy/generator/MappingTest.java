@@ -1,5 +1,6 @@
 package net.concini.sbebuddy.generator;
 
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.BYTE;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.CHAR;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
@@ -11,7 +12,9 @@ import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.array;
 import static net.concini.sbebuddy.generator.Fixtures.boxed;
+import static net.concini.sbebuddy.generator.Fixtures.bytes;
 import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.setOf;
@@ -258,6 +261,68 @@ final class MappingTest {
 
 		assertThat(problemsOf(message))
 				.containsExactly(new Problem(message.build(), "\"qty\" is both a component and an unmapped field"));
+	}
+
+	@Test
+	void aTypeWithALengthHasTheFaceOfItsArray() {
+		Fixtures.AnnotatedFieldBuilder symbol = annotatedField("symbol", 1, bytes())
+				.type(annotatedType("Symbol", PrimitiveType.CHAR).length(6));
+		Fixtures.AnnotatedFieldBuilder colour = annotatedField("colour", 1, text())
+				.type(annotatedType("Rgb", PrimitiveType.UINT8).length(3));
+		Fixtures.AnnotatedFieldBuilder samples = annotatedField("samples", 1, array(SHORT))
+				.type(annotatedType("Samples", PrimitiveType.INT32).length(4));
+		Fixtures.AnnotatedFieldBuilder sizes = annotatedField("sizes", 1, array(LONG))
+				.type(annotatedType("Sizes", PrimitiveType.UINT32).length(2));
+
+		assertThat(problemsOf(symbol))
+				.containsExactly(new Problem(symbol.build(), "byte[] is not the face of Symbol, which is String"));
+		assertThat(problemsOf(colour))
+				.containsExactly(new Problem(colour.build(), "String is not the face of Rgb, which is byte[]"));
+		assertThat(problemsOf(samples))
+				.containsExactly(new Problem(samples.build(), "short[] is not the face of Samples, which is int[]"));
+		assertThat(problemsOf(sizes)).isEmpty();
+	}
+
+	@Test
+	void aConstantCharValueLongerThanOneCharacterIsAString() {
+		Fixtures.AnnotatedFieldBuilder currency = annotatedField("currency", 1, primitive(BYTE))
+				.type(annotatedType("Currency", PrimitiveType.CHAR).presence(Presence.CONSTANT).value("USD"));
+
+		assertThat(problemsOf(currency))
+				.containsExactly(new Problem(currency.build(), "byte is not the face of Currency, which is String"));
+	}
+
+	@Test
+	void aFieldOfATypeWithALengthCannotBeOptional() {
+		Fixtures.AnnotatedFieldBuilder symbol = annotatedField("symbol", 1, text())
+				.type(annotatedType("Symbol", PrimitiveType.CHAR).length(6))
+				.presence(Presence.OPTIONAL);
+		Fixtures.AnnotatedFieldBuilder samples = annotatedField("samples", 1, array(INT))
+				.type(annotatedType("Samples", PrimitiveType.INT32).length(4).presence(Presence.OPTIONAL));
+
+		assertThat(problemsOf(symbol))
+				.containsExactly(new Problem(symbol.build(), "Symbol has a length; a field of it cannot be optional"));
+		assertThat(problemsOf(samples))
+				.containsExactly(
+						new Problem(samples.build(), "Samples has a length; a field of it cannot be optional")
+				);
+	}
+
+	@Test
+	void aConstantFieldNeedsAValueRefOrAConstantType() {
+		Fixtures.AnnotatedFieldBuilder bare = annotatedField("exponent", 1, primitive(BYTE))
+				.presence(Presence.CONSTANT);
+		Fixtures.AnnotatedFieldBuilder referring = annotatedField("side", 1, primitive(BYTE))
+				.primitiveType(PrimitiveType.CHAR)
+				.presence(Presence.CONSTANT)
+				.valueRef("Side.Buy");
+		Fixtures.AnnotatedFieldBuilder typed = annotatedField("exponent", 1, primitive(BYTE))
+				.type(annotatedType("Exponent", PrimitiveType.INT8).presence(Presence.CONSTANT).value("-4"));
+
+		assertThat(problemsOf(bare))
+				.containsExactly(new Problem(bare.build(), "a constant field needs a valueRef or a constant type"));
+		assertThat(problemsOf(referring)).isEmpty();
+		assertThat(problemsOf(typed)).isEmpty();
 	}
 
 	@Test

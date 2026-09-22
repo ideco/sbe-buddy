@@ -199,6 +199,7 @@ public final class Mapping {
 			problem(field, "an unmapped field needs a name");
 		}
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
+		constant(field);
 		face(field);
 		declaredFace(field);
 		boxing(field);
@@ -292,6 +293,7 @@ public final class Mapping {
 			case Annotated.Primitive primitive -> defaultMapping(node, primitive.kind());
 			case Annotated.Text text -> unmappable(node, "String");
 			case Annotated.Bytes bytes -> unmappable(node, "byte[]");
+			case Annotated.Array array -> unmappable(node, javaTypeName(array));
 			case Annotated.ListOfRecord list -> unmappable(node, "List");
 			case Annotated.Other other -> unmappable(node, other.javaName());
 		};
@@ -322,28 +324,95 @@ public final class Mapping {
 	/**
 	 * The codec hands the component to the flyweight, whose face for a wire
 	 * primitive {@link JavaUtil} decides: {@code int} for {@code uint16},
-	 * {@code long} for {@code uint32}, and so on. Checked where the wire type is
-	 * known to be one primitive; the default mapping is its own face.
+	 * {@code long} for {@code uint32}, and so on; for a type with a length, a
+	 * {@code String} for {@code char}, {@code byte[]} for the byte-sized
+	 * primitives, and the array of the element's face for the rest. Checked where
+	 * the wire type is known; the default mapping is its own face.
 	 */
 	private void face(Annotated.Field field) {
+		if (field.javaType() instanceof Annotated.Unmapped) {
+			return;
+		}
+		Annotated.Type named = namedType(field);
+		if (named != null && named.primitiveType() != PrimitiveType.NONE && length(named) > 1) {
+			String face = arrayFace(primitive(named.primitiveType()));
+			if (!javaTypeName(field.javaType()).equals(face)) {
+				problem(
+						field, javaTypeName(field.javaType()) + " is not the face of "
+								+ wireName(named.name(), named.javaName()) + ", which is " + face
+				);
+			}
+			if (wirePresence(field) == Presence.OPTIONAL) {
+				problem(
+						field, wireName(named.name(), named.javaName())
+								+ " has a length; a field of it cannot be optional"
+				);
+			}
+			return;
+		}
 		uk.co.real_logic.sbe.PrimitiveType wire = wirePrimitive(field);
-		if (wire == null || field.javaType() instanceof Annotated.Unmapped) {
+		if (wire == null) {
 			return;
 		}
 		String face = JavaUtil.javaTypeName(wire);
-		String actual = switch (field.javaType()) {
+		if (!javaTypeName(field.javaType()).equals(face)) {
+			problem(
+					field,
+					javaTypeName(field.javaType()) + " is not the face of " + wire.primitiveName() + ", which is "
+							+ face
+			);
+		}
+	}
+
+	private static String javaTypeName(Annotated.JavaType javaType) {
+		return switch (javaType) {
 			case Annotated.Primitive primitive -> primitive.kind().name().toLowerCase(Locale.ROOT);
 			case Annotated.Text text -> "String";
 			case Annotated.Bytes bytes -> "byte[]";
+			case Annotated.Array array -> array.kind().name().toLowerCase(Locale.ROOT) + "[]";
 			case Annotated.Declared declared -> "a declared type";
 			case Annotated.SetOf set -> "Set";
 			case Annotated.Unmapped none -> "unmapped";
 			case Annotated.ListOfRecord list -> "List";
 			case Annotated.Other other -> other.javaName();
 		};
-		if (!actual.equals(face)) {
-			problem(field, actual + " is not the face of " + wire.primitiveName() + ", which is " + face);
+	}
+
+	/**
+	 * The face of a type with a length: sbe-tool reads a {@code char} array as a
+	 * string and gives the byte-sized primitives bulk accessors over
+	 * {@code byte[]}; every other array is the array of its element's face.
+	 */
+	private static String arrayFace(uk.co.real_logic.sbe.PrimitiveType primitive) {
+		return switch (primitive) {
+			case CHAR -> "String";
+			case INT8, UINT8 -> "byte[]";
+			default -> JavaUtil.javaTypeName(primitive) + "[]";
+		};
+	}
+
+	/**
+	 * The named type a field is written as, given as {@code type} or as the
+	 * component's own type; null for a primitive, an enum, a set or a composite.
+	 */
+	private static Annotated.@Nullable Type namedType(Annotated.Field field) {
+		Annotated.Declaration declaration = field.type();
+		if (declaration == null && field.javaType() instanceof Annotated.Declared declared) {
+			declaration = declared.declaration();
 		}
+		return declaration instanceof Annotated.Type named ? named : null;
+	}
+
+	/**
+	 * A type's length as sbe-tool reads it: its {@code length}, or for a constant
+	 * {@code char} value longer than one character without one, the value's.
+	 */
+	private static int length(Annotated.Type named) {
+		if (named.length() == 1 && named.presence() == Presence.CONSTANT
+				&& named.primitiveType() == PrimitiveType.CHAR) {
+			return Math.max(1, named.value().length());
+		}
+		return named.length();
 	}
 
 	/**
@@ -378,6 +447,7 @@ public final class Mapping {
 			case Annotated.Primitive primitive -> null;
 			case Annotated.Text text -> null;
 			case Annotated.Bytes bytes -> null;
+			case Annotated.Array array -> null;
 			case Annotated.ListOfRecord list -> null;
 			case Annotated.Other other -> null;
 		};
@@ -418,6 +488,19 @@ public final class Mapping {
 	}
 
 	/**
+	 * A constant field takes its value from a {@code valueRef} or from a constant
+	 * type; sbe-tool's IR generator crashes on one with neither, past every parser
+	 * rule.
+	 */
+	private void constant(Annotated.Field field) {
+		Annotated.Type named = namedType(field);
+		boolean constantType = named != null && named.presence() == Presence.CONSTANT;
+		if (field.presence() == Presence.CONSTANT && field.valueRef().isEmpty() && !constantType) {
+			problem(field, "a constant field needs a valueRef or a constant type");
+		}
+	}
+
+	/**
 	 * Optional, or added above the baseline; a constant carries no bytes and is
 	 * never absent.
 	 */
@@ -446,12 +529,8 @@ public final class Mapping {
 		if (field.primitiveType() != PrimitiveType.NONE) {
 			return primitive(field.primitiveType());
 		}
-		Annotated.Declaration declaration = field.type();
-		if (declaration == null && field.javaType() instanceof Annotated.Declared declared) {
-			declaration = declared.declaration();
-		}
-		if (declaration instanceof Annotated.Type named && named.length() == 1
-				&& named.primitiveType() != PrimitiveType.NONE) {
+		Annotated.Type named = namedType(field);
+		if (named != null && length(named) == 1 && named.primitiveType() != PrimitiveType.NONE) {
 			return primitive(named.primitiveType());
 		}
 		return null;
