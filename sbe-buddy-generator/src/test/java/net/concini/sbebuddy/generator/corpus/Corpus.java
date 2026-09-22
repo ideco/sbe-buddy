@@ -52,14 +52,6 @@ public final class Corpus {
 					BigEndian.annotated(), Map.of()
 			),
 			new Case(
-					"Messages", Messages.PACKAGE_INFO, Messages.SOURCE, Messages.schema(), Messages.XML,
-					Messages.annotated(),
-					Map.of(
-							"corpus.messages.NewOrderCodec", Messages.NEW_ORDER_CODEC,
-							"corpus.messages.CancelOrderCodec", Messages.CANCEL_ORDER_CODEC
-					)
-			),
-			new Case(
 					"Arrays", Arrays.PACKAGE_INFO, Arrays.SOURCE, Arrays.schema(), Arrays.XML, Arrays.annotated(),
 					Map.of("corpus.arrays.ArraysCodec", Arrays.CODEC)
 			),

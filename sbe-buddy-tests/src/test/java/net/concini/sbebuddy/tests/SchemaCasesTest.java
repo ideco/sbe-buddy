@@ -90,6 +90,7 @@ final class SchemaCasesTest {
 		assertThat(codec.lastDecodedLength()).as("lastDecodedLength").isEqualTo(length);
 		assertThat(decoded).usingRecursiveComparison().isEqualTo(value);
 		byte[] again = new byte[length];
+		Arrays.fill(again, UNTOUCHED);
 		codec.encode(decoded, new UnsafeBuffer(again), 0);
 		assertThat(again).as("the decoded value encodes to the same bytes")
 				.isEqualTo(Arrays.copyOfRange(bytes, OFFSET, OFFSET + length));
