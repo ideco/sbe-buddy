@@ -76,14 +76,15 @@ final class Groups {
 					@SbeField(id = 1) long orderId,
 					@SbeGroup(
 							id = 10, blockLength = 8, semanticType = "NoLegs",
-							description = "The legs of a multi-leg order"
+							description = "The legs of a multi-leg order",
+							layout = {"legId", "allocations", "legNote"}
 					) List<Leg> legs
 			) {
 
 				record Leg(
-						@SbeField(id = 11) int legId,
+						@SbeData(id = 14, type = VarStringEncoding.class) String legNote,
 						@SbeGroup(id = 12, dimensionType = SmallGroupSizeEncoding.class) List<Allocation> allocations,
-						@SbeData(id = 14, type = VarStringEncoding.class) String legNote
+						@SbeField(id = 11) int legId
 				) {
 
 					record Allocation(
@@ -189,14 +190,15 @@ final class Groups {
 										.blockLength(8)
 										.semanticType("NoLegs")
 										.description("The legs of a multi-leg order")
+										.layout("legId", "allocations", "legNote")
 										.components(
-												annotatedField("legId", 11, primitive(INT)),
+												annotatedData("legNote", 14, text(), varStringEncoding),
 												annotatedGroup("allocations", 12)
 														.dimensionType(smallGroupSizeEncoding)
 														.components(
 																annotatedField("account", 13, primitive(INT))
 														),
-												annotatedData("legNote", 14, text(), varStringEncoding)
+												annotatedField("legId", 11, primitive(INT))
 										)
 						)
 				)

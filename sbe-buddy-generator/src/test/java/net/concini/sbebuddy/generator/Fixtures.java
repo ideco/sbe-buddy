@@ -926,6 +926,10 @@ public final class Fixtures {
 		return new Annotated.SetOf(set.build());
 	}
 
+	public static Annotated.JavaType unmapped() {
+		return new Annotated.Unmapped();
+	}
+
 	public interface AnnotatedDeclarationBuilder {
 		Annotated.Declaration build();
 	}
@@ -1188,6 +1192,8 @@ public final class Fixtures {
 		private final String javaName;
 		private final int id;
 		private final List<Annotated.Component> components = new ArrayList<>();
+		private final List<Annotated.Field> unmapped = new ArrayList<>();
+		private final List<String> layout = new ArrayList<>();
 		private String name = "";
 		private int blockLength;
 		private String semanticType = "";
@@ -1204,6 +1210,18 @@ public final class Fixtures {
 			for (AnnotatedComponentBuilder builder : builders) {
 				components.add(builder.build());
 			}
+			return this;
+		}
+
+		public AnnotatedMessageBuilder unmapped(AnnotatedFieldBuilder... builders) {
+			for (AnnotatedFieldBuilder builder : builders) {
+				unmapped.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedMessageBuilder layout(String... names) {
+			layout.addAll(List.of(names));
 			return this;
 		}
 
@@ -1239,7 +1257,7 @@ public final class Fixtures {
 
 		public Annotated.Message build() {
 			return new Annotated.Message(
-					javaName, id, components, name, blockLength, semanticType, description,
+					javaName, id, components, unmapped, layout, name, blockLength, semanticType, description,
 					sinceVersion, deprecated
 			);
 		}
@@ -1348,6 +1366,8 @@ public final class Fixtures {
 		private final String javaName;
 		private final int id;
 		private final List<Annotated.Component> components = new ArrayList<>();
+		private final List<Annotated.Field> unmapped = new ArrayList<>();
+		private final List<String> layout = new ArrayList<>();
 		private Annotated.JavaType javaType;
 		private Annotated.Composite dimensionType = GROUP_SIZE_ENCODING;
 		private String name = "";
@@ -1373,6 +1393,18 @@ public final class Fixtures {
 			for (AnnotatedComponentBuilder builder : builders) {
 				components.add(builder.build());
 			}
+			return this;
+		}
+
+		public AnnotatedGroupBuilder unmapped(AnnotatedFieldBuilder... builders) {
+			for (AnnotatedFieldBuilder builder : builders) {
+				unmapped.add(builder.build());
+			}
+			return this;
+		}
+
+		public AnnotatedGroupBuilder layout(String... names) {
+			layout.addAll(List.of(names));
 			return this;
 		}
 
@@ -1415,7 +1447,7 @@ public final class Fixtures {
 		public Annotated.Group build() {
 			if (built == null) {
 				built = new Annotated.Group(
-						javaName, javaType, id, components, dimensionType, name, blockLength,
+						javaName, javaType, id, components, unmapped, layout, dimensionType, name, blockLength,
 						semanticType, description, sinceVersion, deprecated
 				);
 			}

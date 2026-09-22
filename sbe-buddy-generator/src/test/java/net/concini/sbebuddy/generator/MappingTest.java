@@ -16,6 +16,7 @@ import static net.concini.sbebuddy.generator.Fixtures.declared;
 import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.setOf;
 import static net.concini.sbebuddy.generator.Fixtures.text;
+import static net.concini.sbebuddy.generator.Fixtures.unmapped;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
@@ -174,6 +175,92 @@ final class MappingTest {
 	}
 
 	@Test
+	void theLayoutOrdersTheBody() {
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.messages(
+						annotatedMessage("M", 1)
+								.components(
+										annotatedField("qty", 2, primitive(INT)),
+										annotatedField("orderId", 1, primitive(LONG))
+								)
+								.unmapped(
+										annotatedField("price", 3, unmapped()).name("price")
+												.primitiveType(PrimitiveType.INT64)
+								)
+								.layout("orderId", "price", "qty")
+				)
+				.build();
+
+		Mapping.Mapped mapped = Mapping.map(annotated);
+
+		assertThat(mapped.problems()).isEmpty();
+		assertThat(mapped.schema().messages().get(0).fields()).extracting(Schema.Field::name)
+				.containsExactly("orderId", "price", "qty");
+	}
+
+	@Test
+	void anUnmappedFieldNeedsAName() {
+		Fixtures.AnnotatedFieldBuilder price = annotatedField("", 3, unmapped()).primitiveType(PrimitiveType.INT64);
+		Fixtures.AnnotatedMessageBuilder message = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)))
+				.unmapped(price)
+				.layout("qty", "");
+
+		assertThat(problemsOf(message)).contains(new Problem(price.build(), "an unmapped field needs a name"));
+	}
+
+	@Test
+	void anUnmappedFieldNeedsAType() {
+		Fixtures.AnnotatedFieldBuilder price = annotatedField("price", 3, unmapped()).name("price");
+		Fixtures.AnnotatedMessageBuilder message = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)))
+				.unmapped(price)
+				.layout("qty", "price");
+
+		assertThat(problemsOf(message))
+				.containsExactly(new Problem(price.build(), "an unmapped field needs a type or a primitiveType"));
+	}
+
+	@Test
+	void unmappedFieldsNeedALayout() {
+		Fixtures.AnnotatedMessageBuilder message = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)))
+				.unmapped(annotatedField("price", 3, unmapped()).name("price").primitiveType(PrimitiveType.INT64));
+
+		assertThat(problemsOf(message))
+				.containsExactly(new Problem(message.build(), "unmapped fields need a layout to take their place in"));
+	}
+
+	@Test
+	void theLayoutNamesEverythingOnceAndNothingElse() {
+		Fixtures.AnnotatedMessageBuilder twice = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)))
+				.layout("qty", "qty");
+		Fixtures.AnnotatedMessageBuilder nothing = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)))
+				.layout("qty", "prize");
+		Fixtures.AnnotatedMessageBuilder misses = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)), annotatedField("orderId", 1, primitive(LONG)))
+				.layout("orderId");
+
+		assertThat(problemsOf(twice)).containsExactly(new Problem(twice.build(), "the layout names \"qty\" twice"));
+		assertThat(problemsOf(nothing))
+				.containsExactly(new Problem(nothing.build(), "the layout names nothing called \"prize\""));
+		assertThat(problemsOf(misses)).containsExactly(new Problem(misses.build(), "the layout misses \"qty\""));
+	}
+
+	@Test
+	void aNameThatIsBothAComponentsAndAnUnmappedFieldsIsAProblem() {
+		Fixtures.AnnotatedMessageBuilder message = annotatedMessage("M", 1)
+				.components(annotatedField("qty", 2, primitive(INT)))
+				.unmapped(annotatedField("qty", 3, unmapped()).name("qty").primitiveType(PrimitiveType.INT64))
+				.layout("qty");
+
+		assertThat(problemsOf(message))
+				.containsExactly(new Problem(message.build(), "\"qty\" is both a component and an unmapped field"));
+	}
+
+	@Test
 	void aBaselineAboveTheSchemasVersionIsAProblem() {
 		Annotated annotated = annotatedSchema("p", 1, 1).baselineVersion(2).build();
 
@@ -262,6 +349,10 @@ final class MappingTest {
 
 	private static java.util.List<Problem> problemsOf(Fixtures.AnnotatedFieldBuilder field) {
 		return problemsOf(field, 0, 0);
+	}
+
+	private static java.util.List<Problem> problemsOf(Fixtures.AnnotatedMessageBuilder message) {
+		return Mapping.map(annotatedSchema("p", 1, 0).messages(message).build()).problems();
 	}
 
 	private static java.util.List<Problem> problemsOf(Fixtures.AnnotatedFieldBuilder field, int version, int baseline) {

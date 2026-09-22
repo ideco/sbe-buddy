@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -144,6 +145,17 @@ public final class CodecEmitter {
 			.of("encode{set}(value.{component}(), encoder.{property}());");
 
 	private static final Template DECODE_SET_FIELD = Template.of("decode{set}(decoder.{property}())");
+
+	// ---- a field no component carries: the null value out, nothing back
+
+	private static final Template ENCODE_UNMAPPED_FIELD = Template.of(
+			"encoder.{property}({flyweights}.{message}Encoder.{property}NullValue());"
+	);
+
+	private static final Template ENCODE_UNMAPPED_ENUM_FIELD = Template
+			.of("encoder.{property}({flyweights}.{enum}.NULL_VAL);");
+
+	private static final Template ENCODE_UNMAPPED_SET_FIELD = Template.of("encoder.{property}().clear();");
 
 	// ---- the shapes over them
 
@@ -296,7 +308,7 @@ public final class CodecEmitter {
 		String flyweights = ir.applicableNamespace();
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		List<String> encodeFields = new ArrayList<>();
-		List<String> decodeFields = new ArrayList<>();
+		Map<Annotated.Component, String> reads = new IdentityHashMap<>();
 		Map<String, String> declaredTypes = new LinkedHashMap<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
@@ -308,9 +320,13 @@ public final class CodecEmitter {
 			if (unsupported != null) {
 				return refuse(message, unsupported);
 			}
-			Annotated.Field component = component(message, field);
 			String property = JavaUtil.formatPropertyName(field.name());
 			List<Token> typeTokens = fields.subList(i + 1, i + 1 + type.componentTokenCount());
+			Annotated.Field component = component(message, field);
+			if (component == null) {
+				encodeFields.add(encodeUnmapped(unmapped(message, field), type, flyweights, messageClass, property));
+				continue;
+			}
 			Access access = switch (type.signal()) {
 				case ENCODING -> primitiveAccess(type, flyweights, messageClass, property, component.javaName());
 				case BEGIN_ENUM -> enumAccess(
@@ -322,7 +338,18 @@ public final class CodecEmitter {
 				default -> throw new IllegalStateException("a field of " + type.signal());
 			};
 			encodeFields.add(encodeField(field, component, access));
-			decodeFields.add(decodeField(field, flyweights, messageClass, property, access));
+			reads.put(component, decodeField(field, flyweights, messageClass, property, access));
+		}
+		// The canonical constructor takes the components as declared, which the
+		// layout may order differently from the wire; the block is addressed by
+		// offset, so either order reads it.
+		List<String> decodeFields = new ArrayList<>();
+		for (Annotated.Component component : message.components()) {
+			String read = reads.get(component);
+			if (read == null) {
+				throw new IllegalStateException(message.javaName() + " has no field for a component");
+			}
+			decodeFields.add(read);
 		}
 		int baseline = annotated.baselineVersion();
 		return CODEC.fill(
@@ -339,6 +366,22 @@ public final class CodecEmitter {
 				"decodeFields", String.join(",\n", decodeFields),
 				"declaredTypes", declaredTypes.isEmpty() ? "" : "\n" + String.join("\n\n", declaredTypes.values())
 		);
+	}
+
+	/** A field no component carries is written as its null value and never read. */
+	private static String encodeUnmapped(
+			Annotated.Field unmapped, Token type, String flyweights, String messageClass, String property
+	) {
+		return switch (type.signal()) {
+			case ENCODING -> ENCODE_UNMAPPED_FIELD
+					.fill("property", property, "flyweights", flyweights, "message", messageClass);
+			case BEGIN_ENUM -> ENCODE_UNMAPPED_ENUM_FIELD.fill(
+					"property", property, "flyweights", flyweights,
+					"enum", JavaUtil.formatClassName(type.applicableTypeName())
+			);
+			case BEGIN_SET -> ENCODE_UNMAPPED_SET_FIELD.fill("property", property);
+			default -> throw new IllegalStateException(unmapped.name() + " is a field of " + type.signal());
+		};
 	}
 
 	/**
@@ -548,10 +591,23 @@ public final class CodecEmitter {
 		return null;
 	}
 
-	/** The record component the field token came from, by wire name. */
-	private static Annotated.Field component(Annotated.Message message, Token field) {
+	/**
+	 * The record component the field token came from, by wire name; null for a
+	 * field no component carries.
+	 */
+	private static Annotated.@Nullable Field component(Annotated.Message message, Token field) {
 		for (Annotated.Component component : message.components()) {
 			if (component instanceof Annotated.Field candidate && wireName(candidate).equals(field.name())) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	/** The unmapped declaration the field token came from, by wire name. */
+	private static Annotated.Field unmapped(Annotated.Message message, Token field) {
+		for (Annotated.Field candidate : message.unmapped()) {
+			if (wireName(candidate).equals(field.name())) {
 				return candidate;
 			}
 		}
