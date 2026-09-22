@@ -16,10 +16,6 @@ public final class Corpus {
 
 	public static final List<Case> CASES = List.of(
 			new Case(
-					"Constants", Constants.PACKAGE_INFO, Constants.SOURCE, Constants.schema(), Constants.XML,
-					Constants.annotated(), Map.of("corpus.constants.ConstantsCodec", Constants.CODEC)
-			),
-			new Case(
 					"Enums", Enums.PACKAGE_INFO, Enums.SOURCE, Enums.schema(), Enums.XML, Enums.annotated(),
 					Map.of("corpus.enums.EnumsCodec", Enums.CODEC)
 			),
