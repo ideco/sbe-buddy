@@ -442,6 +442,8 @@ public final class Discovery {
 				type.getSimpleName().toString(),
 				message.integer("id"),
 				components(type),
+				unmapped(message, type),
+				message.strings("layout"),
 				message.string("name"),
 				message.integer("blockLength"),
 				message.string("semanticType"),
@@ -470,14 +472,34 @@ public final class Discovery {
 		return components;
 	}
 
+	/**
+	 * The fields no component carries, each read from its own {@code @SbeField}
+	 * inside the message's or group's annotation and placed on the element that
+	 * carries it.
+	 */
+	private List<Annotated.Field> unmapped(Members body, Element at) {
+		List<Annotated.Field> unmapped = new ArrayList<>();
+		for (AnnotationMirror mirror : body.annotations("unmapped")) {
+			Members field = new Members(mirror);
+			unmapped.add(field(field, field.string("name"), new Annotated.Unmapped(), at));
+		}
+		return unmapped;
+	}
+
 	private Annotated.Field field(RecordComponentElement component) {
-		Members field = members(component, SbeField.class);
+		return field(
+				members(component, SbeField.class), component.getSimpleName().toString(),
+				javaType(component.asType()), component
+		);
+	}
+
+	private Annotated.Field field(Members field, String javaName, Annotated.JavaType javaType, Element at) {
 		TypeElement type = field.type("type");
 		Annotated.Field result = new Annotated.Field(
-				component.getSimpleName().toString(),
-				javaType(component.asType()),
+				javaName,
+				javaType,
 				field.integer("id"),
-				type == null ? null : reference(component, type),
+				type == null ? null : reference(at, type),
 				field.enumeration("primitiveType", PrimitiveType.class),
 				field.string("name"),
 				field.enumeration("presence", Presence.class),
@@ -490,7 +512,7 @@ public final class Discovery {
 				field.integer("sinceVersion"),
 				field.integer("deprecated")
 		);
-		remember(result, component, field.mirror);
+		remember(result, at, field.mirror);
 		return result;
 	}
 
@@ -502,6 +524,8 @@ public final class Discovery {
 				javaType(component.asType()),
 				group.integer("id"),
 				entry == null ? List.of() : components(entry),
+				unmapped(group, component),
+				group.strings("layout"),
 				composite(component, group.type("dimensionType"), "dimensionType", "GroupSizeEncoding"),
 				group.string("name"),
 				group.integer("blockLength"),
@@ -693,6 +717,28 @@ public final class Discovery {
 		@Nullable
 		TypeElement type(String member) {
 			return declaredTypeOf((TypeMirror) value(member).getValue());
+		}
+
+		List<String> strings(String member) {
+			List<String> strings = new ArrayList<>();
+			for (AnnotationValue element : array(member)) {
+				strings.add((String) element.getValue());
+			}
+			return strings;
+		}
+
+		/** An array of annotations, each a mirror of its own. */
+		List<AnnotationMirror> annotations(String member) {
+			List<AnnotationMirror> mirrors = new ArrayList<>();
+			for (AnnotationValue element : array(member)) {
+				mirrors.add((AnnotationMirror) element.getValue());
+			}
+			return mirrors;
+		}
+
+		@SuppressWarnings("unchecked")
+		private List<? extends AnnotationValue> array(String member) {
+			return (List<? extends AnnotationValue>) value(member).getValue();
 		}
 
 		private AnnotationValue value(String member) {

@@ -215,6 +215,28 @@ final class PlacementTest {
 	}
 
 	@Test
+	void mappingNamesTheRecordWhoseLayoutIsWrong() {
+		// A layout mistake has no component to land on; it lands on the annotation
+		// that holds the layout.
+		String source = """
+				package placement;
+
+				import net.concini.sbebuddy.SbeField;
+				import net.concini.sbebuddy.SbeMessage;
+
+				@SbeMessage(id = 1, layout = {"orderId", "prize"})
+				record Order(
+						@SbeField(id = 1) long orderId
+				) {
+				}
+				""";
+
+		Javac.Result result = compile(source);
+
+		assertOnlyError(result, source, "@SbeMessage(id = 1, layout", "the layout names nothing called \"prize\"");
+	}
+
+	@Test
 	void validationNamesTheSecondComponentOfTheClashingPair() {
 		String source = """
 				package placement;
