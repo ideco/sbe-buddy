@@ -2,13 +2,14 @@ package net.concini.sbebuddy.generator;
 
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotated;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
-import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.boundField;
 import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
@@ -122,7 +123,7 @@ final class GeneratorTest {
 		Schema schema = schema(0, List.of(messageHeader()), List.of(message("M", 1, field("x", 1, "nosuch"))));
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
-		List<Problem> problems = Generator.generate(schema, annotatedSchema("p", 1, 0).build(), output);
+		List<Problem> problems = Generator.generate(schema, annotated(0), output);
 
 		assertThat(problems).hasSize(1);
 		assertThat(problems.get(0).node()).isSameAs(schema);
@@ -134,132 +135,93 @@ final class GeneratorTest {
 	void aConstructTheCodecLacksLeavesTheOutputUntouched() {
 		// sbe-tool accepts the schema and generates its flyweights; the codec has no
 		// var-data yet, so the flyweights must not reach the output either.
-		Fixtures.AnnotatedCompositeBuilder varStringEncoding = annotatedVarStringEncoding();
-		Annotated annotated = annotatedSchema("p", 1, 0)
-				.types(varStringEncoding)
-				.messages(
-						annotatedMessage("M", 1).components(
-								annotatedField("qty", 1, primitive(INT)),
-								annotatedData("note", 2, text(), varStringEncoding)
-						)
+		Annotated.Composite varStringEncoding = varStringEncoding();
+		Annotated annotated = annotated(
+				0, List.of(varStringEncoding),
+				annotatedMessage(
+						"M", 1, annotatedField("qty", 1, primitive(INT)),
+						annotatedData("note", 2, text(), varStringEncoding)
 				)
-				.build();
-		StringWriterOutputManager output = new StringWriterOutputManager();
-
-		assertThat(generate(annotated, output)).containsExactly(
-				new Problem(annotated.messages().get(0), "no codec for var-data yet; set codecs = false on @SbeSchema")
 		);
-		assertThat(output.getSources()).isEmpty();
+
+		assertLacks(annotated, "var-data");
 	}
 
 	@Test
 	void varDataInsideAGroupIsAConstructTheCodecLacks() {
 		// The message's own body has none; the walk must look inside the group.
-		Fixtures.AnnotatedCompositeBuilder varStringEncoding = annotatedVarStringEncoding();
-		Annotated annotated = annotatedSchema("p", 1, 0)
-				.types(varStringEncoding)
-				.messages(
-						annotatedMessage("M", 1).components(
-								annotatedField("qty", 1, primitive(INT)),
-								annotatedGroup("legs", 2).components(
-										annotatedField("legId", 3, primitive(INT)),
-										annotatedData("note", 4, text(), varStringEncoding)
-								)
+		Annotated.Composite varStringEncoding = varStringEncoding();
+		Annotated annotated = annotated(
+				0, List.of(varStringEncoding),
+				annotatedMessage(
+						"M", 1, annotatedField("qty", 1, primitive(INT)),
+						annotatedGroup(
+								"legs", 2, 0, annotatedField("legId", 3, primitive(INT)),
+								annotatedData("note", 4, text(), varStringEncoding)
 						)
 				)
-				.build();
-		StringWriterOutputManager output = new StringWriterOutputManager();
-
-		assertThat(generate(annotated, output)).containsExactly(
-				new Problem(annotated.messages().get(0), "no codec for var-data yet; set codecs = false on @SbeSchema")
 		);
-		assertThat(output.getSources()).isEmpty();
+
+		assertLacks(annotated, "var-data");
 	}
 
 	@Test
 	void aFieldAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
 		// The group's own version is the baseline inside it: a field at version 1 in
 		// a group appended in version 1 is never absent, one at version 2 would be.
-		Annotated annotated = annotatedSchema("p", 1, 2)
-				.messages(
-						annotatedMessage("M", 1).components(
-								annotatedField("qty", 1, primitive(INT)),
-								annotatedGroup("legs", 2).sinceVersion(1).components(
-										annotatedField("legId", 3, primitive(INT)).sinceVersion(1),
-										annotatedField("ratio", 4, boxed(INT)).sinceVersion(2)
-								)
+		Annotated annotated = annotated(
+				2,
+				annotatedMessage(
+						"M", 1, annotatedField("qty", 1, primitive(INT)),
+						annotatedGroup(
+								"legs", 2, 1, annotatedField("legId", 3, primitive(INT), 1),
+								annotatedField("ratio", 4, boxed(INT), 2)
 						)
 				)
-				.build();
-		StringWriterOutputManager output = new StringWriterOutputManager();
-
-		assertThat(generate(annotated, output)).containsExactly(
-				new Problem(
-						annotated.messages().get(0),
-						"no codec for a field added above the baseline in a group yet; set codecs = false on @SbeSchema"
-				)
 		);
-		assertThat(output.getSources()).isEmpty();
+
+		assertLacks(annotated, "a field added above the baseline in a group");
 	}
 
 	@Test
 	void aGroupAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
-		Annotated annotated = annotatedSchema("p", 1, 1)
-				.messages(
-						annotatedMessage("M", 1).components(
-								annotatedField("qty", 1, primitive(INT)),
-								annotatedGroup("legs", 2).components(
-										annotatedField("legId", 3, primitive(INT)),
-										annotatedGroup("allocations", 4).sinceVersion(1)
-												.components(annotatedField("account", 5, primitive(INT)))
-								)
+		Annotated annotated = annotated(
+				1,
+				annotatedMessage(
+						"M", 1, annotatedField("qty", 1, primitive(INT)),
+						annotatedGroup(
+								"legs", 2, 0, annotatedField("legId", 3, primitive(INT)),
+								annotatedGroup("allocations", 4, 1, annotatedField("account", 5, primitive(INT)))
 						)
 				)
-				.build();
-		StringWriterOutputManager output = new StringWriterOutputManager();
-
-		assertThat(generate(annotated, output)).containsExactly(
-				new Problem(
-						annotated.messages().get(0),
-						"no codec for a group added above the baseline in a group yet; set codecs = false on @SbeSchema"
-				)
 		);
-		assertThat(output.getSources()).isEmpty();
+
+		assertLacks(annotated, "a group added above the baseline in a group");
 	}
 
 	@Test
 	void aStringInAnEncodingThatIsNotAsciiIsAConstructTheCodecLacks() {
 		// The flyweight's String form goes through String.getBytes there, and
 		// what the codec would check is not settled.
-		Fixtures.AnnotatedTypeBuilder name = annotatedType("Name", CHAR).length(8).characterEncoding("UTF-8");
-		Annotated annotated = annotatedSchema("p", 1, 0)
-				.types(name)
-				.messages(annotatedMessage("M", 1).components(annotatedField("name", 1, text()).type(name)))
-				.build();
-		StringWriterOutputManager output = new StringWriterOutputManager();
-
-		assertThat(generate(annotated, output)).containsExactly(
-				new Problem(
-						annotated.messages().get(0),
-						"no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"
-				)
+		Annotated.Type name = annotatedType("Name", CHAR, 8, "UTF-8", null);
+		Annotated annotated = annotated(
+				0, List.of(name), annotatedMessage("M", 1, annotatedField("name", 1, text(), name))
 		);
-		assertThat(output.getSources()).isEmpty();
+
+		assertLacks(annotated, "a string in UTF-8");
 	}
 
 	@Test
 	void twoBindingsWithOneSimpleNameInOneCodecIsAProblem() {
 		// The codec names its binding field after the class's simple name.
-		Annotated annotated = annotatedSchema("p", 1, 0)
-				.messages(
-						annotatedMessage("M", 1).components(
-								annotatedField("fee", 1, other("java.math.BigDecimal")).primitiveType(INT64)
-										.binding("a.Cents", primitive(LONG)),
-								annotatedField("tax", 2, other("java.math.BigDecimal")).primitiveType(INT64)
-										.binding("b.Cents", primitive(LONG))
-						)
+		Annotated annotated = annotated(
+				0,
+				annotatedMessage(
+						"M", 1,
+						boundField("fee", 1, other("java.math.BigDecimal"), INT64, "a.Cents", primitive(LONG)),
+						boundField("tax", 2, other("java.math.BigDecimal"), INT64, "b.Cents", primitive(LONG))
 				)
-				.build();
+		);
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
 		assertThat(generate(annotated, output)).containsExactly(
@@ -273,9 +235,7 @@ final class GeneratorTest {
 
 	@Test
 	void aSchemaWithoutAProblemReachesTheOutputWhole() {
-		Annotated annotated = annotatedSchema("p", 1, 0)
-				.messages(annotatedMessage("M", 1).components(annotatedField("qty", 1, primitive(INT))))
-				.build();
+		Annotated annotated = annotated(0, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
 		assertThat(generate(annotated, output)).isEmpty();
@@ -283,6 +243,21 @@ final class GeneratorTest {
 				"p.sbe.package-info", "p.sbe.MessageHeaderEncoder", "p.sbe.MessageHeaderDecoder", "p.sbe.MEncoder",
 				"p.sbe.MDecoder", "p.sbe.MetaAttribute", "p.MCodec"
 		);
+	}
+
+	/**
+	 * The one problem naming the construct the codec lacks, and nothing written.
+	 */
+	private static void assertLacks(Annotated annotated, String construct) {
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		assertThat(generate(annotated, output)).containsExactly(
+				new Problem(
+						annotated.messages().get(0),
+						"no codec for " + construct + " yet; set codecs = false on @SbeSchema"
+				)
+		);
+		assertThat(output.getSources()).isEmpty();
 	}
 
 	/**
@@ -295,13 +270,10 @@ final class GeneratorTest {
 		return Generator.generate(mapped.schema(), annotated, output);
 	}
 
-	private static Fixtures.AnnotatedCompositeBuilder annotatedVarStringEncoding() {
-		return annotatedComposite("VarStringEncoding")
-				.qualifiedName("p.VarStringEncoding")
-				.name("varStringEncoding")
-				.members(
-						annotatedType("length", UINT16).javaType(primitive(INT)),
-						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8").javaType(text())
-				);
+	private static Annotated.Composite varStringEncoding() {
+		return annotatedComposite(
+				"VarStringEncoding", "p.VarStringEncoding", "varStringEncoding",
+				annotatedType("length", UINT16, primitive(INT)), annotatedType("varData", CHAR, 0, "UTF-8", text())
+		);
 	}
 }
