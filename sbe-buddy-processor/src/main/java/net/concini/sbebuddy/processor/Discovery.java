@@ -755,8 +755,9 @@ public final class Discovery {
 		if (name.equals("java.lang.String")) {
 			return new Annotated.Text();
 		}
-		if (listEntryRecord(type) != null) {
-			return new Annotated.ListOfRecord();
+		TypeElement listEntry = listEntryRecord(type);
+		if (listEntry != null) {
+			return new Annotated.ListOfRecord(listEntry.getQualifiedName().toString());
 		}
 		TypeElement setEntry = setEntry(type);
 		if (setEntry != null && has(setEntry, SbeSet.class)) {

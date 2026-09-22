@@ -79,8 +79,11 @@ public record Annotated(
 	public record Declared(Declaration declaration) implements JavaType {
 	}
 
-	/** A {@code List} of a record, which is what a group is written on. */
-	public record ListOfRecord() implements JavaType {
+	/**
+	 * A {@code List} of a record, which is what a group is written on;
+	 * {@code qualifiedName} is the record's name as code names it.
+	 */
+	public record ListOfRecord(String qualifiedName) implements JavaType {
 	}
 
 	/** A {@code Set} of an {@code @SbeSet} enum, which is a set's face. */

@@ -15,6 +15,7 @@ import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.group;
 import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
+import static net.concini.sbebuddy.generator.Fixtures.listOfRecord;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
@@ -190,6 +191,7 @@ final class Groups {
 						annotatedMessage("Groups", 1).components(
 								annotatedField("orderId", 1, primitive(LONG)),
 								annotatedGroup("legs", 10)
+										.javaType(listOfRecord("corpus.groups.Groups.Leg"))
 										.blockLength(8)
 										.semanticType("NoLegs")
 										.description("The legs of a multi-leg order")
@@ -197,6 +199,7 @@ final class Groups {
 										.components(
 												annotatedData("legNote", 14, text(), varStringEncoding),
 												annotatedGroup("allocations", 12)
+														.javaType(listOfRecord("corpus.groups.Groups.Leg.Allocation"))
 														.dimensionType(smallGroupSizeEncoding)
 														.components(
 																annotatedField("account", 13, primitive(INT))

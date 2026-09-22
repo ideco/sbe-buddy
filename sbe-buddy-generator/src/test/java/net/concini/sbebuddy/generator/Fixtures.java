@@ -924,8 +924,9 @@ public final class Fixtures {
 		return new Annotated.Other(javaName);
 	}
 
-	public static Annotated.JavaType listOfRecord() {
-		return new Annotated.ListOfRecord();
+	/** A {@code List} of the record the name code uses for it names. */
+	public static Annotated.JavaType listOfRecord(String qualifiedName) {
+		return new Annotated.ListOfRecord(qualifiedName);
 	}
 
 	public static Annotated.JavaType setOf(AnnotatedDeclarationBuilder set) {
@@ -1421,7 +1422,10 @@ public final class Fixtures {
 		private AnnotatedGroupBuilder(String javaName, int id) {
 			this.javaName = javaName;
 			this.id = id;
-			this.javaType = new Annotated.ListOfRecord();
+			// A record named after the group, for a test that never reaches the codec.
+			this.javaType = new Annotated.ListOfRecord(
+					Character.toUpperCase(javaName.charAt(0)) + javaName.substring(1)
+			);
 		}
 
 		public AnnotatedGroupBuilder javaType(Annotated.JavaType javaType) {
