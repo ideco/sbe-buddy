@@ -21,11 +21,11 @@ public final class Corpus {
 			),
 			new Case(
 					"NamedTypes", NamedTypes.PACKAGE_INFO, NamedTypes.SOURCE, NamedTypes.schema(), NamedTypes.XML,
-					NamedTypes.annotated(), Map.of()
+					NamedTypes.annotated(), Map.of("corpus.namedtypes.NamedTypesCodec", NamedTypes.CODEC)
 			),
 			new Case(
 					"Constants", Constants.PACKAGE_INFO, Constants.SOURCE, Constants.schema(), Constants.XML,
-					Constants.annotated(), Map.of()
+					Constants.annotated(), Map.of("corpus.constants.ConstantsCodec", Constants.CODEC)
 			),
 			new Case(
 					"Enums", Enums.PACKAGE_INFO, Enums.SOURCE, Enums.schema(), Enums.XML, Enums.annotated(),
@@ -69,7 +69,7 @@ public final class Corpus {
 			),
 			new Case(
 					"Arrays", Arrays.PACKAGE_INFO, Arrays.SOURCE, Arrays.schema(), Arrays.XML, Arrays.annotated(),
-					Map.of()
+					Map.of("corpus.arrays.ArraysCodec", Arrays.CODEC)
 			),
 			new Case(
 					"OptionalFields", OptionalFields.PACKAGE_INFO, OptionalFields.SOURCE, OptionalFields.schema(),
