@@ -1,0 +1,338 @@
+package net.concini.sbebuddy.generator;
+
+import static net.concini.sbebuddy.generator.CodecTemplates.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import net.concini.sbebuddy.generator.CodecModel.Body;
+import net.concini.sbebuddy.generator.CodecModel.Helper;
+import net.concini.sbebuddy.generator.CodecModel.Member;
+import net.concini.sbebuddy.generator.CodecModel.Shape;
+
+/**
+ * A {@link CodecModel} as Java source, through {@link CodecTemplates}. Each
+ * question has one switch: how a shape is written and read, how its absence
+ * wraps that, and what each helper declares; a binding stands in front of the
+ * write and behind the read. A template is filled from the model node it
+ * writes, and the names the node does not hold are given beside it.
+ */
+final class CodecWriter {
+
+	private final CodecModel model;
+
+	private CodecWriter(CodecModel model) {
+		this.model = model;
+	}
+
+	static String write(CodecModel model) {
+		return new CodecWriter(model).codec();
+	}
+
+	private String codec() {
+		Body body = model.body();
+		List<String> bindings = new ArrayList<>();
+		for (CodecModel.Binding binding : model.bindings()) {
+			bindings.add(BINDING_FIELD.fill(binding));
+		}
+		List<String> groupLengths = new ArrayList<>();
+		for (Member.Group group : groups(body)) {
+			groupLengths.add(GROUP_LENGTH_TERM.fill(group, "length", lengthOf(group)));
+		}
+		List<String> helpers = new ArrayList<>();
+		for (Helper helper : model.helpers()) {
+			helpers.add(helper(helper));
+		}
+		return CODEC.fill(
+				model,
+				"bindings", String.join("\n", bindings),
+				"groupLengths", String.join("", groupLengths),
+				"encodeFields", writes(body),
+				"refuseBelowBaseline", model.baseline() == 0
+						? ""
+						: REFUSE_BELOW_BASELINE.fill(model, "baseline", String.valueOf(model.baseline())),
+				"decodeGroups", groupReads(body),
+				"decodeFields", arguments(body),
+				"decodedLength",
+				groups(body).isEmpty() ? BLOCK_DECODED_LENGTH.fill(model) : WALKED_DECODED_LENGTH.fill(model),
+				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers)
+		);
+	}
+
+	// ---- writing a body
+
+	/** The body's members in wire order, as encode statements. */
+	private String writes(Body body) {
+		List<String> writes = new ArrayList<>();
+		for (Member member : body.wireOrder()) {
+			writes.add(switch (member) {
+				case Member.Field field -> write(body, field);
+				case Member.Unmapped unmapped -> writeNull(body, unmapped);
+				case Member.Group group -> ENCODE_CHECKED_FIELD.fill(
+						group, "call", ENCODE_GROUP_FIELD.fill(group, "source", SOURCE.fill(group))
+				);
+			});
+		}
+		return String.join("\n", writes);
+	}
+
+	/**
+	 * Decided by the component: an optional field takes the null value for null,
+	 * any other reference refuses it, and a primitive is written as it is.
+	 */
+	private String write(Body body, Member.Field field) {
+		String source = field.binding() == null ? SOURCE.fill(field) : BOUND_SOURCE.fill(field);
+		return switch (field.absence()) {
+			case NONE -> write(body, field, field.shape(), source);
+			case REQUIRED, ADDED -> ENCODE_CHECKED_FIELD.fill(field, "call", write(body, field, field.shape(), source));
+			case OPTIONAL -> switch (field.shape()) {
+				case Shape.Scalar scalar ->
+					ENCODE_OPTIONAL_FIELD.fill(field, "source", source, "encoder", body.encoder());
+				case Shape.Enum enumeration -> ENCODE_OPTIONAL_ENUM_FIELD.fill(
+						field, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass()
+				);
+				case Shape.Text text -> throw noNullValue(field.component());
+				case Shape.Array array -> throw noNullValue(field.component());
+				case Shape.Set set -> throw noNullValue(field.component());
+				case Shape.Composite composite -> throw noNullValue(field.component());
+				case Shape.Constant constant -> throw noNullValue(field.component());
+			};
+		};
+	}
+
+	/** The flyweight call that writes the shape, from {@code source}. */
+	private String write(Body body, Member.Field field, Shape shape, String source) {
+		return switch (shape) {
+			case Shape.Scalar scalar -> ENCODE_FIELD.fill(field, "source", source);
+			case Shape.Text text -> ENCODE_STRING_FIELD.fill(field, "source", source, "encoder", body.encoder());
+			case Shape.Array array -> ENCODE_ARRAY_FIELD.fill(array, "source", source);
+			case Shape.Enum enumeration -> ENCODE_ENUM_FIELD.fill(field, "enumClass", enumeration.enumClass());
+			case Shape.Set set -> ENCODE_SET_FIELD.fill(field, "setClass", set.setClass());
+			case Shape.Composite composite -> ENCODE_COMPOSITE_FIELD
+					.fill(field, "compositeClass", composite.compositeClass(), "source", source);
+			case Shape.Constant constant -> switch (constant.read()) {
+				case Shape.Enum enumeration -> CHECK_CONSTANT_ENUM_FIELD.fill(
+						field, "javaEnum", enumeration.javaEnum(), "constant", String.valueOf(constant.enumConstant())
+				);
+				case Shape.Text text -> CHECK_CONSTANT_STRING_FIELD.fill(field, "source", source);
+				case Shape.Scalar scalar -> CHECK_CONSTANT_FIELD.fill(field, "source", source);
+				case Shape.Array array -> throw notAConstant(field);
+				case Shape.Set set -> throw notAConstant(field);
+				case Shape.Composite composite -> throw notAConstant(field);
+				case Shape.Constant inner -> throw notAConstant(field);
+			};
+		};
+	}
+
+	/** A field or member no component carries, written as its null value. */
+	private String writeNull(Body body, Member.Unmapped unmapped) {
+		return switch (unmapped.shape()) {
+			case Shape.Scalar scalar -> ENCODE_UNMAPPED_FIELD.fill(unmapped, "encoder", body.encoder());
+			case Shape.Enum enumeration -> ENCODE_UNMAPPED_ENUM_FIELD.fill(
+					unmapped, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass()
+			);
+			case Shape.Set set -> ENCODE_UNMAPPED_SET_FIELD.fill(unmapped);
+			case Shape.Text text -> throw noNullValue(unmapped.property());
+			case Shape.Array array -> throw noNullValue(unmapped.property());
+			case Shape.Composite composite -> throw noNullValue(unmapped.property());
+			case Shape.Constant constant -> throw noNullValue(unmapped.property());
+		};
+	}
+
+	// ---- reading a body
+
+	/** The constructor's arguments, one per component in declared order. */
+	private String arguments(Body body) {
+		List<String> arguments = new ArrayList<>();
+		for (Member member : body.constructorOrder()) {
+			arguments.add(switch (member) {
+				case Member.Field field -> read(body, field);
+				case Member.Group group -> group.component();
+				case Member.Unmapped unmapped -> throw new IllegalStateException(
+						unmapped.property() + " is read though no component carries it"
+				);
+			});
+		}
+		return String.join(",\n", arguments);
+	}
+
+	/**
+	 * Decided by the wire: the null value for an optional field, whatever its
+	 * version, since below the acting version the getter returns it; the version
+	 * for a field appended above the baseline, which a required field may hold the
+	 * null value of.
+	 */
+	private String read(Body body, Member.Field field) {
+		String read = read(field, field.shape());
+		if (field.binding() != null) {
+			// The null value and the version are decided before the binding is called.
+			read = BOUND_READ.fill(field, "read", read);
+		}
+		return switch (field.absence()) {
+			case NONE, REQUIRED -> read;
+			case OPTIONAL -> DECODE_OPTIONAL_FIELD.fill("isNull", isNull(body, field), "read", read);
+			case ADDED -> DECODE_ADDED_FIELD.fill(field, "decoder", body.decoder(), "read", read);
+		};
+	}
+
+	/** The flyweight call that reads the shape. */
+	private String read(Member.Field field, Shape shape) {
+		return switch (shape) {
+			case Shape.Scalar scalar -> DECODE_FIELD.fill(field);
+			case Shape.Text text -> DECODE_FIELD.fill(field);
+			case Shape.Array array -> DECODE_ARRAY_FIELD.fill(array);
+			case Shape.Enum enumeration -> DECODE_ENUM_FIELD.fill(enumeration, "property", field.property());
+			case Shape.Set set -> DECODE_SET_FIELD.fill(set, "property", field.property());
+			case Shape.Composite composite -> DECODE_COMPOSITE_FIELD.fill(composite, "property", field.property());
+			case Shape.Constant constant -> read(field, constant.read());
+		};
+	}
+
+	private String isNull(Body body, Member.Field field) {
+		return switch (field.shape()) {
+			case Shape.Scalar scalar -> scalar.floatBox() == null
+					? IS_NULL.fill(field, "decoder", body.decoder())
+					: IS_NULL_FLOATING.fill(scalar, "property", field.property(), "decoder", body.decoder());
+			case Shape.Enum enumeration -> IS_NULL_ENUM.fill(
+					field, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass()
+			);
+			case Shape.Text text -> throw noNullValue(field.component());
+			case Shape.Array array -> throw noNullValue(field.component());
+			case Shape.Set set -> throw noNullValue(field.component());
+			case Shape.Composite composite -> throw noNullValue(field.component());
+			case Shape.Constant constant -> throw noNullValue(field.component());
+		};
+	}
+
+	/**
+	 * The body's groups read into locals, in wire order, before the constructor.
+	 */
+	private String groupReads(Body body) {
+		List<String> reads = new ArrayList<>();
+		for (Member.Group group : groups(body)) {
+			reads.add(
+					group.addedSince() == null
+							? DECODE_GROUP.fill(group)
+							: DECODE_ADDED_GROUP.fill(group, "decoder", body.decoder())
+			);
+		}
+		return String.join("\n", reads);
+	}
+
+	// ---- the helpers
+
+	private String helper(Helper helper) {
+		return switch (helper) {
+			case Helper.Ascii ascii -> ASCII.fill();
+			case Helper.ArrayPair array -> array.bytes()
+					? String.join("\n\n", WRITE_BYTES.fill(array), READ_BYTES.fill(array))
+					: String.join("\n\n", WRITE_ARRAY.fill(array), READ_ARRAY.fill(array));
+			case Helper.EnumPair enumeration -> enumPair(enumeration);
+			case Helper.SetPair set -> setPair(set);
+			case Helper.CompositePair composite -> String.join(
+					"\n\n",
+					WRITE_COMPOSITE.fill(
+							composite, "encoder", composite.body().encoder(), "members", writes(composite.body())
+					),
+					READ_COMPOSITE.fill(
+							composite, "decoder", composite.body().decoder(), "members", arguments(composite.body())
+					)
+			);
+			case Helper.GroupMethods methods -> groupMethods(methods.group());
+		};
+	}
+
+	/**
+	 * The raw value mapped by the valid values' text, so an unknown value is ours
+	 * to decide: the constant the enum designates, or an exception.
+	 */
+	private String enumPair(Helper.EnumPair enumeration) {
+		List<String> toWire = new ArrayList<>();
+		List<String> fromWire = new ArrayList<>();
+		for (Helper.EnumValue value : enumeration.values()) {
+			toWire.add(
+					ENUM_TO_WIRE.fill(value, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass())
+			);
+			fromWire.add(WIRE_TO_ENUM.fill(value, "javaEnum", enumeration.javaEnum()));
+		}
+		if (enumeration.unknownValue() == null) {
+			fromWire.add(WIRE_TO_NOTHING.fill(enumeration));
+		} else {
+			toWire.add(UNKNOWN_TO_WIRE.fill(enumeration));
+			fromWire.add(WIRE_TO_UNKNOWN.fill(enumeration));
+		}
+		return String.join(
+				"\n\n",
+				ENCODE_ENUM.fill(enumeration, "flyweights", model.flyweights(), "cases", String.join("\n", toWire)),
+				DECODE_ENUM.fill(enumeration, "cases", String.join("\n", fromWire))
+		);
+	}
+
+	private String setPair(Helper.SetPair set) {
+		List<String> encodes = new ArrayList<>();
+		List<String> decodes = new ArrayList<>();
+		List<String> bits = new ArrayList<>();
+		for (Helper.Choice choice : set.choices()) {
+			encodes.add(ENCODE_CHOICE.fill(choice, "javaEnum", set.javaEnum()));
+			decodes.add(DECODE_CHOICE.fill(choice, "javaEnum", set.javaEnum()));
+			bits.add(KNOWN_BIT.fill(choice));
+		}
+		return String.join(
+				"\n\n",
+				ENCODE_SET.fill(set, "flyweights", model.flyweights(), "choices", String.join("\n", encodes)),
+				DECODE_SET.fill(
+						set, "flyweights", model.flyweights(), "knownBits", String.join(" | ", bits), "choices",
+						String.join("\n", decodes)
+				)
+		);
+	}
+
+	/**
+	 * The entries written with the entry's encode statements, read into a list
+	 * sized by the count, and summed without encoding, each nested group through
+	 * its own length.
+	 */
+	private String groupMethods(Member.Group group) {
+		Body entry = group.entry();
+		List<String> terms = new ArrayList<>();
+		for (Member.Group nested : groups(entry)) {
+			terms.add(NESTED_GROUP_LENGTH_TERM.fill(nested, "length", lengthOf(nested)));
+		}
+		String length = terms.isEmpty()
+				? GROUP_LENGTH.fill(group, "length", lengthOf(group), "encoder", entry.encoder())
+				: NESTED_GROUP_LENGTH.fill(
+						group, "length", lengthOf(group), "encoder", entry.encoder(), "terms", String.join("\n", terms)
+				);
+		return String.join(
+				"\n\n",
+				WRITE_GROUP.fill(group, "encoder", entry.encoder(), "body", writes(entry)),
+				READ_GROUP.fill(
+						group, "decoder", entry.decoder(), "groups", groupReads(entry), "arguments", arguments(entry)
+				),
+				length
+		);
+	}
+
+	private static List<Member.Group> groups(Body body) {
+		List<Member.Group> groups = new ArrayList<>();
+		for (Member member : body.wireOrder()) {
+			if (member instanceof Member.Group group) {
+				groups.add(group);
+			}
+		}
+		return groups;
+	}
+
+	/** {@code legsLength} for the path {@code Legs}. */
+	private static String lengthOf(Member.Group group) {
+		return Character.toLowerCase(group.path().charAt(0)) + group.path().substring(1) + "Length";
+	}
+
+	private static IllegalStateException noNullValue(String name) {
+		return new IllegalStateException(name + " has no null value on the wire");
+	}
+
+	private static IllegalStateException notAConstant(Member.Field field) {
+		return new IllegalStateException(field.component() + " is a constant of no constant's shape");
+	}
+}

@@ -7,7 +7,7 @@ import net.concini.sbebuddy.tests.SchemaCase;
 /**
  * A header of the schema's own naming and shape. sbe-tool requires the four
  * standard members and ignores anything else the header carries.
- * {@code codecs = false}: the oracle check only, until increment 16.
+ * {@code codecs = false}: the oracle check only, until increment 17.
  */
 final class HeaderTest implements SchemaCase {
 

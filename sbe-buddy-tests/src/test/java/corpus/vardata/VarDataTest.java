@@ -8,7 +8,7 @@ import net.concini.sbebuddy.tests.SchemaCase;
  * Variable-length data: text with a character encoding, opaque bytes without
  * one, a length type wide enough to need its own maxValue, and var-data inside
  * a group's entry. {@code codecs = false}: the oracle check only, until
- * increment 15.
+ * increment 16.
  */
 final class VarDataTest implements SchemaCase {
 
