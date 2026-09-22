@@ -6,7 +6,7 @@ import net.concini.sbebuddy.tests.SchemaCase;
 
 /**
  * A schema on the wire the other way round. {@code codecs = false}: the oracle
- * check only, until increment 16.
+ * check only, until increment 17.
  */
 final class BigEndianTest implements SchemaCase {
 
