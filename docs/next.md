@@ -69,8 +69,8 @@ another branch.
   `LinkedHashMap` keyed by what they map, the declaration or the path,
   so the first use orders them and a nested helper registers before the
   one that uses it. A construct the codec does not cover yet is a
-  `Problem` collected on the message, and the walk stops for that
-  message; the thrown `Rejected` goes. The per-message state, the
+  `Problem` collected once on the message, which then gets no model; the
+  thrown `Rejected` goes. The per-message state, the
   flyweights package, the helpers and the bindings, is the walk's own,
   so no method takes it as a parameter.
 - **`CodecWriter`, the model to source.** A switch over the model's

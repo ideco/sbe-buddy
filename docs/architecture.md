@@ -9,7 +9,7 @@ changing what it is; `intent.md` and `type-mappings.md` outrank this file.
 ```
 sbe-buddy-api          annotations, PrimitiveType, Presence, ByteOrder, the built-in composites; Codec, TypeBinding, bindings
                        dep: agrona, from the first release
-sbe-buddy-generator    net.concini.sbebuddy.generator   Schema, SchemaXml, Annotated, Mapping, Generator, the codec emitter, the corpus
+sbe-buddy-generator    net.concini.sbebuddy.generator   Schema, SchemaXml, Annotated, Mapping, Generator, the codec model, its walk and its writer
                        deps: sbe-buddy-api, sbe-tool
 sbe-buddy-processor    net.concini.sbebuddy.processor   javac elements → Annotated; Messager; Filer
                        dep: sbe-buddy-generator
@@ -88,7 +88,7 @@ never imported.
   its `unmapped` fields, for a field its `binding` as the class code names
   and the `W` it hands the flyweight, and references to other declarations
   by identity rather than by `Class`. It is the Java face: the
-  codec emitter reads it beside the IR, related to `Schema` by name, which
+  codec walk reads it beside the IR, related to `Schema` by name, which
   is unique per message.
 * **Both are values.** Neither carries a position. `Discovery` returns its
   `Annotated` together with identity maps from each `Annotated` node to its
@@ -198,33 +198,43 @@ Three layers, in the order a mistake meets them.
   `.sbeir`, is not written: `IrEncoder` serializes it with Agrona's
   `UnsafeBuffer`, which would make a user's javac need a JVM flag, and
   `-Dsbe.generate.ir=true` on the resource produces it.
-* The codec emitter walks the IR the way `JavaGenerator` does, with
+* The codec is made in two steps, over a model between them.
+  `CodecWalk` walks the IR the way `JavaGenerator` does, with
   `GenerationUtil.collectFields`, `collectGroups` and `collectVarData`,
   and names flyweight members through `JavaUtil`, so the codec calls what
-  was generated, by construction. Each token's Java face comes from
-  `Annotated` by name. Fields, then groups, recursing into each body, then
-  var-data; decoding is the mirror. `encodedLength` takes its shape from
+  was generated, by construction. Each token meets its annotation once, by
+  wire name. Fields, then groups, recursing into each body, then var-data.
+  What the walk builds is a `CodecModel`, the codec's grammar in one file:
+  per message a body of members in wire order and in constructor order,
+  each member a field, an unmapped field or a group whose entry is a body;
+  each field a shape on the wire (a scalar, a string, an array, an enum, a
+  set, a composite, a constant), an absence (none, required, optional,
+  added) and a binding or none; and the helper methods the members call,
+  one per thing mapped, each after the helpers it uses. `CodecWriter`
+  renders the model: one switch per question, how a shape is written and
+  read, how its absence wraps that, what each helper declares, and the
+  binding in front of the write and behind the read. `CodecEmitter` runs
+  both per message and hands the sources to the output. `encodedLength` takes its shape from
   the IR and its numbers from the flyweights' constants (`BLOCK_LENGTH`,
   `sbeHeaderSize()`, `sbeBlockLength()`, `ENCODED_LENGTH`), so generated
-  code holds no wire number. A construct the emitter does not cover yet
+  code holds no wire number. A construct the codec does not cover yet
   is a `Problem` naming the message, never a silent skip, wherever the
-  walk meets it: the body walk throws out of any depth and the message's
-  codec catches it once, so var-data inside a group is refused as var-data
+  walk meets it: the walk collects each once per message, and a message
+  with one gets no model, so var-data inside a group is refused as var-data
   in a message is.
-* Absence, per field, is decided on each side. The encode side follows
-  the component: `encodeField` for a primitive, `encodeOptionalField`
-  writing the flyweight's `<field>NullValue()` for `null`, and
-  `encodeBoxedField` for any other box, which refuses `null` with
-  `IllegalArgumentException` because a required field has no wire form for
-  it. The decode side follows the wire: `decodeField`,
-  `decodeOptionalField` yielding `null` for the null value, whatever the
-  field's version, since below the acting version the getter returns it,
-  and `decodeAddedField` for a required field appended above the
-  baseline, yielding `null` when `decoder.actingVersion()` is below
+* Absence, per field, is the model's `Absence`, decided by the walk from
+  the wire and the component and applied by the writer on each side. The
+  encode side: a primitive is written as it is, an optional field writes
+  the flyweight's `<field>NullValue()` for `null`, and any other reference
+  refuses `null` with `IllegalArgumentException` because a required field
+  has no wire form for it. The decode side: an optional field yields
+  `null` for the null value, whatever the field's version, since below
+  the acting version the getter returns it, and a required field appended
+  above the baseline yields `null` when `decoder.actingVersion()` is below
   `<field>SinceVersion()`, on the version and never on the null value,
   which a required field may hold. The null test is `==` for the integer
   primitives and `Float.compare` or `Double.compare` for the floats,
-  whose null value is `NaN`; the float's box is the one name the emitter
+  whose null value is `NaN`; the float's box is the one name the walk
   decides from the primitive type itself.
 * `@SbeSchema(baselineVersion = n)` is the oldest version the codecs
   still decode: a required field appended at or below it is never absent
@@ -330,7 +340,7 @@ Three layers, in the order a mistake meets them.
   `<group>Length` term per group to the header and the block, without
   encoding; `decodedLength` wraps the decoder and returns the header plus
   `sbeDecodedLength()` where the message has a group, and stays the
-  header's block length where it has none. What the emitter still refuses
+  header's block length where it has none. What the codec still refuses
   inside a group is a field or a group added above the group's baseline,
   whose shape is a field's but whose proof is a frozen version the example
   does not have, and var-data anywhere.
@@ -343,18 +353,18 @@ Three layers, in the order a mistake meets them.
   walks; the constructor call's arguments follow the record's component
   order, which the canonical constructor takes, and fixed-block addressing
   makes the two independent.
-* The emitter is templates. Every construct it emits is a Java text block
-  with named placeholders, beside the method that fills it and named after
-  the construct, filled through `Template`: names and values in, a failure
+* The writer is templates. Every construct it writes is a Java text block
+  with named placeholders in `CodecTemplates`, grouped by the shape it
+  writes and named after the construct, filled through `Template`: names and values in, a failure
   for a name left unfilled or a value never used, a multi-line value
   indented to its placeholder's column with its blank lines left blank,
   and a placeholder alone on its line indenting its value's first line
   the same way, so a value may open with a blank line, and filled empty
   taking the line with it, so a block left out leaves no blank line. What
   varies is decided in Java and pasted in; the templates hold no conditionals and no loops, and no code
-  fragment is assembled by concatenation. The emitter is the file that
-  grows with every increment, and this is what keeps it readable: the
-  generated shape is read in the emitter the way it is read in the output.
+  fragment is assembled by concatenation. A new construct is a node in
+  the model, a case in the writer's switches and its templates, which is
+  what keeps the three readable as they grow.
 * `<Msg>Codec` and `<Iface>Codec` go to the schema package: `public final`,
   public no-arg constructor, `@Generated("net.concini.sbebuddy")`, owning one header
   encoder and decoder and the message flyweights, plus one instance of each
