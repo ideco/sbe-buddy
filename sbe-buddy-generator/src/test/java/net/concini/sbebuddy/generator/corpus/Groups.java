@@ -2,6 +2,7 @@ package net.concini.sbebuddy.generator.corpus;
 
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.SHORT;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
@@ -170,16 +171,18 @@ final class Groups {
 
 	static Annotated annotated() {
 		AnnotatedCompositeBuilder smallGroupSizeEncoding = annotatedComposite("SmallGroupSizeEncoding")
+				.qualifiedName("corpus.groups.SmallGroupSizeEncoding")
 				.name("smallGroupSizeEncoding")
 				.members(
-						annotatedType("blockLength", UINT8),
-						annotatedType("numInGroup", UINT8)
+						annotatedType("blockLength", UINT8).javaType(primitive(SHORT)),
+						annotatedType("numInGroup", UINT8).javaType(primitive(SHORT))
 				);
 		AnnotatedCompositeBuilder varStringEncoding = annotatedComposite("VarStringEncoding")
+				.qualifiedName("corpus.groups.VarStringEncoding")
 				.name("varStringEncoding")
 				.members(
-						annotatedType("length", UINT16),
-						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
+						annotatedType("length", UINT16).javaType(primitive(INT)),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8").javaType(text())
 				);
 		return annotatedSchema("corpus.groups", 1, 0).codecs(false)
 				.types(smallGroupSizeEncoding, varStringEncoding)

@@ -25,6 +25,7 @@ import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
+import static net.concini.sbebuddy.generator.Fixtures.primitive;
 import static net.concini.sbebuddy.generator.Fixtures.ref;
 import static net.concini.sbebuddy.generator.Fixtures.set;
 import static net.concini.sbebuddy.generator.Fixtures.text;
@@ -105,7 +106,7 @@ final class Versions {
 			@SbeComposite(sinceVersion = 1, deprecated = 3)
 			record Pair(
 					@SbeType(primitiveType = INT32) int first,
-					@SbeRef(offset = 4, sinceVersion = 1, deprecated = 3) Added second
+					@SbeRef(value = Added.class, offset = 4, sinceVersion = 1, deprecated = 3) int second
 			) {
 			}
 
@@ -211,10 +212,11 @@ final class Versions {
 
 	static Annotated annotated() {
 		AnnotatedCompositeBuilder varStringEncoding = annotatedComposite("VarStringEncoding")
+				.qualifiedName("corpus.versions.VarStringEncoding")
 				.name("varStringEncoding")
 				.members(
-						annotatedType("length", UINT16),
-						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8")
+						annotatedType("length", UINT16).javaType(primitive(INT)),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8").javaType(text())
 				);
 		AnnotatedTypeBuilder added = annotatedType("Added", INT32).sinceVersion(1).deprecated(3);
 		AnnotatedEnumBuilder status = annotatedEnum("Status")
@@ -230,11 +232,12 @@ final class Versions {
 				.deprecated(3)
 				.choices(annotatedChoice("urgent", 0).sinceVersion(1).deprecated(3));
 		AnnotatedCompositeBuilder pair = annotatedComposite("Pair")
+				.qualifiedName("corpus.versions.Pair")
 				.sinceVersion(1)
 				.deprecated(3)
 				.members(
-						annotatedType("first", INT32),
-						annotatedRef("second", declared(added)).offset(4).sinceVersion(1).deprecated(3)
+						annotatedType("first", INT32).javaType(primitive(INT)),
+						annotatedRef("second", primitive(INT)).value(added).offset(4).sinceVersion(1).deprecated(3)
 				);
 		return annotatedSchema("corpus.versions", 1, 3).codecs(false)
 				.semanticVersion("FIX.5.0SP2")

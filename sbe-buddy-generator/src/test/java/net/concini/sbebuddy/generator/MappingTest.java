@@ -5,10 +5,12 @@ import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.CHAR;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.SHORT;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedEnum;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedRef;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSet;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
@@ -374,6 +376,104 @@ final class MappingTest {
 
 		assertThat(problemsOf(field))
 				.containsExactly(new Problem(field.build(), "Side is an enum; a field of it takes no binding"));
+	}
+
+	@Test
+	void aCompositesMemberIsTheFaceOfItsType() {
+		Fixtures.AnnotatedTypeBuilder mantissa = annotatedType("mantissa", PrimitiveType.INT64)
+				.javaType(primitive(INT));
+		Fixtures.AnnotatedTypeBuilder scale = annotatedType("scale", PrimitiveType.UINT8)
+				.presence(Presence.OPTIONAL)
+				.javaType(primitive(SHORT));
+		Fixtures.AnnotatedTypeBuilder unit = annotatedType("unit", PrimitiveType.CHAR).presence(Presence.CONSTANT)
+				.javaType(primitive(BYTE));
+		Fixtures.AnnotatedCompositeBuilder price = annotatedComposite("Price").members(mantissa, scale, unit);
+
+		assertThat(problemsOf(annotatedField("price", 1, declared(price)))).containsExactly(
+				new Problem(mantissa.build(), "int is not the face of mantissa, which is long"),
+				new Problem(scale.build(), "short cannot hold null, but the member can be absent; use Short"),
+				new Problem(unit.build(), "a constant member needs a value or a valueRef")
+		);
+	}
+
+	@Test
+	void aRefsComponentIsTheFaceOfWhatItRefersTo() {
+		Fixtures.AnnotatedCompositeBuilder decimal = annotatedComposite("Decimal")
+				.members(annotatedType("mantissa", PrimitiveType.INT64).javaType(primitive(LONG)));
+		Fixtures.AnnotatedRefBuilder bid = annotatedRef("bid", primitive(LONG)).value(decimal);
+		Fixtures.AnnotatedCompositeBuilder quote = annotatedComposite("Quote").members(bid);
+
+		assertThat(problemsOf(annotatedField("quote", 1, declared(quote))))
+				.containsExactly(new Problem(bid.build(), "long is not the face of Decimal, which is Decimal"));
+	}
+
+	@Test
+	void aCompositeFieldsComponentIsTheRecordAndNeverOptional() {
+		Fixtures.AnnotatedCompositeBuilder price = annotatedComposite("Price")
+				.members(annotatedType("mantissa", PrimitiveType.INT64).javaType(primitive(LONG)));
+		Fixtures.AnnotatedFieldBuilder plain = annotatedField("price", 1, primitive(LONG)).type(price);
+		Fixtures.AnnotatedFieldBuilder optional = annotatedField("price", 1, declared(price))
+				.presence(Presence.OPTIONAL);
+		Fixtures.AnnotatedFieldBuilder bound = annotatedField("price", 1, other("java.math.BigDecimal"))
+				.type(price)
+				.binding("p.DecimalBinding", primitive(LONG));
+		Fixtures.AnnotatedFieldBuilder wellBound = annotatedField("price", 1, other("java.math.BigDecimal"))
+				.type(price)
+				.binding("p.DecimalBinding", declared(price));
+
+		assertThat(problemsOf(plain)).containsExactly(new Problem(plain.build(), "Price is a composite; use Price"));
+		assertThat(problemsOf(optional))
+				.containsExactly(
+						new Problem(optional.build(), "Price is a composite; a field of it cannot be optional")
+				);
+		assertThat(problemsOf(bound)).containsExactly(
+				new Problem(
+						bound.build(),
+						"DecimalBinding binds the wire as long, but the face of Price is Price; implement TypeBinding over Price"
+				)
+		);
+		assertThat(problemsOf(wellBound)).isEmpty();
+	}
+
+	@Test
+	void aCompositesLayoutOrdersItsMembers() {
+		Fixtures.AnnotatedCompositeBuilder price = annotatedComposite("Price")
+				.members(
+						annotatedType("exponent", PrimitiveType.INT8).javaType(primitive(BYTE)),
+						annotatedType("mantissa", PrimitiveType.INT64).javaType(primitive(LONG))
+				)
+				.unmapped(annotatedType("scale", PrimitiveType.UINT8).name("scale").javaType(unmapped()))
+				.layout("mantissa", "scale", "exponent");
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.types(price)
+				.messages(annotatedMessage("M", 1).components(annotatedField("price", 1, declared(price))))
+				.build();
+
+		Mapping.Mapped mapped = Mapping.map(annotated);
+
+		assertThat(mapped.problems()).isEmpty();
+		assertThat(((Schema.Composite) mapped.schema().types().get(1)).members())
+				.extracting(member -> ((Schema.Type) member).name())
+				.containsExactly("mantissa", "scale", "exponent");
+	}
+
+	@Test
+	void aCompositesLayoutAndUnmappedMembersFollowTheMessagesRules() {
+		Fixtures.AnnotatedTypeBuilder bounds = annotatedType("bounds", PrimitiveType.UINT32)
+				.length(3)
+				.presence(Presence.OPTIONAL)
+				.javaType(array(LONG));
+		Fixtures.AnnotatedTypeBuilder nameless = annotatedType("", PrimitiveType.UINT8).javaType(unmapped());
+		Fixtures.AnnotatedCompositeBuilder price = annotatedComposite("Price")
+				.members(bounds)
+				.unmapped(nameless)
+				.layout("bounds", "", "scale");
+
+		assertThat(problemsOf(annotatedField("price", 1, declared(price)))).contains(
+				new Problem(price.build(), "the layout names nothing called \"scale\""),
+				new Problem(bounds.build(), "bounds has a length; it cannot be optional"),
+				new Problem(nameless.build(), "an unmapped member needs a name")
+		);
 	}
 
 	@Test

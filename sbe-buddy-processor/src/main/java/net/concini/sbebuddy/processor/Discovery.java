@@ -238,10 +238,21 @@ public final class Discovery {
 		return composite;
 	}
 
+	/**
+	 * A type on a class, without a Java type, or on a composite's component, with
+	 * the component's.
+	 */
 	private Annotated.Type type(Element element, String javaName) {
-		Members type = members(element, SbeType.class);
+		Annotated.JavaType javaType = element instanceof RecordComponentElement component
+				? javaType(component.asType())
+				: null;
+		return type(members(element, SbeType.class), javaName, javaType, element);
+	}
+
+	private Annotated.Type type(Members type, String javaName, Annotated.@Nullable JavaType javaType, Element at) {
 		Annotated.Type result = new Annotated.Type(
 				javaName,
+				javaType,
 				type.enumeration("primitiveType", PrimitiveType.class),
 				type.string("name"),
 				type.string("value"),
@@ -258,7 +269,7 @@ public final class Discovery {
 				type.integer("sinceVersion"),
 				type.integer("deprecated")
 		);
-		remember(result, element, type.mirror);
+		remember(result, at, type.mirror);
 		return result;
 	}
 
@@ -274,9 +285,17 @@ public final class Discovery {
 				members.add(member);
 			}
 		}
+		List<Annotated.Type> unmapped = new ArrayList<>();
+		for (AnnotationMirror mirror : composite.annotations("unmapped")) {
+			Members member = new Members(mirror);
+			unmapped.add(type(member, member.string("name"), new Annotated.Unmapped(), at));
+		}
 		Annotated.Composite result = new Annotated.Composite(
 				javaName,
+				type.getQualifiedName().toString(),
 				members,
+				unmapped,
+				composite.strings("layout"),
 				composite.string("name"),
 				composite.integer("offset"),
 				composite.string("semanticType"),
