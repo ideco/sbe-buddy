@@ -3,6 +3,7 @@ package com.example.quotes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -21,19 +22,24 @@ import com.example.quotes.xmlref.QuoteEncoder;
  * reader reads a current message whole, and a version 0 message is below the
  * baseline and refused. The retired trade count is written as its null value
  * and never read; the constant price exponent is on no wire and in every
- * decoded record. The frozen versions' flyweights, and the reference enums
- * whose simple names are the example's own, are qualified.
+ * decoded record; the prices are mantissas on the wire and decimals in the
+ * record, through the binding both ways. The frozen versions' flyweights, and
+ * the reference enums whose simple names are the example's own, are qualified.
  */
 final class ReferenceFlyweightsTest {
 
 	private static final int OFFSET = 16;
+
+	private static final BigDecimal BID = new BigDecimal("1.0050");
+
+	private static final BigDecimal ASK = new BigDecimal("1.0075");
 
 	private static final byte EXPONENT = -4;
 
 	private static final long[] DEPTH = {4_000_000_000L, 900, 800, 700, 600};
 
 	private static final Quote QUOTE = new Quote(
-			42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+			42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
 			EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH
 	);
 
@@ -76,7 +82,7 @@ final class ReferenceFlyweightsTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		codec.encode(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(),
+						42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(),
 						"ACME",
 						EXPONENT, DEPTH
 				),
@@ -106,7 +112,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoded).usingRecursiveComparison().isEqualTo(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNYS, MarketState.HALTED,
+						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNYS, MarketState.HALTED,
 						EnumSet.of(QuoteFlag.CROSSED), "ACME", EXPONENT, DEPTH
 				)
 		);
@@ -168,7 +174,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoded).isEqualTo(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
 						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null
 				)
 		);
@@ -209,7 +215,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoded).isEqualTo(
 				new Quote(
-						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
 						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null
 				)
 		);
@@ -244,7 +250,7 @@ final class ReferenceFlyweightsTest {
 		Quote decoded = codec.decode(buffer, OFFSET);
 
 		assertThat(decoded).isEqualTo(
-				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, null, null, null, null, EXPONENT, null)
+				new Quote(42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, null, null, null, null, EXPONENT, null)
 		);
 		int shorter = com.example.quotes.xmlref.v2.MessageHeaderEncoder.ENCODED_LENGTH
 				+ com.example.quotes.xmlref.v2.QuoteEncoder.BLOCK_LENGTH;
@@ -263,7 +269,7 @@ final class ReferenceFlyweightsTest {
 		Quote decoded = codec.decode(buffer, OFFSET);
 
 		assertThat(decoded).isEqualTo(
-				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, null, null, null, EXPONENT, null)
+				new Quote(42, BID, ASK, 4_000_000_000L, 250, 7, null, null, null, null, null, EXPONENT, null)
 		);
 		int shorter = com.example.quotes.xmlref.v1.MessageHeaderEncoder.ENCODED_LENGTH
 				+ com.example.quotes.xmlref.v1.QuoteEncoder.BLOCK_LENGTH;
