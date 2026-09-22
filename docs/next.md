@@ -1,163 +1,211 @@
-# Increment 13: Codec: groups, nested
+# Increment 14: The tests module
 
 ## Goal
 
-A group reaches the record as the `List<E>` it is written on, `E` the record
-whose components are the group's fields and groups, each mapped by the rules
-a message's body already follows: the same shapes over the group's own
-flyweight, a binding, an enum, a set, a composite, a constant, a string, an
-array, an optional field and an unmapped one as they are on a message. A
-nested group is a list inside an entry, however deep. `encodedLength` earns
-its keep: it sums the dimensions and the entries of every group without
-encoding, and `decodedLength` walks them without decoding. A group appended
-above the baseline is `null` below its version, as a field is. After it, what
-the emitter still refuses is var-data, in a message or a group, a field or
-a group added above the baseline inside a group, a header of the schema's
-own and big-endian byte order.
+The corpus stops being text the generator compares and becomes code the
+build compiles: one package per schema in `sbe-buddy-tests`, the records
+as a user would write them, the processor on the annotation processor
+path, and one test class per package that hands the harness the schema's
+oracle and the values its codecs must carry to the wire and back. What the
+generator's twins proved by record equality the real build proves by
+compiling; what the codec views proved as text the round trips prove as
+behaviour, against the generated flyweights and codecs themselves. The
+compile-time rules stay unit tests, since a refusal is a compile error and
+nothing else can assert its message and its node.
+
+This increment lands in two parts. The pull request that opens it builds
+the module, the harness and the first case, `corpus.composites`, as the
+seed every other case copies. The remaining cases move one commit each,
+by the instructions below, which are written so that they can be followed
+without reading anything else.
 
 ## Settled before it started
 
-- sbe-tool's message flyweights expose a group as a static nested class of
-  the message's, `<Msg>Encoder.<Group>Encoder` and `<Msg>Decoder.<Group>Decoder`,
-  a nested group's class nested in its parent group's. The encoder's
-  `<group>Count(int)` writes the dimensions and returns the group encoder,
-  whose `next()` opens the next entry; the decoder's `<group>()` reads the
-  dimensions and returns the group decoder, with `count()`, `hasNext()` and
-  `next()`, and below the acting version returns it with a count of zero
-  without moving the limit. Both group classes have static `sbeHeaderSize()`
-  and `sbeBlockLength()`, the parent decoder a static
-  `<group>DecoderSinceVersion()`, named after the group's decoder class as
-  sbe-tool has it, and the group decoder `actingVersion()`. Inside a group the fields are
-  generated as a message's, their static meta methods on the group class
-  and their getters guarded by the message's acting version. The encoder's
-  wrap refuses a count outside the dimension type's range with its own
-  `IllegalArgumentException`. The message decoder's `sbeSkip()` walks every
-  group and var-data, and `sbeDecodedLength()` does so and restores the
-  limit. (`JavaGenerator.generateDecoderGroups`, `generateEncoderGroups`,
-  `generateGroupDecoderProperty`, `generateGroupEncoderProperty`,
-  `generateGroupDecoderClassHeader`, `generateGroupEncoderClassHeader`,
-  `generateFieldNotPresentCondition` and `generateMessageLength`, read
-  2026-09-22; to `notes.md`.)
-- An entry's fields are addressed by offset from the entry's start, as a
-  message's are from the block's, so a record's components may take any
-  order; its groups are sequential, so the codec reads them in wire order
-  into locals before it calls the constructor, and writes them after the
-  fields in the order the layout gives.
-- A group has no presence: it cannot be optional, and a group present with
-  zero entries is an empty list. A `null` list on encode is an
-  `IllegalArgumentException`, `legs is required`, from `encodedLength` and
-  `encode` alike. A group appended above the baseline is absent below its
-  version, decodes to `null` by the flyweight's `<group>DecoderSinceVersion()`
-  as a field does by its own, and its component is nullable; the flyweight's count of
-  zero below the version is never read as an empty list. A list longer than
-  the dimension type's `numInGroup` allows is refused by the flyweight.
-- Inside a group the baseline is the group's own `sinceVersion` where that
-  is higher than the schema's: an entry exists only in a message whose
-  version carries the group, so a field at its group's version is never
-  absent while the group is present, and its component is a plain
-  primitive. The flyweight agrees, since the group's guard fires before
-  the field's ever could. sbe-tool's own conventions and the `Versions`
-  corpus write the group's version on its fields, so `Mapping`'s absence
-  rule reads the effective baseline, and so does the emitter.
-- A field or a group added above that baseline inside a group is increment
-  16's, although the flyweight guards both: the shape is a field's, and the
-  proof is a frozen version with one, which the example does not have yet.
-  So is var-data, in a message or a group, increment 14's; a group holding
-  var-data is refused as var-data is, which means the emitter's walk looks
-  inside every group before it emits anything.
+- The processor's tests compile every corpus case with `-proc:only`,
+  which runs the processor and never compiles what it writes. A generated
+  codec that does not compile passes there. The seed found one: a
+  composite's inline set was declared as the set's enum, `Flags flags`,
+  while the codec it generates takes and returns a `Set<Flags>`. The
+  face of a set is `Set<E>` everywhere, so `Discovery` now takes a
+  `Set` of the nested `@SbeSet` enum as the inline set and refuses the
+  bare enum with `Flags is a set; use Set<Flags>`; the guide's composites
+  page follows.
+- The tests module is the one place the repository scans a classpath:
+  `Cases` walks the module's own test classes and instantiates every
+  class implementing `SchemaCase`, ordered by name, so a new schema needs
+  no registration. `java-style.md` records the exception.
+- A case is named `<Name>Test`, so surefire runs its own `@Test` methods
+  as well as the harness finding it. Surefire's phrased reporter names
+  each dynamic check by the case's description, the word `checks`, and
+  the check's own description; the case's own tests are named by their
+  methods, sentences in camelCase as everywhere else.
+- Decoded values are compared by AssertJ's recursive comparison, so a
+  record holding an array or a `Set` compares by content; the bytes a
+  decoded value encodes to are compared exactly, which is the stronger
+  check.
+- `XsdCoverageTest` moves to the tests module now and reads every oracle
+  in both places, the generator's remaining cases through `Corpus.CASES`
+  from the generator's test jar and the moved cases through `Cases`, so a
+  port never has to reason about coverage.
+- The example module stays what it is, the realistic schema and the
+  interop with sbe-tool's reference flyweights; the corpus's edge shapes
+  would muddy it.
 
 ## What gets built
 
-- **The api.** Nothing: `@SbeGroup` has every member it needs.
-- **`Annotated`.** `ListOfRecord` gains `qualifiedName`, the entry record's
-  name as code names it, which the codec's helpers and locals are typed
-  with; `Discovery` fills it from the `E` of `List<E>`, and the corpus DSL
-  gains `listOfRecord(name)`.
-- **The rules.** `Mapping`'s absence rule takes the effective baseline: a
-  body is checked against the higher of the schema's `baselineVersion` and
-  its group's `sinceVersion`, and a nested group's against the higher of
-  its parent's and its own, so a field at its group's version is a plain
-  primitive and one above it is boxed. Otherwise a group must be a `List`
-  of a record, its body follows the message's rules, and a group has no
-  presence to check. The emitter refuses a field or a group added above
-  that baseline inside a group, `a field added above the baseline in a
-  group` and `a group added above the baseline in a group`, and var-data
-  wherever it is, in a message or in a group at any depth.
-- **The codec emitter.** Every shape takes its flyweight classes from its
-  owner, the message's, a composite's or a group's, so a field inside a
-  group is the same template over `<Msg>Encoder.<Group>Encoder`. A group
-  is three private methods keyed by its path, `write<Group>(List<E>
-  entries, <Group>Encoder encoder)` looping the entries with `next()` and
-  the body's encode statements, `List<E> read<Group>(<Group>Decoder decoder)`
-  looping `hasNext()` and `next()` into an `ArrayList` sized by `count()`,
-  both the codec's own since an entry's bound field reaches its binding,
-  and the static `int <group>Length(List<E> entries)`, the header plus the
-  entries times the block length, plus each entry's nested groups where
-  there are any, refusing `null`; a nested group's methods carry the parent's name,
-  `writeLegsAllocations`, as an array pair does, in order of first use
-  after the codec's own methods, a group's three before those of what its
-  body uses. A group encodes as
-  `write<Group>(value.<group>(), encoder.<group>Count(value.<group>().size()))`
-  under the checked shape, after the fields, and decodes into a local,
-  `List<E> <group> = read<Group>(decoder.<group>())`, under the added shape
-  above the baseline, before the constructor call, which takes the local
-  where its component is. `encodedLength` adds a `<group>Length` term per
-  group to the header and the block; `decodedLength` wraps the decoder and
-  returns the header plus `sbeDecodedLength()` where the message has a
-  group, and stays the block length where it has none, so every other
-  case's view is untouched.
-- **The corpus.** `Groups` goes to `version = 1`, turns codecs on and gains
-  its `CODEC` view: a group with a `layout` and an unmapped field, holding
-  a nested group with a `dimensionType` of its own and an optional field,
-  and a second group appended in version 1 whose entry binds a price
-  through `Cents`, so the nested pair, the shapes over a group's classes
-  and the added shape on a group all show. Its var-data member moves to
-  `VarData`, which gains a group holding var-data, so the shape stays in
-  the corpus and `VarData` stays on `codecs = false`. `Versions` stays on
-  `codecs = false` for its var-data.
-- **The example.** `com.example.quotes` goes to `version = 7` and appends
-  `contributors`, a group of `Contributor` records, each a venue's own
-  quote, `Venue venue`, `bid` and `ask` through the `Price` binding and
-  their sizes, `@Nullable List<Contributor>` since it is above the
-  baseline; `quotes-v6.xml` is frozen with `xmlref.v6`. The tests: the
-  round trip with two contributors and with none; `null` contributors
-  refused on `encodedLength` and `encode`; the reference decoder reading
-  the entries where the codec wrote them; the codec reading what the
-  reference encoder writes; a version 6 message decoding with `null`
-  contributors; a version 6 reader reading a current message's block and
-  stopping before the group, which is SBE's limit. `com.example.trading`
-  stays on `codecs = false` for its var-data.
-- **The guide.** The reference page the index promises, `reference/
-  groups.md`: `@SbeGroup` on a `List` of a record, the entry record,
-  nested groups, `dimensionType`, `blockLength`, `layout` and `unmapped`
-  on the body, what a group costs in `encodedLength`, absence and the
-  empty list, what the compiler and the codec refuse.
-- **The documents.** `type-mappings.md`'s absence section takes the rule on
-  groups; `architecture.md`'s models, rules, generation, contract and
-  testing sections follow; `notes.md` takes the facts above; `intent.md`
-  ticks 13 and moves appended groups out of 16, which keeps the rest.
+- **The module.** `sbe-buddy-tests`, after the example in the root
+  `pom.xml`, built like the example: `sbe-buddy-api` in compile scope,
+  the processor on `annotationProcessorPaths`, the generator and its test
+  jar and `xmlunit-assertj3` in test scope for `SchemaXmlAssert`. Not
+  deployed. The surefire configuration for phrased names in its `pom.xml`.
+- **The harness**, in `net.concini.sbebuddy.tests` under the test
+  sources. `SchemaCase`, the interface a case implements: `description()`,
+  one line; `oracle()`, the hand-written XML as a text block;
+  `roundTrips()`, a list of `RoundTrip<T>(description, codec, value)`.
+  `Cases`, the discovery. `SchemaCasesTest`, the `@TestFactory`: per case
+  a `DynamicContainer` named by the description, holding the oracle check
+  and one `DynamicTest` per round trip. The round trip: `encodedLength`,
+  a buffer of that length plus sixteen bytes on either side filled with a
+  marker, `encode` at offset sixteen returning the length and leaving the
+  marker bytes untouched, `decodedLength` equal to the length, `decode`,
+  `lastDecodedLength` equal, the decoded value equal to the original by
+  recursive comparison, and the decoded value encoded again into the
+  same bytes.
+- **The seed.** `corpus.composites` as it was in the generator's corpus,
+  one file per type, `@NullMarked` on the package and `@Nullable` on the
+  optional member; `CompositesTest` with three round trips, every member
+  set, every absence and bound, and the unsigned top bit, and seven tests
+  of its own: `null` in a message component and in a member, the constant
+  member, the unknown enum value and the unnamed set bit on decode,
+  another template, and the binding's own exception passing through. The
+  generator's `Composites` case is deleted and its entry in `Corpus.CASES`
+  with it.
+- **The ports**, one commit per case, in the order of the table below.
+- **The documents.** `architecture.md`'s modules and testing sections;
+  `AGENTS.md`'s module list; `java-style.md`'s scanning rule;
+  `intent.md` ticks 14 once every case has moved.
+
+## How to port a case
+
+Every case follows the same eight steps. The seed, `corpus.composites`,
+is the worked example of each; when in doubt, do what it does.
+
+1. **Read the case** in
+   `sbe-buddy-generator/src/test/java/net/concini/sbebuddy/generator/corpus/<Name>.java`:
+   its class javadoc, which says what the schema shows; `PACKAGE_INFO`;
+   `SOURCE`; `XML`; and `CODEC`, if it has one, whose `throw` statements
+   list what the codec refuses and with which message.
+2. **Create the schema package** under `sbe-buddy-tests/src/main/java/`,
+   the package `SOURCE` names, `corpus.<name>`. `package-info.java` is
+   `PACKAGE_INFO` with the case's javadoc above it, `@NullMarked` before
+   `@SbeSchema` and `import org.jspecify.annotations.NullMarked;`. Each
+   top-level type of `SOURCE` goes into its own file named after it,
+   package-private as it is, with the imports it needs. Keep every
+   annotation and every name exactly as `SOURCE` has them; the oracle
+   depends on them. Add `@Nullable` from `org.jspecify.annotations` to
+   every component that may hold `null`: an optional field or member, a
+   boxed primitive, a field, group or data appended above the baseline.
+   Keep `codecs = false` where `PACKAGE_INFO` has it.
+3. **Create the case** in `sbe-buddy-tests/src/test/java/corpus/<name>/<Name>Test.java`,
+   `final class <Name>Test implements SchemaCase`, with the case's
+   javadoc. `ORACLE` is `XML` verbatim as a text block. `description()`
+   is one line, `<Name>: ` and what the schema shows. `oracle()` returns
+   `ORACLE`. `roundTrips()` returns a `List.of` of `new RoundTrip<>(
+   description, new <Message>Codec(), value)`; for a case with
+   `codecs = false` it returns `List.of()`. Values are built through the
+   records' canonical constructors, edge cases first: the null value on
+   every optional field, meaning `null` in the record, then every
+   optional field present; the bounds of every primitive, `Long.MIN_VALUE`
+   and `Long.MAX_VALUE` for an `int64`, `-1L` for a `uint64` since the top
+   bit set reads as negative through the `long` face; a full-length string
+   and an empty one; an empty group, a group of several entries, and an
+   empty nested group inside a filled one; an empty set and a full one;
+   every enum value. Name each value by what it shows, as a phrase.
+4. **Add the case's own tests**, `@Test` methods on the same class, one
+   per refusal the codec view's `throw` statements list, asserting the
+   exception type and the exact message with `assertThatThrownBy(...)
+   .isInstanceOf(IllegalArgumentException.class).hasMessage(...)`. A
+   refusal on decode plants the bad byte with `buffer.putByte` at the
+   flyweights' own offset, `OFFSET + MessageHeaderEncoder.ENCODED_LENGTH
+   + <Message>Encoder.<field>EncodingOffset()`, plus the member's
+   `EncodingOffset()` on the composite's encoder for a member; never a
+   literal offset. Another template: `new MessageHeaderEncoder()
+   .wrap(buffer, OFFSET).templateId(<other>)`. A case with versions
+   encodes a message, sets `headerEncoder.version(<older>)` the same way,
+   decodes, and asserts the appended fields `null`; a header below the
+   baseline is refused with the message the view shows. A case whose
+   record can carry what the wire cannot, a string too long or not ASCII,
+   an array of the wrong length, the unknown-value enum constant, a
+   `null` group, asserts each refusal. The flyweight classes are in
+   `corpus.<name>.sbe`, the codec beside the records.
+5. **Delete the generator's case**: `git rm` the case class and remove
+   its `new Case(...)` entry from `Corpus.CASES` in `Corpus.java`. Nothing
+   else in the generator refers to a case by name.
+6. **Build**: `./mvnw spotless:apply`, then `./mvnw verify`. A compile
+   error in the schema package is the records disagreeing with the
+   processor's rules, or a generated codec that does not compile, which
+   is a finding: fix the product, never the oracle, and say so in the
+   commit body. A failing round trip is a codec bug or a wrong value;
+   read the assertion's description before deciding. `XsdCoverageTest`
+   cannot fail from a move, since it reads both places.
+7. **Commit**: `Move the <Name> case to the tests module`, the body
+   naming what the round trips and the tests cover and any finding.
+8. **When `Corpus.CASES` is empty**, in the last commit: delete
+   `Corpus.java` and `CorpusTest.java`, which empties the generator's
+   `corpus` test package, while `Fixtures` in the parent package stays;
+   delete `SbeProcessorTest.java`, the `Corpus` overload of
+   `Javac.compile` and the corpus-parameterized test of `DiscoveryTest`;
+   remove the `Corpus.CASES` loop and import from `XsdCoverageTest`; tick
+   14 in `intent.md`; and strike the "until every case has moved" bullet
+   from `architecture.md`'s testing section. `Fixtures` keeps what
+   `MappingTest` and `GeneratorTest` need and loses the rest.
+
+## The cases to port
+
+In this order, simplest first, so each port can copy the last. The third
+column is the least the round trips and the case's own tests must show;
+the case's javadoc and its `CODEC` view say the rest.
+
+| Case | Package | Must show |
+| --- | --- | --- |
+| Primitives | `corpus.primitives` | Every field at zero, at its minimum and at its maximum, the unsigned ones at their top bit through the face. |
+| OptionalFields | `corpus.optionalfields` | Every optional field `null`, then present; the floats' null value is `NaN`, so a float field present at `NaN` is the null value and decodes to `null`. |
+| Messages | `corpus.messages` | A round trip per message; each codec refuses the other's template with `not a <Message>: schemaId ..., templateId ...`. |
+| NamedTypes | `corpus.namedtypes` | The optional type's field `null` and present; the constrained values at `minValue` and `maxValue`. |
+| Constants | `corpus.constants` | Each constant held; each constant given another value refused with `<component> is the constant ...`. |
+| Enums | `corpus.enums` | Every value of both enums; the unknown wire value decoding to the designated constant on the enum that has one and refused with `<Enum> has no value ...` on the one that has not; encoding the designated constant refused with `<Enum>.<Constant> has no wire form`. |
+| Sets | `corpus.sets` | Each set empty, with one choice and with all; a bit no choice names refused on decode with `<Set> has a bit no choice names: ...`. |
+| Arrays | `corpus.arrays` | Every array full at its bounds; an array of the wrong length refused, `null` in an array field refused. |
+| Layout | `corpus.layout` | The components in their declared order round tripping; a test that the unmapped field's bytes hold its null value, read through the generated decoder. |
+| AddedFields | `corpus.addedfields` | A current message with every field; the same message with its header at version 1 decoding with the version 2 fields `null`; a header at version 0 refused with `... is below the baseline 1`. |
+| Bindings | `corpus.bindings` | A value through every binding and back, the optional bound field `null` and present; a binding's own exception passing through unwrapped. |
+| Groups | `corpus.groups` | No entries; several entries with the nested group empty in one and filled in another; the optional entry field `null`; the appended group with entries; a `null` group refused from `encodedLength` and from `encode` with `<group> is required`; a version 0 message decoding with the appended group `null`. |
+| VarData | `corpus.vardata` | `codecs = false`: the oracle check only, no round trips, until increment 15. |
+| Versions | `corpus.versions` | `codecs = false`: the oracle check only. |
+| Header | `corpus.header` | `codecs = false`: the oracle check only, until increment 16. |
+| BigEndian | `corpus.bigendian` | `codecs = false`: the oracle check only, until increment 16. |
+
+A case named in the table does not exist by the time you read this only
+if it was already ported; the generator's corpus directory is the list
+of what remains.
 
 ## Criteria
 
-- `Groups`' emitted codec equals its `codecs` view exactly, its oracle
-  parses, and every other case's view is untouched.
-- The quotes example round trips with contributors against the reference
-  flyweights, in the real build, with `encodedLength`, `lastDecodedLength`
-  and `decodedLength` equal to the bytes written, and decodes a version 6
-  message without them.
-- Each refusal above has a test that builds the mistake and asserts the
-  `Problem` and the node: a field and a group added above the baseline in
-  a group, and var-data inside a group as well as in a message. The
-  effective baseline has a `Mapping` test each way: a field at its group's
-  version stays a plain primitive, one above it must be boxed.
-- The guide's reference page compiles as written: its snippets are the
-  example's and the corpus's.
-- `./mvnw verify` is green on a fresh clone, and the CI job passes on this
-  pull request.
+- The seed's pull request: the module builds in the reactor, `Cases`
+  finds `CompositesTest`, the surefire report names every check by its
+  phrase, the generator's `Composites` case is gone, and `./mvnw verify`
+  is green on a fresh clone with the CI job passing.
+- Each port: its commit builds green, the case's round trips and tests
+  run under the phrased names, the generator's case is gone, and any
+  finding is fixed in the product with the fix in the same commit.
+- The increment: `Corpus.CASES` is gone with everything that read it,
+  every construct the old corpus covered has a case whose round trips
+  cover it, `XsdCoverageTest` passes over the moved oracles alone, and
+  `intent.md` ticks 14.
 
 ## Out of scope
 
-Var-data, increment 14, in a message or a group. A field or a group added
-above the baseline inside a group, increment 16, and `sinceVersion` inside
-a composite with it. A header type of the schema's own, increment 15. A
-group under `unmapped`, which `retire-a-field.md` still promises.
+A synthetic value generator over the IR, which the `RoundTrip` shape
+would take later. Moving the example's tests, which stay where the
+reference flyweights are. New constructs: var-data, byte order and header
+types keep their increments and their `codecs = false` until then.
