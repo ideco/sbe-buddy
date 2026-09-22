@@ -3,15 +3,15 @@
 ## Goal
 
 A record may hold a field as a type of its own rather than as the wire's
-face: `@Bind(X.class)` on the component names a `TypeBinding<J, W>`, and
-the codec maps through it, `toWire` before the flyweight's setter and
+face: `@SbeField(binding = X.class)` names a `TypeBinding<J, W>`, and the
+codec maps through it, `toWire` before the flyweight's setter and
 `fromWire` after its getter. A named type stays what it is, a wire encoding
 the schema declares, and a binding stays Java: it contributes nothing to
-the schema, another reader never sees it, and the field alone says which
-binding it wants over which wire, so one domain type may arrive over
-different encodings and one encoding may reach different types. The
-increment covers the faces the block has so far, a primitive's, a `char`
-string's and an array's; composite faces come with composites.
+the schema, another reader never sees it, no class is both, and the field
+alone says which binding it wants over which wire, so one domain type may
+arrive over different encodings and one encoding may reach different
+types. The increment covers the faces the block has so far, a primitive's,
+a `char` string's and an array's; composite faces come with composites.
 
 ## Settled before it started
 
@@ -20,12 +20,16 @@ string's and an array's; composite faces come with composites.
   as `null` without calling the binding; whatever the binding throws
   passes through unwrapped (`type-mappings.md`, bindings and the codec
   contract).
-- The "type that is its own binding" form, an `@SbeType` implementing
-  `TypeBinding` that a field takes through `type` alone, is dropped: it
-  welds a Java type to one encoding, where the field should decide. A
-  class may still carry both roles, and a field that wants both says both,
-  `type = Cents.class` and `@Bind(Cents.class)`. `type-mappings.md`,
-  its running example and `intent.md` change in this increment.
+- The binding is a member of `@SbeField`, `binding`, beside `type`, the
+  way `layout` and `unmapped` sit on `@SbeMessage`: the Java side of the
+  annotation, contributing nothing to the schema. There is no `@Bind`;
+  `@SbeData` gets the same member with var-data, and a composite's members
+  none until a schema asks.
+- A declaration never implements `TypeBinding`. The "type that is its own
+  binding" form is dropped: it welds a Java type to one encoding, where
+  the field should decide, and it blurs what is schema and what is Java.
+  `type-mappings.md`, its running example and `intent.md` change in this
+  increment.
 - javac resolves a class's `TypeBinding` arguments through
   `Types.asMemberOf` on the interface's methods: the parameter type of
   `toWire` is J and its return type W, with the class's own type arguments
@@ -35,29 +39,30 @@ string's and an array's; composite faces come with composites.
 
 - **The api.** `TypeBinding<J, W>` with `W toWire(J value)` and
   `J fromWire(W wire)`, documented as the contract: stateless, a public
-  no-arg constructor, never handed `null`. `@Bind` on a record component,
-  `Class<? extends TypeBinding<?, ?>> value()`, retained at `CLASS`,
-  documented as the Java side beside `@UnknownValue`.
+  no-arg constructor, never handed `null`. `Class<?> binding() default
+  void.class` on `@SbeField`, documented as the Java side.
 - **`Annotated`.** `Field` gains `binding`, a nullable `Binding(String
   qualifiedName, JavaType wire)`: the class code names, and W as the Java
   type descriptor the face rule compares. J is not carried, because only
-  javac can compare it with the component; the corpus DSL gains `bound(name,
-  wire)` on its field builder.
-- **The rules in `Discovery`,** on the component: `@Bind` goes with
-  `@SbeField`, so on a group or data component it is a problem; the class
-  implements `TypeBinding`, is not abstract and has a public no-arg
-  constructor; J is the component's type, where a primitive component
-  matches its box, `Cents binds BigDecimal, not long`. A `@Bind` inside an
-  unmapped field is impossible, since the annotation goes on a component.
+  javac can compare it with the component; the corpus DSL gains
+  `binding(name, wire)` on its field builder.
+- **The rules in `Discovery`,** on the component: the class implements
+  `TypeBinding`, is not abstract and has a public no-arg constructor; it
+  carries no declaration annotation, `Cents is a type; a binding is a class
+  of its own`, and the reverse on the declaration, an `@SbeType`,
+  `@SbeComposite`, `@SbeEnum` or `@SbeSet` class that implements
+  `TypeBinding`; J is the component's type, where a primitive component
+  matches its box, `CentsBinding binds BigDecimal, not long`. An unmapped
+  field's `binding` is a problem too: nothing is read or written for it.
 - **The rules in `Mapping`.** W is the face of the field's wire type, boxed
   where the face is a primitive because a type argument is: `Long` for
   `int64`, `String` for a `char` type with a length, `byte[]` for a `uint8`
-  array: `Cents binds the wire as Long, but the face of int32 is Integer`.
-  A binding on a field of an enum or a set is a problem, since their faces
-  are the user's types already. The boxing rule reads the component as
-  before, so a primitive J on a field that can be absent is refused as any
-  primitive is; the face rule on the component yields to the binding's
-  rule, since the component is J.
+  array: `CentsBinding binds the wire as Long, but the face of int32 is
+  Integer`. A binding on a field of an enum or a set is a problem, since
+  their faces are the user's types already. The boxing rule reads the
+  component as before, so a primitive J on a field that can be absent is
+  refused as any primitive is; the face rule on the component yields to
+  the binding's rule, since the component is J.
 - **The codec emitter.** One private final field per binding class a codec
   uses, `private final com.example.Price priceBinding = new
   com.example.Price();`, named after the class's simple name, after the
@@ -73,9 +78,9 @@ string's and an array's; composite faces come with composites.
   before the binding is called.
 - **The corpus.** A new case, `Bindings`, whose oracle is what the same
   schema writes without a binding, which is the point: `Cents`, an
-  `@SbeType` of `int64` that also implements `TypeBinding<BigDecimal,
-  Long>`, on a field through `type` and `@Bind` together; the same class on
-  a field with `primitiveType = INT64`, sharing the instance; an optional
+  `@SbeType` of `int64`, and `CentsBinding`, a `TypeBinding<BigDecimal,
+  Long>`, on a field through `type` and `binding`; the same binding on a
+  field with `primitiveType = INT64`, sharing the instance; an optional
   field through it, `@Nullable BigDecimal`; `Symbol`, a `char` type of
   length 6, bound to a wrapper record `Ticker(String value)` by
   `TickerBinding`; and `Rgb`, a `uint8` array, bound to a record `Colour`.
@@ -91,14 +96,15 @@ string's and an array's; composite faces come with composites.
   decimals; a price with more than four decimals refused by the binding's
   own `ArithmeticException`, passing through the codec unwrapped.
 - **The guide.** A reference page, `docs/guide/reference/bindings.md`:
-  the interface and its contract, `@Bind` over a primitive and over a named
-  type, a wrapper record, absence, what the binding may throw; the index
-  links it, and the named-types page's coverage section points to it.
-- **The documents.** `type-mappings.md`'s bindings section drops the
-  own-binding form and its running example gives `commission` its `@Bind`;
-  `intent.md` rewords increment 11 and ticks it; `architecture.md`'s
-  models, rules and generation sections follow; `notes.md` takes the javac
-  fact.
+  the interface and its contract, `binding` over a primitive and over a
+  named type, a wrapper record, absence, what the binding may throw; the
+  index links it, and the named-types page's coverage section points to
+  it.
+- **The documents.** `type-mappings.md`'s bindings section says the member
+  and the separation, and its running example gives `Cents` a
+  `CentsBinding` beside it; `intent.md` rewords increment 11 and ticks it;
+  `architecture.md`'s models, rules and generation sections follow;
+  `notes.md` takes the javac fact.
 
 ## Criteria
 
@@ -116,8 +122,9 @@ string's and an array's; composite faces come with composites.
 
 ## Out of scope
 
-Bindings over composite faces, increment 12, and over var-data, increment
-14. The built-in bindings, `Uuid` and the time encodings, increment 18. A
-wrapper record taken as its own binding without a class, a convention to
-revisit once the FIX schema of increment 19 shows how often the case
-occurs. A binding with state, or one constructed with arguments.
+Bindings over composite faces, which go through the face record,
+increment 12, and over var-data, increment 14. The built-in bindings,
+`Uuid` and the time encodings, increment 18. A wrapper record taken as its
+own binding without a class, a convention to revisit once the FIX schema
+of increment 19 shows how often the case occurs. A binding with state, or
+one constructed with arguments.
