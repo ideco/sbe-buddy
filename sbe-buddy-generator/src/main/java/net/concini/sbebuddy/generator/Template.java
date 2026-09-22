@@ -1,11 +1,14 @@
 package net.concini.sbebuddy.generator;
 
+import java.lang.reflect.RecordComponent;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.jspecify.annotations.Nullable;
 
 /**
  * A text block with named placeholders, {@code {name}}, and nothing else: no
@@ -16,7 +19,8 @@ import java.util.regex.Pattern;
  * value may open with a blank line, and an empty value takes the line with it,
  * so a block left out leaves no blank line behind. A name left unfilled or a
  * value never used fails, because a gap in generated code is a bug nobody sees
- * until it compiles.
+ * until it compiles. The values may come from a record, a placeholder taking
+ * the component of its name, so a template reads a model node as it is.
  */
 public final class Template {
 
@@ -34,6 +38,15 @@ public final class Template {
 
 	/** Names and values, alternating. */
 	public String fill(String... namesAndValues) {
+		return fill(null, namesAndValues);
+	}
+
+	/**
+	 * A placeholder takes the value given for its name, or else the record's
+	 * component of that name, which must be a {@code String}. Every value given
+	 * must be used; the record's components need not be.
+	 */
+	public String fill(@Nullable Record source, String... namesAndValues) {
 		if (namesAndValues.length % 2 != 0) {
 			throw new IllegalArgumentException("names and values alternate");
 		}
@@ -49,7 +62,7 @@ public final class Template {
 		int copied = 0;
 		while (placeholder.find()) {
 			String name = placeholder.group(1);
-			String value = values.get(name);
+			String value = values.containsKey(name) ? values.get(name) : component(source, name);
 			if (value == null) {
 				throw new IllegalArgumentException("{" + name + "} is not filled");
 			}
@@ -72,6 +85,31 @@ public final class Template {
 			throw new IllegalArgumentException(unused + " are not placeholders of this template");
 		}
 		return filled.toString();
+	}
+
+	/** The record's text component of the name, or null where it has none. */
+	private static @Nullable String component(@Nullable Record source, String name) {
+		if (source == null) {
+			return null;
+		}
+		for (RecordComponent component : source.getClass().getRecordComponents()) {
+			if (component.getName().equals(name)) {
+				Object value;
+				try {
+					value = component.getAccessor().invoke(source);
+				} catch (ReflectiveOperationException e) {
+					throw new IllegalStateException(e);
+				}
+				if (value != null && !(value instanceof String)) {
+					throw new IllegalArgumentException(
+							"{" + name + "} would take " + source.getClass().getSimpleName() + "." + name
+									+ ", which is not text"
+					);
+				}
+				return (String) value;
+			}
+		}
+		return null;
 	}
 
 	/**

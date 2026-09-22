@@ -114,4 +114,51 @@ final class TemplateTest {
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("names and values alternate");
 	}
+
+	// ---- filled from a record
+
+	private record Field(String component, String property, int offset) {
+	}
+
+	@Test
+	void aPlaceholderTakesTheRecordsComponentOfItsName() {
+		Template template = Template.of("encoder.{property}(value.{component}());");
+
+		assertThat(template.fill(new Field("quantity", "qty", 8))).isEqualTo("encoder.qty(value.quantity());");
+	}
+
+	@Test
+	void aValueGivenBesideTheRecordComesFirst() {
+		Template template = Template.of("encoder.{property}({source});");
+
+		assertThat(template.fill(new Field("quantity", "qty", 8), "property", "size", "source", "wire"))
+				.isEqualTo("encoder.size(wire);");
+	}
+
+	@Test
+	void aComponentThatIsNotTextIsAMistake() {
+		Template template = Template.of("{offset}");
+
+		assertThatThrownBy(() -> template.fill(new Field("quantity", "qty", 8)))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("{offset} would take Field.offset, which is not text");
+	}
+
+	@Test
+	void aNameNeitherGivenNorAComponentIsNotFilled() {
+		Template template = Template.of("{encoder}");
+
+		assertThatThrownBy(() -> template.fill(new Field("quantity", "qty", 8)))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("{encoder} is not filled");
+	}
+
+	@Test
+	void aValueGivenBesideTheRecordMustStillBeUsed() {
+		Template template = Template.of("{property}");
+
+		assertThatThrownBy(() -> template.fill(new Field("quantity", "qty", 8), "source", "wire"))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("[source] are not placeholders of this template");
+	}
 }

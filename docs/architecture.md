@@ -355,8 +355,11 @@ Three layers, in the order a mistake meets them.
   makes the two independent.
 * The writer is templates. Every construct it writes is a Java text block
   with named placeholders in `CodecTemplates`, grouped by the shape it
-  writes and named after the construct, filled through `Template`: names and values in, a failure
-  for a name left unfilled or a value never used, a multi-line value
+  writes and named after the construct, filled through `Template`: the
+  model node the template writes, each placeholder taking the node's
+  record component of its name, and beside it names and values for what
+  the node does not hold; a failure for a name left unfilled, a value
+  given and never used, or a component that is not text; a multi-line value
   indented to its placeholder's column with its blank lines left blank,
   and a placeholder alone on its line indenting its value's first line
   the same way, so a value may open with a blank line, and filled empty
@@ -436,7 +439,6 @@ public interface Codec<T> {
 ## Testing
 
 The corpus does the work at every layer; javac appears only where it must.
-Reflection is banned in main code and free in tests.
 
 * **The corpus, in the tests module.** One package per schema under
   `sbe-buddy-tests/src/main/java`, the records as a user would write them,
