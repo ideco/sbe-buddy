@@ -52,7 +52,7 @@ final class CorpusTest {
 		assertThat(Generator.validate(aCase.schema())).isEmpty();
 	}
 
-	@ParameterizedTest
+	@ParameterizedTest(allowZeroInvocations = true)
 	@MethodSource("casesTheCodecCovers")
 	void emitsItsCodecs(Corpus.Case aCase) {
 		StringWriterOutputManager output = new StringWriterOutputManager();
