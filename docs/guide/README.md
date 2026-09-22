@@ -12,7 +12,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 * [Bindings](reference/bindings.md) — `TypeBinding` and `binding`, a record's own types over the wire's faces
 * [Enums](reference/enums.md) — `@SbeEnum`, explicit wire values and unknown values
 * [Sets](reference/sets.md) — `@SbeSet`, bit choices and `Set` components
-* Composites — composites and refs
+* [Composites](reference/composites.md) — `@SbeComposite`, members, refs, the record as the field
 * Groups — repeating groups
 * Variable data — strings and byte arrays
 * Codecs — the `Codec` contract and its lifecycle

@@ -342,6 +342,20 @@ alternatives considered.
   work although `MessageHeader` carries `@SbeComposite`. (Every corpus
   case, which resolves `MessageHeader` from the api jar and compiles
   without a diagnostic.)
+* A message flyweight exposes a composite field as a flyweight of its own:
+  the decoder's `<field>()` wraps a `<Composite>Decoder` at the field's
+  offset and returns it, `null` below the acting version; the encoder's
+  `<field>()` wraps a `<Composite>Encoder` and never guards. Inside a
+  composite flyweight the members are generated as a message's fields are,
+  primitives with their static meta methods, arrays and strings, enums with
+  `<member>Raw()`, sets and nested composites, but with no version guard of
+  any kind, `inComposite` being true for every one: a member's
+  `sinceVersion` changes nothing in the flyweight. A `ref` is a nested
+  composite property wrapping the referenced composite's flyweight, whose
+  class `applicableTypeName()` names. (`JavaGenerator.java`,
+  `generateCompositeProperty`, `generateComposite` and
+  `generatePropertyNotPresentCondition`, read 2026-09-22; the `Composites`
+  corpus case.)
 * `Types.asMemberOf(declaredType, method)` on an interface's method, with
   the class implementing the interface as the type, returns the
   `ExecutableType` with the class's type arguments substituted: for

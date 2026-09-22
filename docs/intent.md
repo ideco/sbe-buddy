@@ -107,7 +107,7 @@ the block, one at a time.
 
 **Composites.** Structured values, and bindings over them.
 
-* [ ] 12. Codec: composites. Nested records, `@SbeRef`, inline declarations; bindings over composite faces, `Uuid` first
+* [x] 12. Codec: composites. Nested records, `@SbeRef`, inline declarations, `layout` and `unmapped` on the composite; a binding over a composite face goes through the face record
 
 **Variable length.** `encodedLength` has to earn its keep.
 

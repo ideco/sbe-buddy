@@ -120,4 +120,4 @@ The checks the codec makes on the wire's face still apply to what the binding ha
 
 ## Coverage
 
-This page covers bindings over a primitive's, a string's and an array's face. Bindings over composites and variable-length data, and the built-in bindings for the JDK's `UUID` and time types, have their own pages.
+This page covers bindings over a primitive's, a string's and an array's face. A binding over a [composite](composites.md) takes its record as `W`; bindings over variable-length data, and the built-in bindings for the JDK's `UUID` and time types, have their own pages.
