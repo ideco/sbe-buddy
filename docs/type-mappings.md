@@ -103,7 +103,8 @@ field names; boxed where the field can be absent.
 | `uint8`, `uint16`, `uint32`, `uint64` | `short`, `int`, `long`, `long` (sbe-tool's widening; `uint64` is the bit pattern) |
 | `char` (`length` 1) | `byte` |
 | `char`, `length = N` | `String`: decoded up to the first NUL, encoded NUL-padded; `IllegalArgumentException` over `N` or outside `characterEncoding` |
-| any other primitive, `length = N` | the primitive's array type (`byte[]`, `short[]`, `int[]`, `long[]`, `float[]`, `double[]`), exactly `N` long |
+| `int8` or `uint8`, `length = N` | `byte[]`, the bytes as they are, exactly `N` long |
+| any other primitive, `length = N` | the array of the element's face (`short[]`, `int[]`, `long[]`, `float[]`, `double[]`), exactly `N` long |
 | `enum` | the `@SbeEnum` enum |
 | `set` | `Set<E>` of the `@SbeSet` enum; decoded as an `EnumSet` |
 | `composite` | the `@SbeComposite` record |
@@ -124,8 +125,10 @@ sbe-tool applies it. A field left at the default presence takes its named
 type's, as sbe-tool reads the document.
 
 A set field cannot be optional: a set has no null value, and an empty set is
-a value; the compiler rejects `presence = OPTIONAL` on one. A field of an
-enum or a set is absent below the acting version like any other.
+a value; the compiler rejects `presence = OPTIONAL` on one. Nor can a field
+of a type with a `length`, a string or an array: SBE gives an array no null
+value and sbe-tool's flyweight reads none. A field of an enum, a set, a
+string or an array is absent below the acting version like any other.
 
 A field *can be absent* when it is optional, or when its `sinceVersion` is
 above the schema's `baselineVersion` and it is not a constant. A primitive
@@ -169,7 +172,10 @@ still exists: decoding fills it with the constant, encoding requires the
 component to equal the constant and throws otherwise. The constant is
 `value` on the `@SbeType`, or `valueRef` (`Enum.CONSTANT`) on the field. A
 constant is never absent, whatever its `sinceVersion`: its value is in the
-schema, not on the wire.
+schema, not on the wire. A constant field names a `valueRef` or a constant
+type; the compiler rejects one with neither. A constant `char` type whose
+`value` is longer than one character has that length, as sbe-tool reads it,
+and its face is `String`.
 
 ## Bindings: the Java side
 

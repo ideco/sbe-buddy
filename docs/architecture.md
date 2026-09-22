@@ -78,7 +78,8 @@ never imported.
   annotation, one component per member with the member's name, plus what
   an annotation cannot carry: the Java name of the thing annotated, its
   Java type as a small sealed descriptor (a primitive, `String`,
-  `byte[]`, a `List` of a record, a `Set` of an `@SbeSet` enum, a declared
+  `byte[]`, an array of another primitive, a `List` of a record, a `Set` of
+  an `@SbeSet` enum, a declared
   type, or none for a field no component carries), for an enum or a set
   the qualified name code uses, for a message or a group its `layout` and
   its `unmapped` fields, and references to other declarations by identity
@@ -126,7 +127,11 @@ Three layers, in the order a mistake meets them.
   absent, and the one warning, a box on a field that never is
   (`type-mappings.md`, absence), a field of an enum whose component is
   not that enum, a field of a set whose component is not a `Set` of that
-  enum, `presence = OPTIONAL` on a set field, which has no null value, an
+  enum, `presence = OPTIONAL` on a set field, which has no null value, a
+  component that is not the face of a type with a length, `String` for
+  `char` and the element's array otherwise, `presence = OPTIONAL` on a
+  field of such a type, a constant field with neither a `valueRef` nor a
+  constant type, which sbe-tool's IR generator crashes on, an
   unmapped field without a `name` or a type, unmapped fields without a
   `layout`, and a `layout` that misses a name, repeats one or names
   nothing, or a name that is both a component's and an unmapped field's.
@@ -227,6 +232,27 @@ Three layers, in the order a mistake meets them.
   field, boxed primitive, enum or set. The only literals in generated
   code are the schema's own declarations: the baseline, the valid values'
   text and the choices' bits.
+* A named type of length 1 needs nothing of its own: the field shapes read
+  the presence sbe-tool resolved from the type and the null value the type
+  declares. A `char` string in an ASCII encoding goes through the
+  flyweight's own `String` form, `<field>(String)` and `<field>()`, after
+  `ascii`, a private static helper emitted once per codec that needs it,
+  which refuses a string longer than `<field>Length()` or holding a char
+  above 127, because Agrona writes `?` for those silently and throws its
+  own exception over the length; a string in any other encoding is refused
+  by name. An array is a pair of private static methods per field,
+  `write<Field>` refusing a length other than `<field>Length()` and putting
+  each element by index, `read<Field>` allocating that length and getting
+  each, and for `uint8` the flyweight's bulk `put<Field>` and `get<Field>`
+  over `byte[]`, so nothing is cast. A constant carries no bytes: encode
+  compares the component with the flyweight's own constant getter, or for
+  an enum with the record's constant the `valueRef` names, and refuses a
+  mismatch; decode is the plain read, never the added shape, because a
+  constant is never absent; an unmapped constant writes nothing. The field
+  shapes wrap all of them: `null` refused on a required field, the version
+  tested for an added string or array, since the flyweight answers `""` or
+  the null value below it. The enum and set pairs, the array pairs and
+  `ascii` follow the codec's own methods in order of first use.
 - A body's wire order is its `layout` when it gives one, declaration order
   otherwise; `Mapping` orders the fields, groups and data before every
   rule that reads the order, so `SchemaXml` and sbe-tool see one document
