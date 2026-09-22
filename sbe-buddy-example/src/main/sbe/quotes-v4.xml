@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The oracle for com.example.quotes: the schema the annotated records must
-     produce, written by hand as a person would write it. -->
+<!-- Version 4 of com.example.quotes, frozen: never edited again. The
+     reference flyweights in com.example.quotes.xmlref.v4 come from it. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="com.example.quotes"
                    id="92"
-                   version="5"
+                   version="4"
                    description="Top of book quotes">
     <types>
         <composite name="messageHeader">
@@ -28,9 +28,6 @@
             <choice name="crossed">1</choice>
             <choice name="locked">2</choice>
         </set>
-        <type name="Symbol" primitiveType="char" length="8" characterEncoding="US-ASCII" semanticType="String" description="An instrument symbol, NUL padded"/>
-        <type name="PriceExponent" primitiveType="int8" presence="constant" description="The power of ten every price is scaled by">-4</type>
-        <type name="Depth" primitiveType="uint32" length="5" description="The sizes at the five best levels, best first"/>
     </types>
     <sbe:message name="Quote" id="1" description="The best bid and offer of one instrument">
         <field name="instrumentId" id="1" type="int64"/>
@@ -44,8 +41,5 @@
         <field name="venue" id="9" type="Venue" sinceVersion="3" description="The venue the quote comes from"/>
         <field name="state" id="10" type="MarketState" sinceVersion="3" description="The state of the instrument's market"/>
         <field name="flags" id="11" type="QuoteFlag" sinceVersion="3" description="What the quote says about itself"/>
-        <field name="symbol" id="12" type="Symbol" sinceVersion="5" description="The instrument's symbol"/>
-        <field name="priceExponent" id="13" type="PriceExponent" sinceVersion="5" description="The exponent of bid, ask and vwap"/>
-        <field name="bidDepth" id="14" type="Depth" sinceVersion="5" description="The bid sizes at the five best levels"/>
     </sbe:message>
 </sbe:messageSchema>

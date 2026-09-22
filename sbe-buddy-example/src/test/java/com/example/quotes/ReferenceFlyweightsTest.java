@@ -20,16 +20,21 @@ import com.example.quotes.xmlref.QuoteEncoder;
  * message from an older writer decodes with its later fields absent, an older
  * reader reads a current message whole, and a version 0 message is below the
  * baseline and refused. The retired trade count is written as its null value
- * and never read. The frozen versions' flyweights, and the reference enums
+ * and never read; the constant price exponent is on no wire and in every
+ * decoded record. The frozen versions' flyweights, and the reference enums
  * whose simple names are the example's own, are qualified.
  */
 final class ReferenceFlyweightsTest {
 
 	private static final int OFFSET = 16;
 
+	private static final byte EXPONENT = -4;
+
+	private static final long[] DEPTH = {4_000_000_000L, 900, 800, 700, 600};
+
 	private static final Quote QUOTE = new Quote(
 			42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-			EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED)
+			EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH
 	);
 
 	@Test
@@ -53,6 +58,15 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoder.flags().indicative()).isTrue();
 		assertThat(decoder.flags().crossed()).isFalse();
 		assertThat(decoder.flags().locked()).isTrue();
+		assertThat(decoder.symbol()).isEqualTo("ACME");
+		byte[] symbol = new byte[QuoteDecoder.symbolLength()];
+		decoder.getSymbol(symbol, 0);
+		assertThat(symbol).containsExactly('A', 'C', 'M', 'E', 0, 0, 0, 0);
+		assertThat(decoder.priceExponent()).isEqualTo(EXPONENT);
+		assertThat(QuoteDecoder.priceExponentEncodingLength()).isZero();
+		for (int level = 0; level < QuoteDecoder.bidDepthLength(); level++) {
+			assertThat(decoder.bidDepth(level)).isEqualTo(DEPTH[level]);
+		}
 		assertThat(MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength()).isEqualTo(written);
 	}
 
@@ -61,7 +75,11 @@ final class ReferenceFlyweightsTest {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		codec.encode(
-				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of()),
+				new Quote(
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(),
+						"ACME",
+						EXPONENT, DEPTH
+				),
 				buffer, OFFSET
 		);
 
@@ -80,14 +98,16 @@ final class ReferenceFlyweightsTest {
 				.tradeCount(3).vwap(10_060.5).venue(com.example.quotes.xmlref.Venue.XNYS)
 				.state(com.example.quotes.xmlref.MarketState.HALTED);
 		encoder.flags().crossed(true);
+		encoder.symbol("ACME").bidDepth(0, 4_000_000_000L).bidDepth(1, 900).bidDepth(2, 800).bidDepth(3, 700)
+				.bidDepth(4, 600);
 		QuoteCodec codec = new QuoteCodec();
 
 		Quote decoded = codec.decode(buffer, OFFSET);
 
-		assertThat(decoded).isEqualTo(
+		assertThat(decoded).usingRecursiveComparison().isEqualTo(
 				new Quote(
 						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNYS, MarketState.HALTED,
-						EnumSet.of(QuoteFlag.CROSSED)
+						EnumSet.of(QuoteFlag.CROSSED), "ACME", EXPONENT, DEPTH
 				)
 		);
 		assertThat(codec.lastDecodedLength()).isEqualTo(MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength());
@@ -134,6 +154,47 @@ final class ReferenceFlyweightsTest {
 	}
 
 	@Test
+	void aVersionFourMessageDecodesWithTheConstantAndItsArraysAbsent() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		com.example.quotes.xmlref.v4.QuoteEncoder encoder = new com.example.quotes.xmlref.v4.QuoteEncoder()
+				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v4.MessageHeaderEncoder());
+		encoder.instrumentId(42).bid(10_050).ask(10_075).bidSize(4_000_000_000L).askSize(250).sequence(7)
+				.vwap(10_060.5).venue(com.example.quotes.xmlref.v4.Venue.XNAS)
+				.state(com.example.quotes.xmlref.v4.MarketState.OPEN);
+		encoder.flags().indicative(true).locked(true);
+		QuoteCodec codec = new QuoteCodec();
+
+		Quote decoded = codec.decode(buffer, OFFSET);
+
+		assertThat(decoded).isEqualTo(
+				new Quote(
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null
+				)
+		);
+		int shorter = com.example.quotes.xmlref.v4.MessageHeaderEncoder.ENCODED_LENGTH
+				+ com.example.quotes.xmlref.v4.QuoteEncoder.BLOCK_LENGTH;
+		assertThat(shorter).isLessThan(codec.encodedLength(QUOTE));
+		assertThat(codec.lastDecodedLength()).isEqualTo(shorter);
+	}
+
+	@Test
+	void aVersionFourReaderReadsACurrentMessageWhole() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		int written = codec.encode(QUOTE, buffer, OFFSET);
+
+		com.example.quotes.xmlref.v4.QuoteDecoder decoder = new com.example.quotes.xmlref.v4.QuoteDecoder()
+				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v4.MessageHeaderDecoder());
+
+		assertThat(decoder.tradeCount()).isEqualTo(com.example.quotes.xmlref.v4.QuoteDecoder.tradeCountNullValue());
+		assertThat(decoder.flags().locked()).isTrue();
+		assertThat(decoder.actingVersion()).isEqualTo(5);
+		assertThat(com.example.quotes.xmlref.v4.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
+				.isEqualTo(written);
+	}
+
+	@Test
 	void aVersionThreeMessageWithATradeCountDecodesWithoutIt() {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		com.example.quotes.xmlref.v3.QuoteEncoder encoder = new com.example.quotes.xmlref.v3.QuoteEncoder()
@@ -146,8 +207,13 @@ final class ReferenceFlyweightsTest {
 
 		Quote decoded = codec.decode(buffer, OFFSET);
 
-		assertThat(decoded).isEqualTo(QUOTE);
-		assertThat(codec.lastDecodedLength()).isEqualTo(codec.encodedLength(QUOTE));
+		assertThat(decoded).isEqualTo(
+				new Quote(
+						42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null
+				)
+		);
+		assertThat(codec.lastDecodedLength()).isLessThan(codec.encodedLength(QUOTE));
 	}
 
 	@Test
@@ -161,7 +227,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.tradeCount()).isEqualTo(com.example.quotes.xmlref.v3.QuoteDecoder.tradeCountNullValue());
 		assertThat(decoder.venue()).isEqualTo(com.example.quotes.xmlref.v3.Venue.XNAS);
-		assertThat(decoder.actingVersion()).isEqualTo(4);
+		assertThat(decoder.actingVersion()).isEqualTo(5);
 		assertThat(com.example.quotes.xmlref.v3.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(written);
 	}
@@ -177,8 +243,9 @@ final class ReferenceFlyweightsTest {
 
 		Quote decoded = codec.decode(buffer, OFFSET);
 
-		assertThat(decoded)
-				.isEqualTo(new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, null, null, null));
+		assertThat(decoded).isEqualTo(
+				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, 10_060.5, null, null, null, null, EXPONENT, null)
+		);
 		int shorter = com.example.quotes.xmlref.v2.MessageHeaderEncoder.ENCODED_LENGTH
 				+ com.example.quotes.xmlref.v2.QuoteEncoder.BLOCK_LENGTH;
 		assertThat(shorter).isLessThan(codec.encodedLength(QUOTE));
@@ -195,7 +262,9 @@ final class ReferenceFlyweightsTest {
 
 		Quote decoded = codec.decode(buffer, OFFSET);
 
-		assertThat(decoded).isEqualTo(new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, null, null));
+		assertThat(decoded).isEqualTo(
+				new Quote(42, 10_050, 10_075, 4_000_000_000L, 250, 7, null, null, null, null, null, EXPONENT, null)
+		);
 		int shorter = com.example.quotes.xmlref.v1.MessageHeaderEncoder.ENCODED_LENGTH
 				+ com.example.quotes.xmlref.v1.QuoteEncoder.BLOCK_LENGTH;
 		assertThat(codec.lastDecodedLength()).isEqualTo(shorter);
@@ -213,7 +282,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.instrumentId()).isEqualTo(42);
 		assertThat(decoder.sequence()).isEqualTo(7);
-		assertThat(decoder.actingVersion()).isEqualTo(4);
+		assertThat(decoder.actingVersion()).isEqualTo(5);
 		// The acting block length is the header's, so the longer block is consumed
 		// whole.
 		assertThat(com.example.quotes.xmlref.v1.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
