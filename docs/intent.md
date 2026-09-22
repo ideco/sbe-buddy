@@ -111,7 +111,7 @@ the block, one at a time.
 
 **Variable length.** `encodedLength` has to earn its keep.
 
-* [ ] 13. Codec: groups, nested
+* [x] 13. Codec: groups, nested
 * [ ] 14. Codec: var-data, and the built-in var-data encodings
 
 **The rest of `sbe.xsd`.**
@@ -120,7 +120,7 @@ the block, one at a time.
 
 **Evolution, proved.** Through the codecs, not only the flyweights.
 
-* [ ] 16. Evolution through every construct: appended groups and var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
+* [ ] 16. Evolution through every construct: appended var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
 
 **Families.**
 

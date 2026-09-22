@@ -92,7 +92,7 @@ public final class Mapping {
 	}
 
 	private Schema.Message message(Annotated.Message message) {
-		Body body = body(message, message.components(), message.unmapped(), message.layout());
+		Body body = body(message, message.components(), message.unmapped(), message.layout(), baselineVersion);
 		Schema.Message result = new Schema.Message(
 				name(message, message.name(), message.javaName()),
 				id(message, message.id()),
@@ -115,10 +115,12 @@ public final class Mapping {
 	/**
 	 * Fields, then groups, then data: the XSD orders them, so a component out of
 	 * order is a problem. The order is the layout when there is one, declaration
-	 * order otherwise.
+	 * order otherwise. {@code baseline} is the version below which nothing in this
+	 * body is read: the schema's, or a group's own where that is higher.
 	 */
 	private Body body(
-			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout
+			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout,
+			int baseline
 	) {
 		List<Schema.Field> fields = new ArrayList<>();
 		List<Schema.Group> groups = new ArrayList<>();
@@ -129,13 +131,13 @@ public final class Mapping {
 					if (!groups.isEmpty() || !data.isEmpty()) {
 						problem(field, "a field must come before every group and data");
 					}
-					fields.add(field(field));
+					fields.add(field(field, baseline));
 				}
 				case Annotated.Group group -> {
 					if (!data.isEmpty()) {
 						problem(group, "a group must come before every data");
 					}
-					groups.add(group(group));
+					groups.add(group(group, baseline));
 				}
 				case Annotated.Data datum -> data.add(data(datum));
 			}
@@ -216,7 +218,7 @@ public final class Mapping {
 		};
 	}
 
-	private Schema.Field field(Annotated.Field field) {
+	private Schema.Field field(Annotated.Field field, int baseline) {
 		if (field.javaType() instanceof Annotated.Unmapped && field.name().isEmpty()) {
 			problem(field, "an unmapped field needs a name");
 		}
@@ -224,7 +226,7 @@ public final class Mapping {
 		constant(field);
 		face(field);
 		declaredFace(field);
-		boxing(field);
+		boxing(field, baseline);
 		Schema.Field result = new Schema.Field(
 				name(field, field.name(), field.javaName()),
 				id(field, field.id()),
@@ -243,12 +245,18 @@ public final class Mapping {
 		return result;
 	}
 
-	private Schema.Group group(Annotated.Group group) {
+	/**
+	 * An entry exists only in a message whose version carries the group, so inside
+	 * it nothing below the group's own version is ever read.
+	 */
+	private Schema.Group group(Annotated.Group group, int baseline) {
 		if (!(group.javaType() instanceof Annotated.ListOfRecord)) {
 			problem(group, "a group must be a List of a record");
 		}
 		String dimensionType = declare(group.dimensionType());
-		Body body = body(group, group.components(), group.unmapped(), group.layout());
+		Body body = body(
+				group, group.components(), group.unmapped(), group.layout(), Math.max(baseline, group.sinceVersion())
+		);
 		Schema.Group result = new Schema.Group(
 				name(group, group.name(), group.javaName()),
 				id(group, group.id()),
@@ -659,7 +667,7 @@ public final class Mapping {
 	 * its box; a box on a field that is never absent may be there for reasons of
 	 * the user's own, so it is a warning.
 	 */
-	private void boxing(Annotated.Field field) {
+	private void boxing(Annotated.Field field, int baseline) {
 		if (!(field.javaType() instanceof Annotated.Primitive primitive)) {
 			return;
 		}
@@ -676,10 +684,10 @@ public final class Mapping {
 			return;
 		}
 		String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
-		if (canBeAbsent(field) && !primitive.boxed()) {
+		if (canBeAbsent(field, baseline) && !primitive.boxed()) {
 			problem(field, plain + " cannot hold null, but the field can be absent; use " + box);
 		}
-		if (!canBeAbsent(field) && primitive.boxed()) {
+		if (!canBeAbsent(field, baseline) && primitive.boxed()) {
 			problems.add(
 					new Problem(
 							field, box + " is boxed although the field is never absent", Problem.Severity.WARNING
@@ -702,12 +710,12 @@ public final class Mapping {
 	}
 
 	/**
-	 * Optional, or added above the baseline; a constant carries no bytes and is
-	 * never absent.
+	 * Optional, or added above the body's baseline; a constant carries no bytes and
+	 * is never absent.
 	 */
-	private boolean canBeAbsent(Annotated.Field field) {
+	private static boolean canBeAbsent(Annotated.Field field, int baseline) {
 		Presence presence = wirePresence(field);
-		return presence == Presence.OPTIONAL || field.sinceVersion() > baselineVersion && presence != Presence.CONSTANT;
+		return presence == Presence.OPTIONAL || field.sinceVersion() > baseline && presence != Presence.CONSTANT;
 	}
 
 	/**

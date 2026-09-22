@@ -119,7 +119,10 @@ and holds the null value, or when its `sinceVersion` is above the acting
 version of the message being decoded. Absent decodes to `null`; the component
 is boxed if its face is a primitive. Encoding `null` writes the null value for
 an optional field and is an `IllegalArgumentException` for a required one. A
-group that is present with zero entries is an empty list, not `null`. The
+group has no presence: a group that is present with zero entries is an empty
+list, not `null`, a group whose `sinceVersion` is above the acting version is
+`null`, and encoding a `null` list is an `IllegalArgumentException` from
+`encodedLength` and `encode` alike. The
 null value is the type's `nullValue` or the primitive's default, exactly as
 sbe-tool applies it. A field left at the default presence takes its named
 type's, as sbe-tool reads the document.
@@ -136,7 +139,12 @@ field of an enum, a set, a string, an array or a composite is absent below
 the acting version like any other.
 
 A field *can be absent* when it is optional, or when its `sinceVersion` is
-above the schema's `baselineVersion` and it is not a constant. A primitive
+above its body's baseline and it is not a constant. A message's baseline is
+the schema's `baselineVersion`; inside a group it is the group's own
+`sinceVersion` where that is higher, and a nested group's the higher of its
+parent's and its own, because an entry exists only in a message whose
+version carries the group, so a field at its group's version is never absent
+while the group is present. A primitive
 component on a field that can be absent is an error, because `null` has
 nowhere to go; a box on a field that never is stays allowed and is a
 warning, since the box may be there for reasons of the user's own, and the

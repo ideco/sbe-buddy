@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 import org.agrona.concurrent.UnsafeBuffer;
@@ -22,10 +23,11 @@ import com.example.quotes.sbe.MessageHeaderEncoder;
 /**
  * The codec seen working in the real build: a record goes onto the wire through
  * the generated codec and comes back equal, at an offset, with every length the
- * contract promises agreeing, with and without its optional field; what it
- * refuses, it refuses with the exception the contract names: a string that does
- * not fit, an array of the wrong length, a constant the record disagrees with;
- * what a binding refuses passes through as the binding's own exception.
+ * contract promises agreeing, with and without its optional field, with
+ * contributors and with none; what it refuses, it refuses with the exception
+ * the contract names: a string that does not fit, an array of the wrong length,
+ * a constant the record disagrees with, a group that is null; what a binding
+ * refuses passes through as the binding's own exception.
  */
 final class QuotesTest {
 
@@ -43,6 +45,11 @@ final class QuotesTest {
 
 	private static final Trade TRADE = new Trade(10_060, 300);
 
+	private static final List<Contributor> CONTRIBUTORS = List.of(
+			new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250),
+			new Contributor(Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100, 4_000_000_000L)
+	);
+
 	@Test
 	void theSchemaInTheJarIsTheOracle() throws IOException {
 		try (InputStream schema = QuotesTest.class.getResourceAsStream(RESOURCE)) {
@@ -57,19 +64,36 @@ final class QuotesTest {
 		assertRoundTrip(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE, CONTRIBUTORS
 				)
 		);
 	}
 
 	@Test
-	void aQuoteWithoutAVwapAndWithoutFlagsRoundTrips() {
+	void aQuoteWithoutAVwapWithoutFlagsAndWithoutContributorsRoundTrips() {
 		assertRoundTrip(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XLON, MarketState.CLOSED, Set.of(), "",
-						EXPONENT, new long[5], new Trade(0, 0)
+						EXPONENT, new long[5], new Trade(0, 0), List.of()
 				)
 		);
+	}
+
+	@Test
+	void nullContributorsAreRefusedByTheLengthAndByTheEncoder() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = new Quote(
+				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
+				DEPTH, TRADE, null
+		);
+
+		assertThatThrownBy(() -> codec.encodedLength(quote))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("contributors is required");
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("contributors is required");
 	}
 
 	@Test
@@ -78,7 +102,21 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, null, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
-				DEPTH, TRADE
+				DEPTH, TRADE, List.of()
+		);
+
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("venue is required");
+	}
+
+	@Test
+	void aNullVenueInsideAContributorIsRefused() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		Quote quote = new Quote(
+				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
+				DEPTH, TRADE, List.of(new Contributor(null, BID, ASK, 100, 100))
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
@@ -92,7 +130,7 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.OTHER, MarketState.OPEN, Set.of(), "ACME",
-				EXPONENT, DEPTH, TRADE
+				EXPONENT, DEPTH, TRADE, List.of()
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
@@ -150,7 +188,7 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, new BigDecimal("1.00505"), ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN,
-				Set.of(), "ACME", EXPONENT, DEPTH, TRADE
+				Set.of(), "ACME", EXPONENT, DEPTH, TRADE, List.of()
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET)).isInstanceOf(ArithmeticException.class);
@@ -171,13 +209,13 @@ final class QuotesTest {
 	private static Quote quoteWith(String symbol, byte priceExponent, long[] bidDepth) {
 		return new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), symbol,
-				priceExponent, bidDepth, TRADE
+				priceExponent, bidDepth, TRADE, List.of()
 		);
 	}
 
 	private static void assertRoundTrip(Quote quote) {
 		QuoteCodec codec = new QuoteCodec();
-		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
 
 		int written = codec.encode(quote, buffer, OFFSET);
 

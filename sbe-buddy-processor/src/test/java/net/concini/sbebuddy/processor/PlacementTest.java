@@ -364,29 +364,23 @@ final class PlacementTest {
 		String source = """
 				package placement;
 
-				import java.util.List;
-
+				import net.concini.sbebuddy.SbeData;
 				import net.concini.sbebuddy.SbeField;
-				import net.concini.sbebuddy.SbeGroup;
 				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.VarStringEncoding;
 
 				@SbeMessage(id = 1)
 				record Order(
 						@SbeField(id = 1) long orderId,
-						@SbeGroup(id = 2) List<Leg> legs
+						@SbeData(id = 2, type = VarStringEncoding.class) String note
 				) {
-
-					record Leg(
-							@SbeField(id = 3) long instrumentId
-					) {
-					}
 				}
 				""";
 
 		Javac.Result result = compile(source);
 
 		assertOnlyError(
-				result, source, "@SbeMessage(id = 1)", "no codec for a group yet; set codecs = false on @SbeSchema"
+				result, source, "@SbeMessage(id = 1)", "no codec for var-data yet; set codecs = false on @SbeSchema"
 		);
 	}
 

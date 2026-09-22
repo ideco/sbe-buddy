@@ -22,6 +22,7 @@ import static net.concini.sbebuddy.generator.Fixtures.enumeration;
 import static net.concini.sbebuddy.generator.Fixtures.field;
 import static net.concini.sbebuddy.generator.Fixtures.group;
 import static net.concini.sbebuddy.generator.Fixtures.groupSizeEncoding;
+import static net.concini.sbebuddy.generator.Fixtures.listOfRecord;
 import static net.concini.sbebuddy.generator.Fixtures.message;
 import static net.concini.sbebuddy.generator.Fixtures.messageHeader;
 import static net.concini.sbebuddy.generator.Fixtures.messageSchema;
@@ -252,6 +253,7 @@ final class Versions {
 												.sinceVersion(1)
 												.deprecated(3),
 										annotatedGroup("extra", 2)
+												.javaType(listOfRecord("corpus.versions.Versions.Extra"))
 												.sinceVersion(2)
 												.deprecated(3)
 												.components(

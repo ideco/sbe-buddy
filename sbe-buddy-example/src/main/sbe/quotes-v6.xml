@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The oracle for com.example.quotes: the schema the annotated records must
-     produce, written by hand as a person would write it. -->
+<!-- Version 6 of com.example.quotes, frozen: never edited again. The
+     reference flyweights in com.example.quotes.xmlref.v6 come from it. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="com.example.quotes"
                    id="92"
-                   version="7"
+                   version="6"
                    description="Top of book quotes">
     <types>
         <composite name="messageHeader">
@@ -35,10 +35,6 @@
             <type name="price" primitiveType="int64"/>
             <type name="size" primitiveType="uint32"/>
         </composite>
-        <composite name="groupSizeEncoding">
-            <type name="blockLength" primitiveType="uint16"/>
-            <type name="numInGroup" primitiveType="uint16"/>
-        </composite>
     </types>
     <sbe:message name="Quote" id="1" description="The best bid and offer of one instrument">
         <field name="instrumentId" id="1" type="int64"/>
@@ -56,12 +52,5 @@
         <field name="priceExponent" id="13" type="PriceExponent" sinceVersion="5" description="The exponent of bid, ask and vwap"/>
         <field name="bidDepth" id="14" type="Depth" sinceVersion="5" description="The bid sizes at the five best levels"/>
         <field name="lastTrade" id="15" type="Trade" sinceVersion="6" description="The last trade of the instrument"/>
-        <group name="contributors" id="16" sinceVersion="7" description="The venues' own quotes behind the best">
-            <field name="venue" id="17" type="Venue" description="The venue quoting"/>
-            <field name="bid" id="18" type="int64"/>
-            <field name="ask" id="19" type="int64"/>
-            <field name="bidSize" id="20" type="uint32"/>
-            <field name="askSize" id="21" type="uint32"/>
-        </group>
     </sbe:message>
 </sbe:messageSchema>

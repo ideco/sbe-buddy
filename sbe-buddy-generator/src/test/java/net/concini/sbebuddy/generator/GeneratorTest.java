@@ -2,11 +2,14 @@ package net.concini.sbebuddy.generator;
 
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.INT;
 import static net.concini.sbebuddy.generator.Annotated.JavaPrimitive.LONG;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
+import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedSchema;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
+import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
@@ -22,6 +25,7 @@ import static net.concini.sbebuddy.generator.Fixtures.type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.INT64;
+import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 
 import java.util.List;
 
@@ -152,20 +156,25 @@ final class GeneratorTest {
 	@Test
 	void aConstructTheCodecLacksLeavesTheOutputUntouched() {
 		// sbe-tool accepts the schema and generates its flyweights; the codec has no
-		// group yet, so the flyweights must not reach the output either.
+		// var-data yet, so the flyweights must not reach the output either.
+		Fixtures.CompositeBuilder varStringEncoding = composite("varStringEncoding").members(
+				type("length", UINT16),
+				type("varData", CHAR).length(0).characterEncoding("UTF-8")
+		);
 		Schema schema = messageSchema("p", 1, 0)
-				.types(messageHeader(), groupSizeEncoding())
+				.types(messageHeader(), varStringEncoding)
 				.messages(
 						message("M", 1)
 								.fields(field("qty", 1, "int32"))
-								.groups(group("legs", 2).fields(field("legId", 1, "int32")))
+								.data(data("note", 2, "varStringEncoding"))
 				)
 				.build();
 		Annotated annotated = annotatedSchema("p", 1, 0)
+				.types(annotatedVarStringEncoding())
 				.messages(
 						annotatedMessage("M", 1).components(
 								annotatedField("qty", 1, primitive(INT)),
-								annotatedGroup("legs", 2).components(annotatedField("legId", 1, primitive(INT)))
+								annotatedData("note", 2, text(), annotatedVarStringEncoding())
 						)
 				)
 				.build();
@@ -174,9 +183,146 @@ final class GeneratorTest {
 		List<Problem> problems = Generator.generate(schema, annotated, output);
 
 		assertThat(problems).containsExactly(
-				new Problem(annotated.messages().get(0), "no codec for a group yet; set codecs = false on @SbeSchema")
+				new Problem(annotated.messages().get(0), "no codec for var-data yet; set codecs = false on @SbeSchema")
 		);
 		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void varDataInsideAGroupIsAConstructTheCodecLacks() {
+		// The message's own body has none; the walk must look inside the group.
+		Fixtures.CompositeBuilder varStringEncoding = composite("varStringEncoding").members(
+				type("length", UINT16),
+				type("varData", CHAR).length(0).characterEncoding("UTF-8")
+		);
+		Schema schema = messageSchema("p", 1, 0)
+				.types(messageHeader(), varStringEncoding, groupSizeEncoding())
+				.messages(
+						message("M", 1)
+								.fields(field("qty", 1, "int32"))
+								.groups(
+										group("legs", 2)
+												.fields(field("legId", 3, "int32"))
+												.data(data("note", 4, "varStringEncoding"))
+								)
+				)
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 0)
+				.types(annotatedVarStringEncoding())
+				.messages(
+						annotatedMessage("M", 1).components(
+								annotatedField("qty", 1, primitive(INT)),
+								annotatedGroup("legs", 2).components(
+										annotatedField("legId", 3, primitive(INT)),
+										annotatedData("note", 4, text(), annotatedVarStringEncoding())
+								)
+						)
+				)
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).containsExactly(
+				new Problem(annotated.messages().get(0), "no codec for var-data yet; set codecs = false on @SbeSchema")
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aFieldAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
+		// The group's own version is the baseline inside it: a field at version 1 in
+		// a group appended in version 1 is never absent, one at version 2 would be.
+		Schema schema = messageSchema("p", 1, 2)
+				.types(messageHeader(), groupSizeEncoding())
+				.messages(
+						message("M", 1)
+								.fields(field("qty", 1, "int32"))
+								.groups(
+										group("legs", 2)
+												.sinceVersion(1)
+												.fields(
+														field("legId", 3, "int32").sinceVersion(1),
+														field("ratio", 4, "int32").sinceVersion(2)
+												)
+								)
+				)
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 2)
+				.messages(
+						annotatedMessage("M", 1).components(
+								annotatedField("qty", 1, primitive(INT)),
+								annotatedGroup("legs", 2).sinceVersion(1).components(
+										annotatedField("legId", 3, primitive(INT)).sinceVersion(1),
+										annotatedField("ratio", 4, boxed(INT)).sinceVersion(2)
+								)
+						)
+				)
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).containsExactly(
+				new Problem(
+						annotated.messages().get(0),
+						"no codec for a field added above the baseline in a group yet; set codecs = false on @SbeSchema"
+				)
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aGroupAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
+		Schema schema = messageSchema("p", 1, 1)
+				.types(messageHeader(), groupSizeEncoding())
+				.messages(
+						message("M", 1)
+								.fields(field("qty", 1, "int32"))
+								.groups(
+										group("legs", 2)
+												.fields(field("legId", 3, "int32"))
+												.groups(
+														group("allocations", 4)
+																.sinceVersion(1)
+																.fields(field("account", 5, "int32"))
+												)
+								)
+				)
+				.build();
+		Annotated annotated = annotatedSchema("p", 1, 1)
+				.messages(
+						annotatedMessage("M", 1).components(
+								annotatedField("qty", 1, primitive(INT)),
+								annotatedGroup("legs", 2).components(
+										annotatedField("legId", 3, primitive(INT)),
+										annotatedGroup("allocations", 4).sinceVersion(1)
+												.components(annotatedField("account", 5, primitive(INT)))
+								)
+						)
+				)
+				.build();
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, output);
+
+		assertThat(problems).containsExactly(
+				new Problem(
+						annotated.messages().get(0),
+						"no codec for a group added above the baseline in a group yet; set codecs = false on @SbeSchema"
+				)
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	private static Fixtures.AnnotatedCompositeBuilder annotatedVarStringEncoding() {
+		return annotatedComposite("VarStringEncoding")
+				.qualifiedName("p.VarStringEncoding")
+				.name("varStringEncoding")
+				.members(
+						annotatedType("length", UINT16).javaType(primitive(INT)),
+						annotatedType("varData", CHAR).length(0).characterEncoding("UTF-8").javaType(text())
+				);
 	}
 
 	@Test

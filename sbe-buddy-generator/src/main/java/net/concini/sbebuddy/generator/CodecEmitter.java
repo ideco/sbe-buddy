@@ -54,7 +54,7 @@ public final class CodecEmitter {
 
 						@Override
 						public int encodedLength({record} value) {
-							return {flyweights}.{header}Encoder.ENCODED_LENGTH + {flyweights}.{message}Encoder.BLOCK_LENGTH;
+							return {flyweights}.{header}Encoder.ENCODED_LENGTH + {flyweights}.{message}Encoder.BLOCK_LENGTH{groupLengths};
 						}
 
 						@Override
@@ -74,6 +74,7 @@ public final class CodecEmitter {
 							}
 							{refuseBelowBaseline}
 							decoder.wrap(buffer, offset + {flyweights}.{header}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
+							{decodeGroups}
 							{record} value = new {record}(
 									{decodeFields}
 							);
@@ -89,7 +90,7 @@ public final class CodecEmitter {
 						@Override
 						public int decodedLength(org.agrona.DirectBuffer buffer, int offset) {
 							headerDecoder.wrap(buffer, offset);
-							return {flyweights}.{header}Decoder.ENCODED_LENGTH + headerDecoder.blockLength();
+							{decodedLength}
 						}
 						{helpers}
 					}
@@ -107,23 +108,32 @@ public final class CodecEmitter {
 						"{message} version " + headerDecoder.version() + " is below the baseline {baseline}");
 			}""");
 
+	/** Without a group the length is the header's block length, no walk needed. */
+	private static final Template BLOCK_DECODED_LENGTH = Template
+			.of("return {flyweights}.{header}Decoder.ENCODED_LENGTH + headerDecoder.blockLength();");
+
+	/** With one, the flyweight walks every group and restores its limit. */
+	private static final Template WALKED_DECODED_LENGTH = Template.of(
+			"""
+					decoder.wrap(buffer, offset + {flyweights}.{header}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
+					return {flyweights}.{header}Decoder.ENCODED_LENGTH + decoder.sbeDecodedLength();"""
+	);
+
 	// ---- a primitive field
 
 	private static final Template ENCODE_FIELD = Template.of("encoder.{property}({source});");
 
 	private static final Template ENCODE_OPTIONAL_FIELD = Template.of(
-			"encoder.{property}(value.{component}() == null ? {flyweights}.{message}Encoder.{property}NullValue() : {source});"
+			"encoder.{property}(value.{component}() == null ? {encoder}.{property}NullValue() : {source});"
 	);
 
 	private static final Template DECODE_FIELD = Template.of("decoder.{property}()");
 
-	private static final Template IS_NULL = Template.of(
-			"decoder.{property}() == {flyweights}.{message}Decoder.{property}NullValue()"
-	);
+	private static final Template IS_NULL = Template.of("decoder.{property}() == {decoder}.{property}NullValue()");
 
 	/** The null value of the floats is NaN, which == never matches. */
 	private static final Template IS_NULL_FLOATING = Template.of(
-			"{box}.compare(decoder.{property}(), {flyweights}.{message}Decoder.{property}NullValue()) == 0"
+			"{box}.compare(decoder.{property}(), {decoder}.{property}NullValue()) == 0"
 	);
 
 	// ---- a field of an enum
@@ -150,9 +160,8 @@ public final class CodecEmitter {
 
 	// ---- a field no component carries: the null value out, nothing back
 
-	private static final Template ENCODE_UNMAPPED_FIELD = Template.of(
-			"encoder.{property}({flyweights}.{message}Encoder.{property}NullValue());"
-	);
+	private static final Template ENCODE_UNMAPPED_FIELD = Template
+			.of("encoder.{property}({encoder}.{property}NullValue());");
 
 	private static final Template ENCODE_UNMAPPED_ENUM_FIELD = Template
 			.of("encoder.{property}({flyweights}.{enum}.NULL_VAL);");
@@ -162,7 +171,7 @@ public final class CodecEmitter {
 	// ---- a char string: the flyweight's own String form, checked first
 
 	private static final Template ENCODE_STRING_FIELD = Template.of(
-			"encoder.{property}(ascii({source}, {flyweights}.{message}Encoder.{property}Length(), \"{component}\"));"
+			"encoder.{property}(ascii({source}, {encoder}.{property}Length(), \"{component}\"));"
 	);
 
 	/**
@@ -188,22 +197,20 @@ public final class CodecEmitter {
 
 	private static final Template DECODE_ARRAY_FIELD = Template.of("read{field}(decoder)");
 
-	private static final Template WRITE_ARRAY = Template.of(
-			"""
-					private static void write{field}({face}[] value, {flyweights}.{message}Encoder encoder) {
-						if (value.length != {flyweights}.{message}Encoder.{property}Length()) {
-							throw new IllegalArgumentException(
-									"{component} must be " + {flyweights}.{message}Encoder.{property}Length() + " long, not " + value.length);
-						}
-						for (int i = 0; i < value.length; i++) {
-							encoder.{property}(i, value[i]);
-						}
-					}"""
-	);
+	private static final Template WRITE_ARRAY = Template.of("""
+			private static void write{field}({face}[] value, {encoder} encoder) {
+				if (value.length != {encoder}.{property}Length()) {
+					throw new IllegalArgumentException(
+							"{component} must be " + {encoder}.{property}Length() + " long, not " + value.length);
+				}
+				for (int i = 0; i < value.length; i++) {
+					encoder.{property}(i, value[i]);
+				}
+			}""");
 
 	private static final Template READ_ARRAY = Template.of("""
-			private static {face}[] read{field}({flyweights}.{message}Decoder decoder) {
-				{face}[] value = new {face}[{flyweights}.{message}Decoder.{property}Length()];
+			private static {face}[] read{field}({decoder} decoder) {
+				{face}[] value = new {face}[{decoder}.{property}Length()];
 				for (int i = 0; i < value.length; i++) {
 					value[i] = decoder.{property}(i);
 				}
@@ -214,20 +221,18 @@ public final class CodecEmitter {
 	 * A uint8 array has bulk accessors over byte[], where its index accessors widen
 	 * to short.
 	 */
-	private static final Template WRITE_BYTES = Template.of(
-			"""
-					private static void write{field}(byte[] value, {flyweights}.{message}Encoder encoder) {
-						if (value.length != {flyweights}.{message}Encoder.{property}Length()) {
-							throw new IllegalArgumentException(
-									"{component} must be " + {flyweights}.{message}Encoder.{property}Length() + " long, not " + value.length);
-						}
-						encoder.put{field}(value, 0, value.length);
-					}"""
-	);
+	private static final Template WRITE_BYTES = Template.of("""
+			private static void write{field}(byte[] value, {encoder} encoder) {
+				if (value.length != {encoder}.{property}Length()) {
+					throw new IllegalArgumentException(
+							"{component} must be " + {encoder}.{property}Length() + " long, not " + value.length);
+				}
+				encoder.put{field}(value, 0, value.length);
+			}""");
 
 	private static final Template READ_BYTES = Template.of("""
-			private static byte[] read{field}({flyweights}.{message}Decoder decoder) {
-				byte[] value = new byte[{flyweights}.{message}Decoder.{property}Length()];
+			private static byte[] read{field}({decoder} decoder) {
+				byte[] value = new byte[{decoder}.{property}Length()];
 				decoder.get{field}(value, 0, value.length);
 				return value;
 			}""");
@@ -272,16 +277,85 @@ public final class CodecEmitter {
 	 * member as it is.
 	 */
 	private static final Template WRITE_COMPOSITE = Template.of("""
-			private static void write{composite}({record} value, {flyweights}.{composite}Encoder encoder) {
+			private static void write{composite}({record} value, {encoder} encoder) {
 				{members}
 			}""");
 
 	private static final Template READ_COMPOSITE = Template.of("""
-			private static {record} read{composite}({flyweights}.{composite}Decoder decoder) {
+			private static {record} read{composite}({decoder} decoder) {
 				return new {record}(
 						{members}
 				);
 			}""");
+
+	// ---- a group: three methods per group, keyed by its path, over its own
+	// classes
+
+	private static final Template ENCODE_GROUP_FIELD = Template
+			.of("write{path}({source}, encoder.{property}Count({source}.size()));");
+
+	private static final Template GROUP_LENGTH_TERM = Template.of(" + {length}(value.{component}())");
+
+	private static final Template DECODE_GROUP = Template
+			.of("java.util.List<{record}> {local} = read{path}(decoder.{property}());");
+
+	/**
+	 * Absent below the acting version, as a field is; count zero is never read.
+	 * sbe-tool names the group's static methods after its decoder class,
+	 * {@code legsDecoderSinceVersion()}.
+	 */
+	private static final Template DECODE_ADDED_GROUP = Template.of(
+			"java.util.List<{record}> {local} = decoder.actingVersion() < {decoder}.{since}() ? null : read{path}(decoder.{property}());"
+	);
+
+	/**
+	 * The entry's shapes are the message's, over the group's classes: the loop's
+	 * variable and parameter bear the names the field templates use, and the
+	 * methods are the codec's own, since a bound field reaches its binding.
+	 */
+	private static final Template WRITE_GROUP = Template.of("""
+			private void write{path}(java.util.List<{record}> entries, {encoder} encoder) {
+				for ({record} value : entries) {
+					encoder.next();
+					{body}
+				}
+			}""");
+
+	private static final Template READ_GROUP = Template.of("""
+			private java.util.List<{record}> read{path}({decoder} decoder) {
+				java.util.List<{record}> entries = new java.util.ArrayList<>(decoder.count());
+				while (decoder.hasNext()) {
+					decoder.next();
+					{groups}
+					entries.add(new {record}(
+							{arguments}
+					));
+				}
+				return entries;
+			}""");
+
+	/** The dimensions and the entries, without encoding; null has no wire form. */
+	private static final Template GROUP_LENGTH = Template.of("""
+			private static int {length}(java.util.List<{record}> entries) {
+				if (entries == null) {
+					throw new IllegalArgumentException("{component} is required");
+				}
+				return {encoder}.sbeHeaderSize() + entries.size() * {encoder}.sbeBlockLength();
+			}""");
+
+	private static final Template NESTED_GROUP_LENGTH = Template.of("""
+			private static int {length}(java.util.List<{record}> entries) {
+				if (entries == null) {
+					throw new IllegalArgumentException("{component} is required");
+				}
+				int length = {encoder}.sbeHeaderSize() + entries.size() * {encoder}.sbeBlockLength();
+				for ({record} value : entries) {
+					{terms}
+				}
+				return length;
+			}""");
+
+	private static final Template NESTED_GROUP_LENGTH_TERM = Template.of("length += {length}(value.{component}());");
 
 	// ---- the shapes over them
 
@@ -299,7 +373,7 @@ public final class CodecEmitter {
 	 * value, which a required field may legitimately hold.
 	 */
 	private static final Template DECODE_ADDED_FIELD = Template.of(
-			"decoder.actingVersion() < {flyweights}.{message}Decoder.{property}SinceVersion() ? null : {read}"
+			"decoder.actingVersion() < {decoder}.{property}SinceVersion() ? null : {read}"
 	);
 
 	// ---- an enum's mapping, one pair per codec
@@ -401,6 +475,22 @@ public final class CodecEmitter {
 	}
 
 	/**
+	 * What stops a message's codec, thrown out of the walk at any depth and
+	 * reported once on the message.
+	 */
+	private static final class Rejected extends RuntimeException {
+
+		private static final long serialVersionUID = 1L;
+
+		private final String problem;
+
+		Rejected(String problem) {
+			super(problem, null, false, false);
+			this.problem = problem;
+		}
+	}
+
+	/**
 	 * How one field reaches the wire: the plain call each way, and the optional
 	 * forms where the wire has a null value for it.
 	 */
@@ -408,75 +498,164 @@ public final class CodecEmitter {
 	}
 
 	/**
-	 * Whose flyweight a token's accessors are on: the message's, whose decoder
-	 * guards by version, or a composite's, which never does; {@code prefix} keeps a
-	 * member's array pair apart from a field's of the same name.
+	 * Whose flyweights a token's accessors are on: the message's or a group's,
+	 * whose decoders guard by version, or a composite's, which never does.
+	 * {@code prefix} keeps a member's or an entry's helpers apart from a field's of
+	 * the same name, and {@code baseline} is the version below which nothing in
+	 * this body is read.
 	 */
-	private record Owner(String flyweightClass, String prefix, boolean guarded) {
+	private record Owner(String encoder, String decoder, String prefix, Kind kind, int baseline) {
+
+		enum Kind {
+			MESSAGE, COMPOSITE, GROUP
+		}
+
+		boolean guarded() {
+			return kind != Kind.COMPOSITE;
+		}
+	}
+
+	/** A group of a body, as its parent's length sums it. */
+	private record Nested(String path, String component) {
+	}
+
+	/**
+	 * What one body's tokens become: the encode statements in wire order, the
+	 * groups' reads into locals in wire order, each component's read for the
+	 * constructor, and the groups the body's length adds.
+	 */
+	private record Body(
+			List<String> encodes,
+			List<String> locals,
+			Map<Annotated.Component, String> reads,
+			List<Nested> groups
+	) {
 	}
 
 	/**
 	 * The codec's source, or null with a problem for a construct not covered yet.
 	 */
 	private @Nullable String codec(Annotated.Message message) {
+		try {
+			return source(message);
+		} catch (Rejected rejected) {
+			problems.add(new Problem(message, rejected.problem));
+			return null;
+		}
+	}
+
+	private String source(Annotated.Message message) {
 		String header = ir.headerStructure().tokens().get(0).name();
 		if (!header.equals(STANDARD_HEADER)) {
-			return refuse(message, "a header type of its own");
+			throw new Rejected(lacking("a header type of its own"));
 		}
 		if (ir.byteOrder() != ByteOrder.LITTLE_ENDIAN) {
-			return refuse(message, "big-endian byte order");
+			throw new Rejected(lacking("big-endian byte order"));
 		}
 		List<Token> tokens = ir.getMessage(message.id());
+		String flyweights = ir.applicableNamespace();
+		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
+		Owner owner = new Owner(
+				flyweights + "." + messageClass + "Encoder", flyweights + "." + messageClass + "Decoder", "",
+				Owner.Kind.MESSAGE, annotated.baselineVersion()
+		);
+		Map<String, String> helpers = new LinkedHashMap<>();
+		Map<String, String> bindings = new LinkedHashMap<>();
+		Body body = body(tokens, 1, message.components(), message.unmapped(), owner, flyweights, helpers, bindings);
+		StringBuilder groupLengths = new StringBuilder();
+		for (Nested group : body.groups()) {
+			groupLengths
+					.append(GROUP_LENGTH_TERM.fill("length", lengthOf(group.path()), "component", group.component()));
+		}
+		int baseline = annotated.baselineVersion();
+		return CODEC.fill(
+				"package", annotated.packageName(),
+				"codec", message.javaName() + "Codec",
+				"record", annotated.packageName() + "." + message.javaName(),
+				"flyweights", flyweights,
+				"header", JavaUtil.formatClassName(header),
+				"message", messageClass,
+				"bindings", bindingFields(bindings),
+				"groupLengths", groupLengths.toString(),
+				"encodeFields", String.join("\n", body.encodes()),
+				"refuseBelowBaseline", baseline == 0
+						? ""
+						: REFUSE_BELOW_BASELINE.fill("message", messageClass, "baseline", String.valueOf(baseline)),
+				"decodeGroups", String.join("\n", body.locals()),
+				"decodeFields", String.join(",\n", arguments(message.javaName(), message.components(), body)),
+				"decodedLength", body.groups().isEmpty()
+						? BLOCK_DECODED_LENGTH
+								.fill("flyweights", flyweights, "header", JavaUtil.formatClassName(header))
+						: WALKED_DECODED_LENGTH
+								.fill("flyweights", flyweights, "header", JavaUtil.formatClassName(header)),
+				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers.values())
+		);
+	}
+
+	/**
+	 * The canonical constructor takes the components as declared, which the layout
+	 * may order differently from the wire; the block is addressed by offset, so
+	 * either order reads it, and a group is read into a local first.
+	 */
+	private static List<String> arguments(String record, List<Annotated.Component> components, Body body) {
+		List<String> arguments = new ArrayList<>();
+		for (Annotated.Component component : components) {
+			String read = body.reads().get(component);
+			if (read == null) {
+				throw new IllegalStateException(record + " has no field for a component");
+			}
+			arguments.add(read);
+		}
+		return arguments;
+	}
+
+	/**
+	 * A message's or an entry's body from its tokens: the fields, then the groups,
+	 * recursing into each, and var-data, which the codec lacks wherever it is.
+	 */
+	private Body body(
+			List<Token> tokens, int index, List<Annotated.Component> components, List<Annotated.Field> unmapped,
+			Owner owner, String flyweights, Map<String, String> helpers, Map<String, String> bindings
+	) {
 		List<Token> fields = new ArrayList<>();
 		List<Token> groups = new ArrayList<>();
 		List<Token> varData = new ArrayList<>();
-		int index = GenerationUtil.collectFields(tokens, 1, fields);
-		index = GenerationUtil.collectGroups(tokens, index, groups);
-		GenerationUtil.collectVarData(tokens, index, varData);
-		if (!groups.isEmpty()) {
-			return refuse(message, "a group");
-		}
+		int next = GenerationUtil.collectFields(tokens, index, fields);
+		next = GenerationUtil.collectGroups(tokens, next, groups);
+		GenerationUtil.collectVarData(tokens, next, varData);
 		if (!varData.isEmpty()) {
-			return refuse(message, "var-data");
+			throw new Rejected(lacking("var-data"));
 		}
-		String flyweights = ir.applicableNamespace();
-		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
-		List<String> encodeFields = new ArrayList<>();
+		List<String> encodes = new ArrayList<>();
+		List<String> locals = new ArrayList<>();
 		Map<Annotated.Component, String> reads = new IdentityHashMap<>();
-		Map<String, String> helpers = new LinkedHashMap<>();
-		Map<String, String> bindings = new LinkedHashMap<>();
-		Owner owner = new Owner(messageClass, "", true);
+		List<Nested> nested = new ArrayList<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
 			Token field = fields.get(i);
 			Token type = fields.get(i + 1);
 			String unsupported = unsupported(type);
 			if (unsupported != null) {
-				return refuse(message, unsupported);
+				throw new Rejected(lacking(unsupported));
 			}
 			String property = JavaUtil.formatPropertyName(field.name());
 			List<Token> typeTokens = fields.subList(i + 1, i + 1 + type.componentTokenCount());
-			Annotated.Field component = component(message, field);
+			Annotated.Field component = component(components, field);
 			if (component == null) {
 				if (type.signal() == Signal.BEGIN_COMPOSITE) {
-					return refuse(message, "an unmapped field of a composite");
+					throw new Rejected(lacking("an unmapped field of a composite"));
 				}
 				if (!constant(field)) {
-					encodeFields.add(
-							encodeUnmapped(unmapped(message, field).name(), type, flyweights, messageClass, property)
-					);
+					encodes.add(encodeUnmapped(unmapped(unmapped, field).name(), type, flyweights, owner, property));
 				}
 				continue;
 			}
 			Annotated.Binding binding = component.binding();
 			String bindingName = binding == null ? null : bindingName(binding, bindings);
 			if (binding != null && bindingName == null) {
-				problems.add(
-						new Problem(
-								message, "two bindings share the simple name " + simpleName(binding.qualifiedName())
-										+ " in one codec; the second is " + binding.qualifiedName()
-						)
+				throw new Rejected(
+						"two bindings share the simple name " + simpleName(binding.qualifiedName())
+								+ " in one codec; the second is " + binding.qualifiedName()
 				);
-				return null;
 			}
 			String source = bindingName == null
 					? SOURCE.fill("component", component.javaName())
@@ -492,43 +671,114 @@ public final class CodecEmitter {
 						BOUND_READ.fill("name", bindingName, "read", access.decode()), access.isNull()
 				);
 			}
-			encodeFields.add(encodeField(field, component.javaName(), component.javaType(), access));
-			reads.put(component, decodeField(field, flyweights, owner, property, access));
+			encodes.add(encodeField(field, component.javaName(), component.javaType(), access));
+			reads.put(component, decodeField(field, owner, property, access));
 		}
-		// The canonical constructor takes the components as declared, which the
-		// layout may order differently from the wire; the block is addressed by
-		// offset, so either order reads it.
-		List<String> decodeFields = new ArrayList<>();
-		for (Annotated.Component component : message.components()) {
-			String read = reads.get(component);
-			if (read == null) {
-				throw new IllegalStateException(message.javaName() + " has no field for a component");
+		for (int i = 0; i < groups.size(); i += groups.get(i).componentTokenCount()) {
+			Token token = groups.get(i);
+			List<Token> groupTokens = groups.subList(i, i + token.componentTokenCount());
+			Annotated.Group group = group(components, token);
+			String property = JavaUtil.formatPropertyName(token.name());
+			String path = owner.prefix() + Generators.toUpperFirstChar(property);
+			boolean added = token.version() > owner.baseline();
+			if (added && owner.kind() == Owner.Kind.GROUP) {
+				throw new Rejected(lacking("a group added above the baseline in a group"));
 			}
-			decodeFields.add(read);
+			String groupClass = JavaUtil.formatClassName(token.name());
+			Owner entry = new Owner(
+					owner.encoder() + "." + groupClass + "Encoder", owner.decoder() + "." + groupClass + "Decoder",
+					path,
+					Owner.Kind.GROUP, Math.max(owner.baseline(), token.version())
+			);
+			// The place is held first: a group's methods precede those its body uses.
+			String key = "group " + path;
+			helpers.put(key, "");
+			Body body = body(
+					groupTokens, 1 + groupTokens.get(1).componentTokenCount(), group.components(), group.unmapped(),
+					entry, flyweights, helpers, bindings
+			);
+			helpers.put(key, groupMethods(path, group, entry, body));
+			String source = SOURCE.fill("component", group.javaName());
+			encodes.add(
+					ENCODE_CHECKED_FIELD.fill(
+							"component", group.javaName(),
+							"call", ENCODE_GROUP_FIELD.fill("path", path, "source", source, "property", property)
+					)
+			);
+			locals.add(
+					added
+							? DECODE_ADDED_GROUP.fill(
+									"record", entryRecord(group), "local", group.javaName(), "decoder", owner.decoder(),
+									"since", JavaUtil.formatPropertyName(groupClass + "Decoder") + "SinceVersion",
+									"property", property, "path", path
+							)
+							: DECODE_GROUP.fill(
+									"record", entryRecord(group), "local", group.javaName(), "path", path, "property",
+									property
+							)
+			);
+			reads.put(group, group.javaName());
+			nested.add(new Nested(path, group.javaName()));
 		}
-		int baseline = annotated.baselineVersion();
-		return CODEC.fill(
-				"package", annotated.packageName(),
-				"codec", message.javaName() + "Codec",
-				"record", annotated.packageName() + "." + message.javaName(),
-				"flyweights", flyweights,
-				"header", JavaUtil.formatClassName(header),
-				"message", messageClass,
-				"bindings", bindingFields(bindings),
-				"encodeFields", String.join("\n", encodeFields),
-				"refuseBelowBaseline", baseline == 0
-						? ""
-						: REFUSE_BELOW_BASELINE.fill("message", messageClass, "baseline", String.valueOf(baseline)),
-				"decodeFields", String.join(",\n", decodeFields),
-				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers.values())
+		return new Body(encodes, locals, reads, nested);
+	}
+
+	/**
+	 * The group's three methods: the entries written with the body's encode
+	 * statements, read into a list sized by the count, and summed without encoding,
+	 * each nested group through its own.
+	 */
+	private static String groupMethods(String path, Annotated.Group group, Owner entry, Body body) {
+		String record = entryRecord(group);
+		List<String> terms = new ArrayList<>();
+		for (Nested nested : body.groups()) {
+			terms.add(
+					NESTED_GROUP_LENGTH_TERM.fill("length", lengthOf(nested.path()), "component", nested.component())
+			);
+		}
+		String length = terms.isEmpty()
+				? GROUP_LENGTH.fill(
+						"length", lengthOf(path), "record", record, "component", group.javaName(), "encoder",
+						entry.encoder()
+				)
+				: NESTED_GROUP_LENGTH.fill(
+						"length", lengthOf(path), "record", record, "component", group.javaName(), "encoder",
+						entry.encoder(), "terms", String.join("\n", terms)
+				);
+		return String.join(
+				"\n\n",
+				WRITE_GROUP.fill(
+						"path", path, "record", record, "encoder", entry.encoder(),
+						"body", String.join("\n", body.encodes())
+				),
+				READ_GROUP.fill(
+						"path", path, "record", record, "decoder", entry.decoder(),
+						"groups", String.join("\n", body.locals()),
+						"arguments", String.join(",\n", arguments(record, group.components(), body))
+				),
+				length
 		);
 	}
 
+	/**
+	 * {@code legsLength} for the path {@code Legs}: a method, not a pair's suffix.
+	 */
+	private static String lengthOf(String path) {
+		return Character.toLowerCase(path.charAt(0)) + path.substring(1) + "Length";
+	}
+
+	/** The entry record's name as code names it; the mapping saw to the shape. */
+	private static String entryRecord(Annotated.Group group) {
+		if (group.javaType() instanceof Annotated.ListOfRecord list) {
+			return list.qualifiedName();
+		}
+		throw new IllegalStateException(group.javaName() + " is a group that is not a List of a record");
+	}
+
 	/** A field no component carries is written as its null value and never read. */
-	private static String encodeUnmapped(String name, Token type, String flyweights, String owner, String property) {
+	private static String encodeUnmapped(String name, Token type, String flyweights, Owner owner, String property) {
 		return switch (type.signal()) {
-			case ENCODING ->
-				ENCODE_UNMAPPED_FIELD.fill("property", property, "flyweights", flyweights, "message", owner);
+			case ENCODING -> ENCODE_UNMAPPED_FIELD.fill("property", property, "encoder", owner.encoder());
 			case BEGIN_ENUM -> ENCODE_UNMAPPED_ENUM_FIELD.fill(
 					"property", property, "flyweights", flyweights,
 					"enum", JavaUtil.formatClassName(type.applicableTypeName())
@@ -558,10 +808,11 @@ public final class CodecEmitter {
 	/**
 	 * The decode side is decided from the wire: the null value for an optional
 	 * field, whatever its version, since below the acting version the getter
-	 * returns it; the version for a required field added above the baseline, which
-	 * only a message's flyweight guards.
+	 * returns it; the version for a required field added above the body's baseline,
+	 * which a message's flyweight guards and a group's would, though the shape
+	 * inside a group waits for its proof.
 	 */
-	private String decodeField(Token field, String flyweights, Owner owner, String property, Access access) {
+	private static String decodeField(Token field, Owner owner, String property, Access access) {
 		if (constant(field)) {
 			return access.decode();
 		}
@@ -571,11 +822,11 @@ public final class CodecEmitter {
 			}
 			return DECODE_OPTIONAL_FIELD.fill("isNull", access.isNull(), "read", access.decode());
 		}
-		if (owner.guarded() && field.version() > annotated.baselineVersion()) {
-			return DECODE_ADDED_FIELD.fill(
-					"flyweights", flyweights, "message", owner.flyweightClass(), "property", property, "read",
-					access.decode()
-			);
+		if (owner.guarded() && field.version() > owner.baseline()) {
+			if (owner.kind() == Owner.Kind.GROUP) {
+				throw new Rejected(lacking("a field added above the baseline in a group"));
+			}
+			return DECODE_ADDED_FIELD.fill("decoder", owner.decoder(), "property", property, "read", access.decode());
 		}
 		return access.decode();
 	}
@@ -592,15 +843,13 @@ public final class CodecEmitter {
 		Token type = typeTokens.get(0);
 		String property = JavaUtil.formatPropertyName(field.name());
 		if (constant(field)) {
-			return constantAccess(
-					field, typeTokens, javaName, declaration, flyweights, owner, property, source, helpers
-			);
+			return constantAccess(field, typeTokens, javaName, declaration, flyweights, property, source, helpers);
 		}
 		return switch (type.signal()) {
-			case ENCODING -> encodingAccess(type, flyweights, owner, property, javaName, source, helpers);
+			case ENCODING -> encodingAccess(type, owner, property, javaName, source, helpers);
 			case BEGIN_ENUM -> enumAccess(
-					typeTokens, declared(declaration, Annotated.Enum.class, javaName), flyweights,
-					owner.flyweightClass(), property, javaName, helpers
+					typeTokens, declared(declaration, Annotated.Enum.class, javaName), flyweights, property, javaName,
+					helpers
 			);
 			case BEGIN_SET -> setAccess(
 					typeTokens, declared(declaration, Annotated.Set.class, javaName), flyweights, property, javaName,
@@ -654,7 +903,10 @@ public final class CodecEmitter {
 			List<Token> typeTokens, Annotated.Composite composite, String flyweights, String compositeClass,
 			Map<String, String> helpers
 	) {
-		Owner owner = new Owner(compositeClass, compositeClass, false);
+		Owner owner = new Owner(
+				flyweights + "." + compositeClass + "Encoder", flyweights + "." + compositeClass + "Decoder",
+				compositeClass, Owner.Kind.COMPOSITE, 0
+		);
 		List<String> encodes = new ArrayList<>();
 		Map<Annotated.Member, String> reads = new IdentityHashMap<>();
 		for (int i = 1; i < typeTokens.size() - 1; i += typeTokens.get(i).componentTokenCount()) {
@@ -665,7 +917,7 @@ public final class CodecEmitter {
 			if (annotated == null) {
 				if (!constant(member)) {
 					String name = unmappedMember(composite, member.name()).name();
-					encodes.add(encodeUnmapped(name, member, flyweights, compositeClass, property));
+					encodes.add(encodeUnmapped(name, member, flyweights, owner, property));
 				}
 				continue;
 			}
@@ -676,7 +928,7 @@ public final class CodecEmitter {
 					SOURCE.fill("component", javaName), owner, flyweights, helpers
 			);
 			encodes.add(encodeField(member, javaName, javaType, access));
-			reads.put(annotated, decodeField(member, flyweights, owner, property, access));
+			reads.put(annotated, decodeField(member, owner, property, access));
 		}
 		List<String> arguments = new ArrayList<>();
 		for (Annotated.Member member : composite.members()) {
@@ -689,11 +941,11 @@ public final class CodecEmitter {
 		return String.join(
 				"\n\n",
 				WRITE_COMPOSITE.fill(
-						"composite", compositeClass, "record", composite.qualifiedName(), "flyweights", flyweights,
+						"composite", compositeClass, "record", composite.qualifiedName(), "encoder", owner.encoder(),
 						"members", String.join("\n", encodes)
 				),
 				READ_COMPOSITE.fill(
-						"record", composite.qualifiedName(), "composite", compositeClass, "flyweights", flyweights,
+						"record", composite.qualifiedName(), "composite", compositeClass, "decoder", owner.decoder(),
 						"members", String.join(",\n", arguments)
 				)
 		);
@@ -705,18 +957,16 @@ public final class CodecEmitter {
 	 * through its accessor.
 	 */
 	private static Access encodingAccess(
-			Token type, String flyweights, Owner owner, String property, String javaName, String source,
-			Map<String, String> helpers
+			Token type, Owner owner, String property, String javaName, String source, Map<String, String> helpers
 	) {
 		if (type.arrayLength() <= 1) {
-			return primitiveAccess(type, flyweights, owner.flyweightClass(), property, javaName, source);
+			return primitiveAccess(type, owner, property, javaName, source);
 		}
 		if (type.encoding().primitiveType() == PrimitiveType.CHAR) {
 			helpers.computeIfAbsent("ascii", name -> ASCII.fill());
 			return new Access(
 					ENCODE_STRING_FIELD.fill(
-							"property", property, "source", source, "component", javaName, "flyweights", flyweights,
-							"message", owner.flyweightClass()
+							"property", property, "source", source, "component", javaName, "encoder", owner.encoder()
 					),
 					null,
 					DECODE_FIELD.fill("property", property),
@@ -724,9 +974,7 @@ public final class CodecEmitter {
 			);
 		}
 		String field = owner.prefix() + Generators.toUpperFirstChar(property);
-		helpers.computeIfAbsent(
-				"field " + field, name -> arrayPair(type, flyweights, owner.flyweightClass(), property, field, javaName)
-		);
+		helpers.computeIfAbsent("field " + field, name -> arrayPair(type, owner, property, field, javaName));
 		return new Access(
 				ENCODE_ARRAY_FIELD.fill("field", field, "source", source),
 				null,
@@ -735,33 +983,25 @@ public final class CodecEmitter {
 		);
 	}
 
-	private static String arrayPair(
-			Token type, String flyweights, String messageClass, String property, String field, String component
-	) {
+	private static String arrayPair(Token type, Owner owner, String property, String field, String component) {
 		PrimitiveType primitive = type.encoding().primitiveType();
 		if (primitive == PrimitiveType.UINT8) {
 			return String.join(
 					"\n\n",
 					WRITE_BYTES.fill(
-							"field", field, "flyweights", flyweights, "message", messageClass, "property", property,
-							"component", component
+							"field", field, "encoder", owner.encoder(), "property", property, "component", component
 					),
-					READ_BYTES.fill(
-							"field", field, "flyweights", flyweights, "message", messageClass, "property", property
-					)
+					READ_BYTES.fill("field", field, "decoder", owner.decoder(), "property", property)
 			);
 		}
 		String face = JavaUtil.javaTypeName(primitive);
 		return String.join(
 				"\n\n",
 				WRITE_ARRAY.fill(
-						"field", field, "face", face, "flyweights", flyweights, "message", messageClass, "property",
-						property, "component", component
+						"field", field, "face", face, "encoder", owner.encoder(), "property", property, "component",
+						component
 				),
-				READ_ARRAY.fill(
-						"field", field, "face", face, "flyweights", flyweights, "message", messageClass, "property",
-						property
-				)
+				READ_ARRAY.fill("field", field, "face", face, "decoder", owner.decoder(), "property", property)
 		);
 	}
 
@@ -772,7 +1012,7 @@ public final class CodecEmitter {
 	 */
 	private Access constantAccess(
 			Token field, List<Token> typeTokens, String javaName, Annotated.@Nullable Declaration declaration,
-			String flyweights, Owner owner, String property, String source, Map<String, String> helpers
+			String flyweights, String property, String source, Map<String, String> helpers
 	) {
 		Token type = typeTokens.get(0);
 		return switch (type.signal()) {
@@ -790,9 +1030,7 @@ public final class CodecEmitter {
 			}
 			case BEGIN_ENUM -> {
 				Annotated.Enum enumeration = declared(declaration, Annotated.Enum.class, javaName);
-				Access plain = enumAccess(
-						typeTokens, enumeration, flyweights, owner.flyweightClass(), property, javaName, helpers
-				);
+				Access plain = enumAccess(typeTokens, enumeration, flyweights, property, javaName, helpers);
 				String reference = field.encoding().constValue().toString();
 				String constant = validValue(enumeration, reference.substring(reference.indexOf('.') + 1)).javaName();
 				yield new Access(
@@ -808,34 +1046,30 @@ public final class CodecEmitter {
 		};
 	}
 
-	private static Access primitiveAccess(
-			Token type, String flyweights, String messageClass, String property, String component, String source
-	) {
+	private static Access primitiveAccess(Token type, Owner owner, String property, String component, String source) {
 		return new Access(
 				ENCODE_FIELD.fill("property", property, "source", source),
 				ENCODE_OPTIONAL_FIELD.fill(
-						"property", property, "component", component, "source", source, "flyweights", flyweights,
-						"message", messageClass
+						"property", property, "component", component, "source", source, "encoder", owner.encoder()
 				),
 				DECODE_FIELD.fill("property", property),
-				isNull(type, flyweights, messageClass, property)
+				isNull(type, owner, property)
 		);
 	}
 
-	private static String isNull(Token type, String flyweights, String messageClass, String property) {
+	private static String isNull(Token type, Owner owner, String property) {
 		PrimitiveType primitive = type.encoding().primitiveType();
 		if (primitive == PrimitiveType.FLOAT || primitive == PrimitiveType.DOUBLE) {
 			// The box is the one name that neither the IR nor JavaUtil holds.
 			String box = primitive == PrimitiveType.FLOAT ? "Float" : "Double";
-			return IS_NULL_FLOATING
-					.fill("box", box, "property", property, "flyweights", flyweights, "message", messageClass);
+			return IS_NULL_FLOATING.fill("box", box, "property", property, "decoder", owner.decoder());
 		}
-		return IS_NULL.fill("property", property, "flyweights", flyweights, "message", messageClass);
+		return IS_NULL.fill("property", property, "decoder", owner.decoder());
 	}
 
 	private static Access enumAccess(
-			List<Token> tokens, Annotated.Enum enumeration, String flyweights, String messageClass, String property,
-			String component, Map<String, String> declaredTypes
+			List<Token> tokens, Annotated.Enum enumeration, String flyweights, String property, String component,
+			Map<String, String> declaredTypes
 	) {
 		String enumClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
 		declaredTypes.computeIfAbsent(
@@ -1006,17 +1240,16 @@ public final class CodecEmitter {
 		return null;
 	}
 
-	private @Nullable String refuse(Annotated.Message message, String construct) {
-		problems.add(new Problem(message, "no codec for " + construct + " yet; set codecs = false on @SbeSchema"));
-		return null;
+	private static String lacking(String construct) {
+		return "no codec for " + construct + " yet; set codecs = false on @SbeSchema";
 	}
 
 	/**
 	 * The record component the field token came from, by wire name; null for a
 	 * field no component carries.
 	 */
-	private static Annotated.@Nullable Field component(Annotated.Message message, Token field) {
-		for (Annotated.Component component : message.components()) {
+	private static Annotated.@Nullable Field component(List<Annotated.Component> components, Token field) {
+		for (Annotated.Component component : components) {
 			if (component instanceof Annotated.Field candidate && wireName(candidate).equals(field.name())) {
 				return candidate;
 			}
@@ -1024,14 +1257,24 @@ public final class CodecEmitter {
 		return null;
 	}
 
+	/** The record component the group token came from, by wire name. */
+	private static Annotated.Group group(List<Annotated.Component> components, Token group) {
+		for (Annotated.Component component : components) {
+			if (component instanceof Annotated.Group candidate && wireName(candidate).equals(group.name())) {
+				return candidate;
+			}
+		}
+		throw new IllegalStateException("no component for group " + group.name());
+	}
+
 	/** The unmapped declaration the field token came from, by wire name. */
-	private static Annotated.Field unmapped(Annotated.Message message, Token field) {
-		for (Annotated.Field candidate : message.unmapped()) {
+	private static Annotated.Field unmapped(List<Annotated.Field> unmapped, Token field) {
+		for (Annotated.Field candidate : unmapped) {
 			if (wireName(candidate).equals(field.name())) {
 				return candidate;
 			}
 		}
-		throw new IllegalStateException(message.javaName() + " has no component for field " + field.name());
+		throw new IllegalStateException("no component for field " + field.name());
 	}
 
 	/**
@@ -1147,6 +1390,10 @@ public final class CodecEmitter {
 	}
 
 	private static String wireName(Annotated.Field field) {
-		return field.name().isEmpty() ? field.javaName() : field.name();
+		return wireName(field.name(), field.javaName());
+	}
+
+	private static String wireName(Annotated.Group group) {
+		return wireName(group.name(), group.javaName());
 	}
 }

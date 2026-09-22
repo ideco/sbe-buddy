@@ -130,6 +130,28 @@ final class MappingTest {
 	}
 
 	@Test
+	void aFieldAtItsGroupsVersionIsNeverAbsent() {
+		// The group's guard fires first: an entry exists only where the field does.
+		Fixtures.AnnotatedFieldBuilder plain = annotatedField("legId", 3, primitive(INT)).sinceVersion(2);
+		Fixtures.AnnotatedFieldBuilder boxed = annotatedField("ratio", 4, boxed(LONG)).sinceVersion(2);
+		Fixtures.AnnotatedGroupBuilder group = annotatedGroup("legs", 2).sinceVersion(2).components(plain, boxed);
+
+		assertThat(problemsOf(group, 2, 0)).containsExactly(
+				new Problem(boxed.build(), "Long is boxed although the field is never absent", Problem.Severity.WARNING)
+		);
+	}
+
+	@Test
+	void aFieldAddedAboveItsGroupsVersionCanBeAbsent() {
+		Fixtures.AnnotatedFieldBuilder field = annotatedField("legId", 3, primitive(INT)).sinceVersion(3);
+		Fixtures.AnnotatedGroupBuilder group = annotatedGroup("legs", 2).sinceVersion(2).components(field);
+
+		assertThat(problemsOf(group, 3, 0)).containsExactly(
+				new Problem(field.build(), "int cannot hold null, but the field can be absent; use Integer")
+		);
+	}
+
+	@Test
 	void aFieldTakesItsNamedTypesPresence() {
 		Fixtures.AnnotatedFieldBuilder field = annotatedField("quantity", 1, primitive(LONG))
 				.type(annotatedType("Quantity", PrimitiveType.UINT32).presence(Presence.OPTIONAL));
@@ -572,10 +594,16 @@ final class MappingTest {
 	}
 
 	private static java.util.List<Problem> problemsOf(Fixtures.AnnotatedFieldBuilder field, int version, int baseline) {
+		return problemsOf((Fixtures.AnnotatedComponentBuilder) field, version, baseline);
+	}
+
+	private static java.util.List<Problem> problemsOf(
+			Fixtures.AnnotatedComponentBuilder component, int version, int baseline
+	) {
 		return Mapping.map(
 				annotatedSchema("p", 1, version)
 						.baselineVersion(baseline)
-						.messages(annotatedMessage("M", 1).components(field))
+						.messages(annotatedMessage("M", 1).components(component))
 						.build()
 		).problems();
 	}
