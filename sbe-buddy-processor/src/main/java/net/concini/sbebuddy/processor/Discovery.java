@@ -325,15 +325,21 @@ public final class Discovery {
 				return enumeration(nested, javaName, component);
 			}
 			if (has(nested, SbeSet.class)) {
-				return set(nested, javaName, component);
+				// The set's face is a Set of its enum, as a field's is.
+				problem(component, nested.getSimpleName() + " is a set; use Set<" + nested.getSimpleName() + ">");
+				return null;
 			}
 			if (has(nested, SbeComposite.class)) {
 				return composite(nested, javaName, component);
 			}
 		}
+		TypeElement setEntry = setEntry(component.asType());
+		if (setEntry != null && composite.equals(setEntry.getEnclosingElement()) && has(setEntry, SbeSet.class)) {
+			return set(setEntry, javaName, component);
+		}
 		problem(
 				component,
-				"a composite's component carries @SbeType or @SbeRef, or its type is an @SbeEnum, @SbeSet or @SbeComposite nested in the composite"
+				"a composite's component carries @SbeType or @SbeRef, or its type is an @SbeEnum or @SbeComposite nested in the composite, or a Set of an @SbeSet nested in it"
 		);
 		return null;
 	}

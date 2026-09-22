@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.1.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
+  <modelVersion>4.1.0</modelVersion>
+
+  <parent>
+    <groupId>net.concini</groupId>
+    <artifactId>sbe-buddy-parent</artifactId>
+  </parent>
+
+  <artifactId>sbe-buddy-tests</artifactId>
+
+  <!-- The corpus, compiled by the real build: one package per schema under
+       src/main/java, the processor reaching it through annotationProcessorPaths
+       alone as it does a user's code, and one SchemaCase per package under
+       src/test/java, run against the generated flyweights and codecs. Not
+       deployed. -->
+  <dependencies>
+    <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-api</artifactId>
+    </dependency>
+    <!-- SchemaXmlAssert, from the generator's test jar, brings sbe-tool for the
+         oracle check; nothing in src/main sees either. -->
+    <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-generator</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.concini</groupId>
+      <artifactId>sbe-buddy-generator</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.xmlunit</groupId>
+      <artifactId>xmlunit-assertj3</artifactId>
+      <version>${xmlunit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- The reports name each check by its description, the round trip's or
+           the test method's, instead of everySchema()[1][2]. -->
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <statelessTestsetReporter implementation="org.apache.maven.plugin.surefire.extensions.junit5.JUnit5Xml30StatelessReporter">
+            <usePhrasedTestCaseMethodName>true</usePhrasedTestCaseMethodName>
+          </statelessTestsetReporter>
+          <statelessTestsetInfoReporter implementation="org.apache.maven.plugin.surefire.extensions.junit5.JUnit5StatelessTestsetInfoReporter">
+            <usePhrasedClassNameInTestCaseSummary>true</usePhrasedClassNameInTestCaseSummary>
+          </statelessTestsetInfoReporter>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- Appended to the parent's Error Prone and NullAway paths. -->
+          <annotationProcessorPaths combine.children="append">
+            <path>
+              <groupId>net.concini</groupId>
+              <artifactId>sbe-buddy-processor</artifactId>
+              <version>${project.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <properties>
+    <module.name>net.concini.sbebuddy.tests</module.name>
+  </properties>
+</project>

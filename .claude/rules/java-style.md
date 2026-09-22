@@ -97,7 +97,9 @@ The decisions that shaped the first code, so later code matches it.
   included (`assertThatThrownBy`); JUnit's `Assertions` are not used. Test
   classes and methods package-private, helpers shared across test packages
   public;
-  parameterized tests over an explicit list, never classpath scanning;
+  parameterized tests over an explicit list, never classpath scanning,
+  except the tests module, which finds its schema cases on its own
+  classpath so a new schema needs no registration;
   method names are sentences in camelCase. The corpus DSL in `Fixtures` is
   the only builder code in the repository; a corpus case holds its oracle
   as a text block beside the model that must write it.

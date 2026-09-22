@@ -15,13 +15,16 @@ sbe-buddy-processor    net.concini.sbebuddy.processor   javac elements → Annot
                        dep: sbe-buddy-generator
 sbe-buddy-example      a realistic annotated schema with its oracle; the integration proof; not deployed
                        deps: sbe-buddy-api; the processor on annotationProcessorPaths only
+sbe-buddy-tests        the corpus compiled by the real build: a schema package, its oracle and its round trips per case, run against the generated code; not deployed
+                       deps: sbe-buddy-api; the processor on annotationProcessorPaths only; the generator and its test jar in test scope, for the oracle check
 reference/             sbe-tool's sources as a submodule, for reading
 ```
 
-`api ← generator ← processor`, `api ← example`. The generator knows nothing
-of javac, and the example reaches the processor only through
-`annotationProcessorPaths`, so sbe-tool is never on a user's compile or
-runtime classpath; the module graph guarantees both, no build rule needed.
+`api ← generator ← processor`, `api ← example`, `api ← tests`. The
+generator knows nothing of javac, and the example and the tests reach the
+processor only through `annotationProcessorPaths`, so sbe-tool is never on a
+user's compile or runtime classpath; the module graph guarantees both, no
+build rule needed.
 Base package `net.concini.sbebuddy`; each published jar sets
 `Automatic-Module-Name` to its own package; no `module-info.java`.
 
@@ -425,28 +428,41 @@ public interface Codec<T> {
 The corpus does the work at every layer; javac appears only where it must.
 Reflection is banned in main code and free in tests.
 
-* **The corpus, in the generator.** Each case is one class holding four
-  views of one schema: the Java source as text blocks, `PACKAGE_INFO` and
-  `SOURCE`; `annotated()` and `schema()`, built through the `Fixtures` DSL
-  so the case reads like the oracle; and the hand-written oracle `XML`. In
-  the generator, per case: `Mapping.map(annotated())` equals `schema()` by
-  record equality; `SchemaXml.of(schema())` is equivalent to the oracle;
-  and the oracle parses through `XmlSchemaParser` with no error and no
-  warning, so a wrong oracle cannot agree with a wrong writer. In the
-  processor, which takes the corpus from the generator's test jar: the
-  source discovers to `annotated()` by record equality, and compiles
-  through the real processor to a `schema.xml` equivalent to the oracle.
-  One corpus, source to XML. A
-  model says what an annotation can say: a String member is absent only
-  when empty, so `epoch="unix"` written is `epoch="unix"` emitted, while an
-  enum or int member left at the XSD's default, `presence`, `length`,
-  `byteOrder`, reaches the model as absent and the XML omits it, the same
-  document to any XSD-aware reader and the same IR from sbe-tool. Once
-  over the corpus: every element and attribute `sbe.xsd` declares occurs
-  in some oracle, except an explicit list of attributes the XSD declares
-  and sbe-tool ignores, so completeness is a test, not a claim. One case
-  per XSD feature and one per shape worth taking from sbe-tool's own test
-  schemas, written fresh and never copied. No javac.
+* **The corpus, in the tests module.** One package per schema under
+  `sbe-buddy-tests/src/main/java`, the records as a user would write them,
+  compiled by the real build with the processor on
+  `annotationProcessorPaths`, so the flyweights and the codecs the tests
+  call are the generated classes themselves. Beside each package, in the
+  test sources, one `<Name>Test implements SchemaCase`: its
+  `description()`, its `oracle()` as a text block, and its `roundTrips()`,
+  each a value and the codec that carries it under a description of what
+  the value shows. `SchemaCasesTest` finds every case by walking the
+  module's test classes, the one classpath scan in the repository, and runs
+  what every schema owes as one dynamic test per check, named by its
+  description: the `schema.xml` the processor wrote is the oracle, through
+  `SchemaXmlAssert`; and every round trip holds the codec contract whole,
+  `encodedLength` being what `encode` writes, at an offset and touching
+  nothing around it, `decodedLength` and `lastDecodedLength` agreeing with
+  it, the decoded value equal to the original by recursive comparison and
+  encoding to the same bytes. What only one schema owes, a refusal with its
+  message, an older version's bytes, a binding's exception, is a `@Test`
+  of the case's own, reaching a byte through the flyweights' own
+  `<field>EncodingOffset()` and never a literal offset. The values are the
+  edge cases, listed by hand: the null value on an optional field, an
+  empty group and an empty set, a full-length string, the bounds of a
+  primitive. One case per XSD feature and one per shape worth taking from
+  sbe-tool's own test schemas, written fresh and never copied; once over
+  them, `XsdCoverageTest` asserts that every element and attribute
+  `sbe.xsd` declares occurs in some oracle, except an explicit list of
+  attributes the XSD declares and sbe-tool ignores, so completeness is a
+  test, not a claim. Surefire reports each check by its phrase, the
+  case's description, "checks", the check's.
+* **The model says what an annotation can say.** A String member is
+  absent only when empty, so `epoch="unix"` written is `epoch="unix"`
+  emitted, while an enum or int member left at the XSD's default,
+  `presence`, `length`, `byteOrder`, reaches the model as absent and the
+  XML omits it, the same document to any XSD-aware reader and the same
+  IR from sbe-tool; the oracles are written that way.
 * **The rules** are unit tests over `Annotated` or `Schema` inputs: build
   the mistake, assert the `Problem` and the node it names.
 * **Equivalence** is XMLUnit's, held in `SchemaXmlAssert` in the
@@ -457,14 +473,6 @@ Reflection is banned in main code and free in tests.
   sequence, because offsets follow declaration order and a moved field is
   a different schema. A test is one line through it, or an XPath probe for
   a single attribute.
-* **The codec's view of the corpus.** A case the codec covers holds the
-  expected source of each of its codecs by qualified name, as a text block
-  or a file in the test resources once it outgrows a screen; the emitter's
-  output must equal it exactly, so a change to generated code shows as a
-  diff of Java. A case the codec does not cover yet holds none and sets
-  `codecs = false` in its source, and the test asserts the emitter names
-  the construct it lacks, which is the work list the codec increments
-  shrink. No javac.
 * **The example, as integration.** Realistic schemas a user would write,
   `com.example.trading` and `com.example.quotes`, which grows a construct
   per increment and carries a group since version 7,
@@ -477,7 +485,7 @@ Reflection is banned in main code and free in tests.
   `encodedLength`, `lastDecodedLength` and `decodedLength` equal to the
   bytes written; one that waits for a later increment sets `codecs =
   false` and says which increment. It proves the wiring and shows the
-  product; coverage stays in the corpus.
+  product; coverage stays in the tests module.
   From the first release on it compiles the flyweights the processor
   generates and one smoke test encodes and decodes through them; what
   sbe-tool generates is not tested, because the corpus proves the document
@@ -498,7 +506,9 @@ Reflection is banned in main code and free in tests.
   sbe-tool's on both sides.
 * **The processor** runs javac in memory through the Compiler API, with
   one helper: sources as strings, `-proc:only`, diagnostics and written
-  files collected. The corpus tests above; one negative snippet per rule
+  files collected. `-proc:only` compiles nothing the processor writes, so
+  a generated codec that would not compile passes here; the tests module
+  is where generated code meets javac. The corpus tests above; one negative snippet per rule
   layer, discovery, `Mapping`, `Generator.validate`, sbe-tool and the codec
   emitter, asserting the diagnostic's element and line and that nothing
   was written, which proves placement and the all-or-nothing rule while

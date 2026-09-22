@@ -112,30 +112,31 @@ the block, one at a time.
 **Variable length.** `encodedLength` has to earn its keep.
 
 * [x] 13. Codec: groups, nested
-* [ ] 14. Codec: var-data, and the built-in var-data encodings
+* [x] 14. The tests module: the corpus compiled by the real build, one schema case per package run against the generated flyweights and codecs; the generator's twins and codec views retire as each case moves
+* [ ] 15. Codec: var-data, and the built-in var-data encodings
 
 **The rest of `sbe.xsd`.**
 
-* [ ] 15. Codec: byte order and header types
+* [ ] 16. Codec: byte order and header types
 
 **Evolution, proved.** Through the codecs, not only the flyweights.
 
-* [ ] 16. Evolution through every construct: appended var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
+* [ ] 17. Evolution through every construct: appended var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
 
 **Families.**
 
-* [ ] 17. Message families: the sealed interface and its dispatching codec
+* [ ] 18. Message families: the sealed interface and its dispatching codec
 
 **JDK bindings.** Built on the normal SBE model, no special cases; the wire
 representation stays explicit, above all for timestamps and their
 precision.
 
-* [ ] 18. Built-in wire types and bindings for `UUID`, `Instant`, `LocalDate` and `LocalTime`, each over the SBE specification's standard encoding with its `timeUnit`. A fixed-scale `BigDecimal` and an `OffsetDateTime` over a `TZTimestamp` composite are the examples of a custom binding, not built-ins
+* [ ] 19. Built-in wire types and bindings for `UUID`, `Instant`, `LocalDate` and `LocalTime`, each over the SBE specification's standard encoding with its `timeUnit`. A fixed-scale `BigDecimal` and an `OffsetDateTime` over a `TZTimestamp` composite are the examples of a custom binding, not built-ins
 
 **A real schema.**
 
-* [ ] 19. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` as a family, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
+* [ ] 20. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` as a family, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
 
 **The API pass.**
 
-* [ ] 20. Whatever feels awkward in the annotations and the codec once 19 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
+* [ ] 21. Whatever feels awkward in the annotations and the codec once 20 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
