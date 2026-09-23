@@ -215,13 +215,13 @@ final class CodecTemplates {
 					throw new IllegalArgumentException(
 							"{component} must be " + {encoder}.{property}Length() + " long, not " + value.length);
 				}
-				encoder.put{field}(value, 0, value.length);
+				encoder.put{bulk}(value, 0, value.length);
 			}""");
 
 	static final Template READ_BYTES = Template.of("""
 			private static byte[] read{field}({decoder} decoder) {
 				byte[] value = new byte[{decoder}.{property}Length()];
-				decoder.get{field}(value, 0, value.length);
+				decoder.get{bulk}(value, 0, value.length);
 				return value;
 			}""");
 

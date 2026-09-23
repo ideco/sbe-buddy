@@ -183,14 +183,17 @@ record CodecModel(
 		}
 
 		/**
-		 * The pair for one array field; {@code bytes} for an 8-bit element, which has
-		 * bulk accessors, otherwise element by element as {@code face}.
+		 * The pair for one array field, keyed by {@code field}, which a group's or a
+		 * composite's path prefixes; {@code bytes} for an 8-bit element, which has bulk
+		 * accessors named after {@code bulk}, otherwise element by element as
+		 * {@code face}.
 		 */
 		record ArrayPair(
 				String field,
 				String encoder,
 				String decoder,
 				String property,
+				String bulk,
 				String component,
 				String face,
 				boolean bytes

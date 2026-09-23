@@ -381,8 +381,8 @@ final class CodecWalk {
 		helpers.putIfAbsent(
 				new Key(Helper.ArrayPair.class, field),
 				new Helper.ArrayPair(
-						field, owner.encoder(), owner.decoder(), property, component, JavaUtil.javaTypeName(primitive),
-						primitive == PrimitiveType.UINT8
+						field, owner.encoder(), owner.decoder(), property, Generators.toUpperFirstChar(property),
+						component, JavaUtil.javaTypeName(primitive), primitive == PrimitiveType.UINT8
 				)
 		);
 		return new Shape.Array(field);
