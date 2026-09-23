@@ -27,13 +27,16 @@ caller.
 
 ## Settled before it started
 
-- **A header is named in two ways, as sbe-tool reads it.** The schema's
-  `headerType` attribute names the header composite, and without it the
-  composite named `messageHeader` is the header; nothing else marks it.
-  `@SbeSchema(headerType = …)` keeps doing both: a header record whose wire
-  name is `messageHeader` writes no attribute, any other name writes
-  `headerType`. A hand-written schema in a later partial mode can use
-  either.
+- **The XML always names the declared header.** sbe-tool finds the header
+  through the schema's `headerType` attribute, and without it takes the
+  composite named `messageHeader`; nothing else marks it. The schema we
+  write always carries `headerType`, the wire name of the record in
+  `@SbeSchema(headerType = …)`, which is `DefaultMessageHeader`'s
+  `messageHeader` when none is declared. `Mapping`'s special case that
+  leaves the attribute out for `messageHeader` goes. No oracle changes:
+  `sbe.xsd` defaults `headerType` to `messageHeader`, and the comparison
+  fills in the XSD's defaults. A hand-written schema in a later partial
+  mode may use either form, since sbe-tool reads both.
 - **The api gains `interface MessageHeader`**, with `int blockLength()`,
   `int templateId()`, `int schemaId()` and `int version()`. Not `Header`:
   Aeron's `io.aeron.logbuffer.Header` sits beside a codec in every fragment
@@ -87,7 +90,8 @@ caller.
   body; the header's extras are written after `wrapAndApplyHeader`, from the
   header or as null. `decodeHeader` builds the record through its canonical
   constructor. `encodedLength` is unchanged: the header's length is fixed.
-- **`Mapping`.** The rule on the standard four's wire names.
+- **`Mapping`.** `headerType` always set from the declared header, and the
+  rule on the standard four's wire names.
 - **The corpus.**
   - `header` gets its codecs. Round trips through both `encode`s; a test
     that plain `encode` into a dirty buffer leaves every extra member at
