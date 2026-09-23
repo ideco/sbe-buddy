@@ -171,14 +171,20 @@ The generated codec is an additional API for code that wants to work with
 the annotated record rather than directly with the flyweights.
 
 ```java
-Codec<PlaceOrder> codec = new PlaceOrderCodec();
+PlaceOrderCodec codec = new PlaceOrderCodec();
 
 int encodedLength = codec.encodedLength(order);
 int written = codec.encode(order, buffer, offset);
 
 PlaceOrder decoded = codec.decode(buffer, offset);
 int consumed = codec.lastDecodedLength();
+
+DefaultMessageHeader header = codec.decodeHeader(buffer, offset);
 ```
+
+`decodeHeader` reads the message header without checking it. A schema with
+a header of its own names the record in `@SbeSchema(headerType = …)`, and
+`encode(order, header, buffer, offset)` writes that header's own members.
 
 A codec owns its encoder and decoder flyweights and is stateful. Instances
 are intended to be reused by one thread rather than shared between threads.

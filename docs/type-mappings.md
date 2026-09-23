@@ -40,7 +40,7 @@ memory.
 
 | XSD | Java | Members |
 | --- | --- | --- |
-| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` class; default the standard `messageHeader` of four `uint16`, provided by the api); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`) |
+| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`) |
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` (the body in wire order, by name; empty for declaration order), `unmapped` (complete `@SbeField`s no component carries) |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message |
@@ -221,7 +221,7 @@ binding class it uses, and whatever a binding throws passes through
 unwrapped. A field of an enum or a set takes no binding: their faces are
 the user's types already.
 
-Built-ins in the api: the standard `MessageHeader` and `GroupSizeEncoding`
+Built-ins in the api: the standard `DefaultMessageHeader` and `GroupSizeEncoding`
 composites; `VarStringEncoding` (UTF-8), `VarAsciiEncoding`,
 `VarDataEncoding` for `@SbeData`; `UuidWire` `{int64 msb, int64 lsb}` with
 `Uuid` binding `UUID`; and for `Instant`, `LocalDate` and `LocalTime` the
@@ -232,8 +232,28 @@ in the example below, or an `OffsetDateTime` over a `TZTimestamp` composite,
 is a binding a user writes.
 They carry SBE's conventional wire names through `name`, `messageHeader`,
 `groupSizeEncoding`, `varStringEncoding`, `varAsciiEncoding` and
-`varDataEncoding`, so a schema that uses them writes neither `headerType`
-nor `dimensionType`.
+`varDataEncoding`, so a group that uses the standard dimensions writes no
+`dimensionType`. The schema always names its header in `headerType`.
+
+## The header
+
+sbe-tool knows a header only by name: the schema's `headerType`, or without
+it the composite named `messageHeader`, holding members named
+`blockLength`, `templateId`, `schemaId` and `version`, each `uint16`. In
+Java a header is an `@SbeComposite` record that implements `MessageHeader`,
+whose four accessors those members' components give it; any other member is
+the header's own. `DefaultMessageHeader` is the standard one, and
+`@SbeSchema(headerType = …)` names another.
+
+A codec is a `Codec<T, H>`, `H` the schema's header record. Both `encode`s
+write the message's own block length, template id, schema id and version;
+plain `encode` writes the header's own members as their null value, and
+`encode(value, header, …)` writes them from `header` and ignores its
+standard four, so a header read from one message passes on with another.
+`decodeHeader` reads the whole header and checks nothing, so it reads any
+message of the schema before a codec is chosen. A header's standard member
+renamed on the wire is refused; a composite among its own members is a
+construct the codec lacks.
 
 ## Layout and evolution
 
@@ -260,7 +280,7 @@ nor `dimensionType`.
 ## Families
 
 A sealed interface in the schema package with `@SbeMessage` leaves is a
-family. It carries no annotation. `<Iface>Codec implements Codec<Iface>`
+family. It carries no annotation. `<Iface>Codec implements Codec<Iface, H>`
 decodes by template id and encodes by the record's type; a template id
 outside the family is an `IllegalArgumentException`. Nested hierarchies
 flatten; a record may belong to several families; every leaf must be an

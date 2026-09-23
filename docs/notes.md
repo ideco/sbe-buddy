@@ -357,6 +357,14 @@ alternatives considered.
   `decoder.wrap(buffer, offset, actingBlockLength, actingVersion)` takes
   the header's `blockLength()` and `version()`. (`JavaGenerator.java`,
   read 2026-09-21, and the quotes example's round trip.)
+* `wrapAndApplyHeader` writes only the header members named
+  `blockLength`, `templateId`, `schemaId` and `version`, from the message's
+  constants; any other member of a header of the schema's own keeps the
+  bytes the buffer held. The header flyweight is named after the header
+  composite, `ApplicationHeaderEncoder` for `applicationHeader`, and the
+  message flyweight takes it by that class. (`JavaGenerator.java`,
+  `generateEncoderFlyweightCode`, read 2026-09-23, and the header corpus
+  case's dirty-buffer test.)
 
 ## javac
 
@@ -374,7 +382,7 @@ alternatives considered.
 * A type loaded from a class file, from a jar or a classes directory,
   exposes its `CLASS`-retained annotations through `getAnnotationMirrors()`
   on the type and on each `RecordComponentElement`, with the components in
-  declaration order; `MessageHeader` from the api jar reads as
+  declaration order; `MessageHeader`, since renamed `DefaultMessageHeader`, from the api jar reads as
   `@SbeComposite(name="messageHeader")` over four `@SbeType(primitiveType=
   UINT16)` components. (Spike experiment, javac 21, 2026-09-21.)
 * An annotation may carry an array of annotations as a member,
@@ -407,8 +415,8 @@ alternatives considered.
   types being compiled; a type read from a jar is never in a round, however
   many of our annotations it carries. So the packages a round offers are
   the compilation's own, and the api's package never becomes a unit of
-  work although `MessageHeader` carries `@SbeComposite`. (Every corpus
-  case, which resolves `MessageHeader` from the api jar and compiles
+  work although `DefaultMessageHeader` carries `@SbeComposite`. (Every corpus
+  case, which resolves `DefaultMessageHeader` from the api jar and compiles
   without a diagnostic.)
 * A message flyweight exposes a composite field as a flyweight of its own:
   the decoder's `<field>()` wraps a `<Composite>Decoder` at the field's

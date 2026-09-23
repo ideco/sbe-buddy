@@ -31,6 +31,6 @@ public interface SchemaCase {
 	 * A value and the codec that carries it; the description names what the value
 	 * shows and is printed as the check's name.
 	 */
-	record RoundTrip<T>(String description, Codec<T> codec, T value) {
+	record RoundTrip<T>(String description, Codec<T, ?> codec, T value) {
 	}
 }

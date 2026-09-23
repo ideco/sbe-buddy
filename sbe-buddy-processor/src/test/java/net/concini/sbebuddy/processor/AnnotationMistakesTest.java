@@ -494,6 +494,41 @@ final class AnnotationMistakesTest {
 	}
 
 	@Test
+	void aHeadersStandardMemberKeepsItsWireName() {
+		assertErrors(
+				framedIn("Frame"),
+				inMessage(
+						"@SbeField(id = 1) int qty",
+						"""
+								@SbeComposite record Frame(
+								@SbeType(name = "length", primitiveType = UINT16) int blockLength,
+								@SbeType(primitiveType = UINT16) int templateId,
+								@SbeType(primitiveType = UINT16) int schemaId,
+								@SbeType(primitiveType = UINT16) int version
+								) implements MessageHeader {}"""
+				),
+				error("int blockLength", "a header's blockLength keeps its wire name, not \"length\"")
+		);
+	}
+
+	@Test
+	void aHeaderThatIsNoMessageHeaderIsJavacsError() {
+		Javac.Result result = compile(
+				framedIn("Frame"),
+				inMessage(
+						"@SbeField(id = 1) int qty",
+						"@SbeComposite record Frame(@SbeType(primitiveType = UINT16) int blockLength) {}"
+				)
+		);
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getSource()).isNotNull();
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
 	void aFieldAfterAGroupIsAProblem() {
 		assertErrors(
 				inMessage("@SbeGroup(id = 1) List<Leg> legs,\n@SbeField(id = 2) int late", LEG),
@@ -601,6 +636,16 @@ final class AnnotationMistakesTest {
 
 				import net.concini.sbebuddy.SbeSchema;
 				""".formatted(version, baseline);
+	}
+
+	/** The schema of the snippets, framed in a header of its own. */
+	private static String framedIn(String header) {
+		return """
+				@SbeSchema(id = 1, version = 0, headerType = %s.class, codecs = false)
+				package mistakes;
+
+				import net.concini.sbebuddy.SbeSchema;
+				""".formatted(header);
 	}
 
 	/**

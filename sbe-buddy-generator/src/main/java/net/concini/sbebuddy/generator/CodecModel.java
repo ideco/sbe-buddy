@@ -16,7 +16,7 @@ record CodecModel(
 		String codec,
 		String record,
 		String flyweights,
-		String header,
+		Header header,
 		String message,
 		int baseline,
 		List<Binding> bindings,
@@ -27,6 +27,21 @@ record CodecModel(
 	CodecModel {
 		bindings = List.copyOf(bindings);
 		helpers = List.copyOf(helpers);
+	}
+
+	/**
+	 * The header every message is framed in, over the flyweights named after
+	 * {@code headerClass}; {@code record} is what {@code decodeHeader} returns.
+	 * {@code body} reads every component and writes the members of the header's
+	 * own, never the standard four, which {@code wrapAndApplyHeader} writes;
+	 * {@code nulls} writes those members as their null value when no header is
+	 * given.
+	 */
+	record Header(String headerClass, String record, Body body, List<Member.Unmapped> nulls) {
+
+		Header {
+			nulls = List.copyOf(nulls);
+		}
 	}
 
 	/** A binding the codec holds as a field, one per class, named after it. */

@@ -96,10 +96,12 @@ Three layers, in the order a mistake meets them.
 ## The codec contract
 
 ```java
-public interface Codec<T> {
+public interface Codec<T, H extends MessageHeader> {
   int encodedLength(T value);                                    // exact, header included
   int encode(T value, MutableDirectBuffer buffer, int offset);   // writes exactly encodedLength(value) bytes
+  int encode(T value, H header, MutableDirectBuffer buffer, int offset);  // the header's own members from header
   T decode(DirectBuffer buffer, int offset);                     // acting version and block length from the header
+  H decodeHeader(DirectBuffer buffer, int offset);               // the whole header, nothing checked
   int lastDecodedLength();                                       // bytes consumed by the last decode
   int decodedLength(DirectBuffer buffer, int offset);            // bytes a decode would consume, without decoding
 }
@@ -108,8 +110,9 @@ public interface Codec<T> {
 A codec is a stateful instance, one per thread; bindings are stateless. Its
 one exception of its own is `IllegalArgumentException`, for a value it
 cannot represent or bytes that are not its message; everything else passes
-through unwrapped. `Codec<T>` is implemented only by generated code, so it
-may grow.
+through unwrapped. `H` is the schema's header record; the standard four
+members of a header are always the message's own. `Codec` is implemented
+only by generated code, so it may grow.
 
 ## Testing
 

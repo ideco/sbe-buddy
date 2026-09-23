@@ -32,6 +32,8 @@ final class CodecWriter {
 
 	private String codec() {
 		Body body = model.body();
+		CodecModel.Header header = model.header();
+		String headerClass = header.headerClass();
 		List<String> bindings = new ArrayList<>();
 		for (CodecModel.Binding binding : model.bindings()) {
 			bindings.add(BINDING_FIELD.fill(binding));
@@ -46,18 +48,45 @@ final class CodecWriter {
 		}
 		return CODEC.fill(
 				model,
+				"headerClass", headerClass,
+				"headerRecord", header.record(),
 				"bindings", String.join("\n", bindings),
 				"variableLengths", String.join("", variableLengths),
+				"writeNullHeader", header.nulls().isEmpty() ? "" : WRITE_NULL_HEADER_CALL.fill(),
+				"writeHeader", header.body().wireOrder().isEmpty() ? "" : WRITE_HEADER_CALL.fill(),
 				"encodeFields", writes(body),
 				"refuseBelowBaseline", model.baseline() == 0
 						? ""
 						: REFUSE_BELOW_BASELINE.fill(model, "baseline", String.valueOf(model.baseline())),
 				"decodeVariable", variableReads(body),
 				"decodeFields", arguments(body),
-				"decodedLength",
-				variable(body).isEmpty() ? BLOCK_DECODED_LENGTH.fill(model) : WALKED_DECODED_LENGTH.fill(model),
+				"decodedLength", variable(body).isEmpty()
+						? BLOCK_DECODED_LENGTH.fill(model, "headerClass", headerClass)
+						: WALKED_DECODED_LENGTH.fill(model, "headerClass", headerClass),
+				"headerMethods", headerMethods(header),
 				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers)
 		);
+	}
+
+	/**
+	 * The header read whole, and, where it has members of its own, written from a
+	 * header and as null.
+	 */
+	private String headerMethods(CodecModel.Header header) {
+		Body body = header.body();
+		List<String> methods = new ArrayList<>();
+		methods.add(READ_HEADER.fill(header, "decoder", body.decoder(), "members", arguments(body)));
+		if (!body.wireOrder().isEmpty()) {
+			methods.add(WRITE_HEADER.fill(header, "encoder", body.encoder(), "members", writes(body)));
+		}
+		if (!header.nulls().isEmpty()) {
+			List<String> nulls = new ArrayList<>();
+			for (Member.Unmapped unmapped : header.nulls()) {
+				nulls.add(writeNull(body, unmapped));
+			}
+			methods.add(WRITE_NULL_HEADER.fill("encoder", body.encoder(), "members", String.join("\n", nulls)));
+		}
+		return String.join("\n\n", methods);
 	}
 
 	// ---- writing a body

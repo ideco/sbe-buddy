@@ -106,8 +106,8 @@ caller.
     var-data with a `uint16` length. Its own test reads values big-endian
     at the flyweights' `<field>EncodingOffset()`.
   - `SchemaCase.RoundTrip` takes a `Codec<T, ?>`, and `SchemaCasesTest`
-    checks `decodeHeader` after every round trip: the standard four as the
-    flyweights declare them.
+    relays every round trip: the decoded value, encoded with the header
+    `decodeHeader` reads, gives the same bytes.
 - **The example.** The rename and the new type parameter only. Neither
   schema changes its byte order or header: `quotes` cannot without breaking
   every frozen version, and `trading` would prove nothing the corpus does
@@ -120,8 +120,9 @@ caller.
 
 ## Criteria
 
-- Every round trip in the corpus passes the whole codec contract, and its
-  header reads back through `decodeHeader`.
+- Every round trip in the corpus passes the whole codec contract, and
+  relays through `decodeHeader` and `encode` with a header to the same
+  bytes.
 - No `encode` leaves a header byte as the buffer held it.
 - The `bigendian` case reads every value big-endian at its offset.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this

@@ -83,11 +83,11 @@ public final class Fixtures {
 	// ----------------------------------------------------------------------------------
 
 	/**
-	 * The api's {@code MessageHeader}, one instance, as the mapping declares it
-	 * once.
+	 * The api's {@code DefaultMessageHeader}, one instance, as the mapping declares
+	 * it once.
 	 */
 	public static final Annotated.Composite MESSAGE_HEADER = annotatedComposite(
-			"MessageHeader", "net.concini.sbebuddy.MessageHeader", "messageHeader",
+			"DefaultMessageHeader", "net.concini.sbebuddy.DefaultMessageHeader", "messageHeader",
 			annotatedType("blockLength", PrimitiveType.UINT16, primitive(Annotated.JavaPrimitive.INT)),
 			annotatedType("templateId", PrimitiveType.UINT16, primitive(Annotated.JavaPrimitive.INT)),
 			annotatedType("schemaId", PrimitiveType.UINT16, primitive(Annotated.JavaPrimitive.INT)),

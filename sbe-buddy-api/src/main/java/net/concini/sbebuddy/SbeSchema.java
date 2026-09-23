@@ -24,7 +24,11 @@ public @interface SbeSchema {
 
 	ByteOrder byteOrder() default ByteOrder.LITTLE_ENDIAN;
 
-	Class<?> headerType() default MessageHeader.class;
+	/**
+	 * The header every message of the schema is framed in: the standard
+	 * {@link DefaultMessageHeader}, or a record of the schema's own.
+	 */
+	Class<? extends MessageHeader> headerType() default DefaultMessageHeader.class;
 
 	/**
 	 * Whether a codec is generated per message. Off, the processor writes the

@@ -56,6 +56,10 @@ Problem          a mistake on a node of either model
 - Generated code holds no wire numbers; lengths come from the flyweights'
   constants. The only literals are the baseline, the valid values' text and
   the choices' bits.
+- The header is walked as a composite from `ir.headerStructure()`. Its
+  standard four are read and never written: the message flyweight's
+  `wrapAndApplyHeader` writes them. Its own members are written from a
+  header or as their null value.
 - A construct the codec does not cover yet is a `Problem` on the message,
   collected once, and the message gets no model. Nothing is skipped silently.
 - A new construct is a node in `CodecModel`, a case in the writer's switches
