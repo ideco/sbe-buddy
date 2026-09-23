@@ -46,8 +46,8 @@ final class ReferenceFlyweightsTest {
 	private static final Trade TRADE = new Trade(10_060, 300);
 
 	private static final List<Contributor> CONTRIBUTORS = List.of(
-			new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250),
-			new Contributor(Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100, 4_000_000_000L)
+			new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250, 12L),
+			new Contributor(Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100, 4_000_000_000L, 3L)
 	);
 
 	private static final String REMARK = "Firm to 12:00 — size negotiable";
@@ -100,12 +100,14 @@ final class ReferenceFlyweightsTest {
 		assertThat(contributors.ask()).isEqualTo(10_075);
 		assertThat(contributors.bidSize()).isEqualTo(4_000_000_000L);
 		assertThat(contributors.askSize()).isEqualTo(250);
+		assertThat(contributors.bidOrders()).isEqualTo(12);
 		contributors.next();
 		assertThat(contributors.venue()).isEqualTo(com.example.quotes.xmlref.Venue.XLON);
 		assertThat(contributors.bid()).isEqualTo(10_025);
 		assertThat(contributors.ask()).isEqualTo(10_100);
 		assertThat(contributors.bidSize()).isEqualTo(100);
 		assertThat(contributors.askSize()).isEqualTo(4_000_000_000L);
+		assertThat(contributors.bidOrders()).isEqualTo(3);
 		assertThat(contributors.hasNext()).isFalse();
 		assertThat(decoder.remark()).isEqualTo(REMARK);
 		assertThat(MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength()).isEqualTo(written);
@@ -147,9 +149,9 @@ final class ReferenceFlyweightsTest {
 		encoder.lastTrade().price(10_060).size(300);
 		QuoteEncoder.ContributorsEncoder contributors = encoder.contributorsCount(2);
 		contributors.next().venue(com.example.quotes.xmlref.Venue.XNAS).bid(10_050).ask(10_075)
-				.bidSize(4_000_000_000L).askSize(250);
+				.bidSize(4_000_000_000L).askSize(250).bidOrders(12);
 		contributors.next().venue(com.example.quotes.xmlref.Venue.XLON).bid(10_025).ask(10_100).bidSize(100)
-				.askSize(4_000_000_000L);
+				.askSize(4_000_000_000L).bidOrders(3);
 		encoder.remark(REMARK);
 		QuoteCodec codec = new QuoteCodec();
 
@@ -210,6 +212,68 @@ final class ReferenceFlyweightsTest {
 	}
 
 	@Test
+	void aVersionEightMessageDecodesWithoutTheOrderCounts() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+		com.example.quotes.xmlref.v8.QuoteEncoder encoder = new com.example.quotes.xmlref.v8.QuoteEncoder()
+				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v8.MessageHeaderEncoder());
+		encoder.instrumentId(42).bid(10_050).ask(10_075).bidSize(4_000_000_000L).askSize(250).sequence(7)
+				.vwap(10_060.5).venue(com.example.quotes.xmlref.v8.Venue.XNAS)
+				.state(com.example.quotes.xmlref.v8.MarketState.OPEN);
+		encoder.flags().indicative(true).locked(true);
+		encoder.symbol("ACME").bidDepth(0, 4_000_000_000L).bidDepth(1, 900).bidDepth(2, 800).bidDepth(3, 700)
+				.bidDepth(4, 600);
+		encoder.lastTrade().price(10_060).size(300);
+		com.example.quotes.xmlref.v8.QuoteEncoder.ContributorsEncoder contributors = encoder.contributorsCount(2);
+		contributors.next().venue(com.example.quotes.xmlref.v8.Venue.XNAS).bid(10_050).ask(10_075)
+				.bidSize(4_000_000_000L).askSize(250);
+		contributors.next().venue(com.example.quotes.xmlref.v8.Venue.XLON).bid(10_025).ask(10_100).bidSize(100)
+				.askSize(4_000_000_000L);
+		encoder.remark(REMARK);
+		QuoteCodec codec = new QuoteCodec();
+
+		Quote decoded = codec.decode(buffer, OFFSET);
+
+		assertThat(decoded).usingRecursiveComparison().isEqualTo(
+				new Quote(
+						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE,
+						List.of(
+								new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250, null),
+								new Contributor(
+										Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100,
+										4_000_000_000L, null
+								)
+						),
+						REMARK
+				)
+		);
+		int written = com.example.quotes.xmlref.v8.MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength();
+		assertThat(codec.lastDecodedLength()).isEqualTo(written);
+		assertThat(codec.decodedLength(buffer, OFFSET)).isEqualTo(written);
+	}
+
+	@Test
+	void aVersionEightReaderStepsOverTheOrderCountInEveryEntry() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+		int written = codec.encode(QUOTE, buffer, OFFSET);
+
+		com.example.quotes.xmlref.v8.QuoteDecoder decoder = new com.example.quotes.xmlref.v8.QuoteDecoder()
+				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v8.MessageHeaderDecoder());
+
+		assertThat(decoder.actingVersion()).isEqualTo(9);
+		com.example.quotes.xmlref.v8.QuoteDecoder.ContributorsDecoder contributors = decoder.contributors();
+		assertThat(contributors.count()).isEqualTo(2);
+		assertThat(contributors.next().askSize()).isEqualTo(250);
+		assertThat(contributors.next().askSize()).isEqualTo(4_000_000_000L);
+		// The entries' block length steps over the appended field, so what follows
+		// the group is where a version 8 reader looks for it.
+		assertThat(decoder.remark()).isEqualTo(REMARK);
+		assertThat(com.example.quotes.xmlref.v8.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
+				.isEqualTo(written);
+	}
+
+	@Test
 	void aVersionSevenMessageDecodesWithoutARemark() {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
 		com.example.quotes.xmlref.v7.QuoteEncoder encoder = new com.example.quotes.xmlref.v7.QuoteEncoder()
@@ -231,7 +295,7 @@ final class ReferenceFlyweightsTest {
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
 						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE,
-						CONTRIBUTORS.subList(0, 1), null
+						List.of(new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250, null)), null
 				)
 		);
 		int written = com.example.quotes.xmlref.v7.MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength();
@@ -248,7 +312,7 @@ final class ReferenceFlyweightsTest {
 		com.example.quotes.xmlref.v7.QuoteDecoder decoder = new com.example.quotes.xmlref.v7.QuoteDecoder()
 				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v7.MessageHeaderDecoder());
 
-		assertThat(decoder.actingVersion()).isEqualTo(8);
+		assertThat(decoder.actingVersion()).isEqualTo(9);
 		com.example.quotes.xmlref.v7.QuoteDecoder.ContributorsDecoder contributors = decoder.contributors();
 		assertThat(contributors.count()).isEqualTo(2);
 		assertThat(contributors.next().bid()).isEqualTo(10_050);
@@ -300,7 +364,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.symbol()).isEqualTo("ACME");
 		assertThat(decoder.lastTrade().price()).isEqualTo(10_060);
-		assertThat(decoder.actingVersion()).isEqualTo(8);
+		assertThat(decoder.actingVersion()).isEqualTo(9);
 		// The block is consumed whole; the group behind it is beyond what a reader
 		// without it can skip, which is SBE's limit.
 		assertThat(com.example.quotes.xmlref.v6.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
@@ -345,7 +409,7 @@ final class ReferenceFlyweightsTest {
 				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v5.MessageHeaderDecoder());
 
 		assertThat(decoder.symbol()).isEqualTo("ACME");
-		assertThat(decoder.actingVersion()).isEqualTo(8);
+		assertThat(decoder.actingVersion()).isEqualTo(9);
 		assertThat(com.example.quotes.xmlref.v5.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(BLOCK)
 				.isLessThan(written);
@@ -387,7 +451,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.tradeCount()).isEqualTo(com.example.quotes.xmlref.v4.QuoteDecoder.tradeCountNullValue());
 		assertThat(decoder.venue()).isEqualTo(com.example.quotes.xmlref.v4.Venue.XNAS);
-		assertThat(decoder.actingVersion()).isEqualTo(8);
+		assertThat(decoder.actingVersion()).isEqualTo(9);
 		assertThat(com.example.quotes.xmlref.v4.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(BLOCK)
 				.isLessThan(written);
@@ -426,7 +490,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.tradeCount()).isEqualTo(com.example.quotes.xmlref.v3.QuoteDecoder.tradeCountNullValue());
 		assertThat(decoder.venue()).isEqualTo(com.example.quotes.xmlref.v3.Venue.XNAS);
-		assertThat(decoder.actingVersion()).isEqualTo(8);
+		assertThat(decoder.actingVersion()).isEqualTo(9);
 		assertThat(com.example.quotes.xmlref.v3.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(BLOCK)
 				.isLessThan(written);
@@ -488,7 +552,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.instrumentId()).isEqualTo(42);
 		assertThat(decoder.sequence()).isEqualTo(7);
-		assertThat(decoder.actingVersion()).isEqualTo(8);
+		assertThat(decoder.actingVersion()).isEqualTo(9);
 		// The acting block length is the header's, so the longer block is consumed
 		// whole; the group behind it is not.
 		assertThat(com.example.quotes.xmlref.v1.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())

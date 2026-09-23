@@ -76,4 +76,4 @@ The components may then be declared in any order, and the record's canonical con
 
 ## What cannot be retired yet
 
-Groups and variable-length data cannot be declared under `unmapped`, and a composite has no `layout` of its own. Both are planned.
+Groups and variable-length data cannot be declared under `unmapped`. That is planned.

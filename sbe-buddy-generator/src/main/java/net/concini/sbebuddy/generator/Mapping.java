@@ -51,13 +51,15 @@ public final class Mapping {
 	private final Map<Annotated.Declaration, String> wireNames = new IdentityHashMap<>();
 	private final FaceRules faces = new FaceRules(problems);
 	private final int baselineVersion;
+	private final Annotated.Composite header;
 
-	private Mapping(int baselineVersion) {
+	private Mapping(int baselineVersion, Annotated.Composite header) {
 		this.baselineVersion = baselineVersion;
+		this.header = header;
 	}
 
 	public static Mapped map(Annotated annotated) {
-		Mapping mapping = new Mapping(annotated.baselineVersion());
+		Mapping mapping = new Mapping(annotated.baselineVersion(), annotated.headerType());
 		Schema schema = mapping.schema(annotated);
 		return new Mapped(schema, List.copyOf(mapping.problems), Collections.unmodifiableMap(mapping.origins));
 	}
@@ -69,8 +71,8 @@ public final class Mapping {
 							+ baselineVersion
 			);
 		}
-		String headerType = declare(annotated.headerType());
-		standardHeaderNames(annotated.headerType());
+		String headerType = declare(header);
+		headerRules();
 		for (Annotated.Declaration declaration : annotated.types()) {
 			declare(declaration);
 		}
@@ -349,14 +351,15 @@ public final class Mapping {
 	}
 
 	/**
-	 * The wire name of a declaration, adding it to {@code types} the first time it
-	 * is reached.
+	 * A header cannot change: its four standard members keep their wire names,
+	 * which sbe-tool requires, under the Java names {@code MessageHeader}'s
+	 * accessors read, and neither it nor a member arrives in a later version, since
+	 * a reader needs the header's length before its version.
 	 */
-	/**
-	 * The header's four standard members keep their wire names, which sbe-tool
-	 * requires, under the Java names {@code MessageHeader}'s accessors read.
-	 */
-	private void standardHeaderNames(Annotated.Composite header) {
+	private void headerRules() {
+		if (header.sinceVersion() > 0) {
+			problem(header, "a header cannot change: a reader needs its length before its version");
+		}
 		for (Annotated.Member member : header.members()) {
 			if (member instanceof Annotated.Type type && STANDARD_HEADER_MEMBERS.contains(type.javaName())
 					&& !type.name().isEmpty() && !type.name().equals(type.javaName())) {
@@ -364,9 +367,16 @@ public final class Mapping {
 						type, "a header's " + type.javaName() + " keeps its wire name, not \"" + type.name() + "\""
 				);
 			}
+			if (sinceVersion(member) > 0) {
+				problem(member, "a header cannot change: a reader needs its length before its version");
+			}
 		}
 	}
 
+	/**
+	 * The wire name of a declaration, adding it to {@code types} the first time it
+	 * is reached.
+	 */
 	private String declare(Annotated.Declaration declaration) {
 		String known = wireNames.get(declaration);
 		if (known != null) {
@@ -419,6 +429,14 @@ public final class Mapping {
 		for (Annotated.Member member : order(
 				composite, composite.members(), composite.unmapped(), composite.layout(), Mapping::javaName
 		)) {
+			// The header has a rule of its own, and the official way to extend a
+			// composite is no way to extend a header.
+			if (composite != header && sinceVersion(member) > composite.sinceVersion()) {
+				problem(
+						member,
+						"a composite cannot be extended in a later version; declare a new composite and append a field of it"
+				);
+			}
 			members.add(switch (member) {
 				case Annotated.Type type -> {
 					faces.member(type);
@@ -444,6 +462,16 @@ public final class Mapping {
 		);
 		origins.put(result, composite);
 		return result;
+	}
+
+	private static int sinceVersion(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> type.sinceVersion();
+			case Annotated.Ref ref -> ref.sinceVersion();
+			case Annotated.Enum enumeration -> enumeration.sinceVersion();
+			case Annotated.Set set -> set.sinceVersion();
+			case Annotated.Composite nested -> nested.sinceVersion();
+		};
 	}
 
 	private Schema.Ref ref(Annotated.Ref ref) {

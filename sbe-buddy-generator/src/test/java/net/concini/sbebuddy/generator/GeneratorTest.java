@@ -6,11 +6,9 @@ import static net.concini.sbebuddy.generator.Fixtures.annotated;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedComposite;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedData;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedField;
-import static net.concini.sbebuddy.generator.Fixtures.annotatedGroup;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedMessage;
 import static net.concini.sbebuddy.generator.Fixtures.annotatedType;
 import static net.concini.sbebuddy.generator.Fixtures.boundField;
-import static net.concini.sbebuddy.generator.Fixtures.boxed;
 import static net.concini.sbebuddy.generator.Fixtures.composite;
 import static net.concini.sbebuddy.generator.Fixtures.data;
 import static net.concini.sbebuddy.generator.Fixtures.field;
@@ -148,58 +146,6 @@ final class GeneratorTest {
 		);
 
 		assertLacks(annotated, "text data in UTF-16");
-	}
-
-	@Test
-	void varDataAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
-		// The group's own version is the baseline inside it, as for a field.
-		Annotated.Composite varStringEncoding = varStringEncoding();
-		Annotated annotated = annotated(
-				2, List.of(varStringEncoding),
-				annotatedMessage(
-						"M", 1, annotatedField("qty", 1, primitive(INT)),
-						annotatedGroup(
-								"legs", 2, 1, annotatedField("legId", 3, primitive(INT), 1),
-								annotatedData("note", 4, text(), varStringEncoding, 2)
-						)
-				)
-		);
-
-		assertLacks(annotated, "var-data added above the baseline in a group");
-	}
-
-	@Test
-	void aFieldAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
-		// The group's own version is the baseline inside it: a field at version 1 in
-		// a group appended in version 1 is never absent, one at version 2 would be.
-		Annotated annotated = annotated(
-				2,
-				annotatedMessage(
-						"M", 1, annotatedField("qty", 1, primitive(INT)),
-						annotatedGroup(
-								"legs", 2, 1, annotatedField("legId", 3, primitive(INT), 1),
-								annotatedField("ratio", 4, boxed(INT), 2)
-						)
-				)
-		);
-
-		assertLacks(annotated, "a field added above the baseline in a group");
-	}
-
-	@Test
-	void aGroupAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
-		Annotated annotated = annotated(
-				1,
-				annotatedMessage(
-						"M", 1, annotatedField("qty", 1, primitive(INT)),
-						annotatedGroup(
-								"legs", 2, 0, annotatedField("legId", 3, primitive(INT)),
-								annotatedGroup("allocations", 4, 1, annotatedField("account", 5, primitive(INT)))
-						)
-				)
-		);
-
-		assertLacks(annotated, "a group added above the baseline in a group");
 	}
 
 	@Test

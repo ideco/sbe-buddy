@@ -131,6 +131,23 @@ alternatives considered.
   `generateGroupDecoderClassHeader`, `generateGroupEncoderClassHeader`,
   `generateFieldNotPresentCondition`, `generateMessageLength` and the
   decoder's `sbeDecodedLength`, read 2026-09-22.)
+* A group decoder's `next()` starts the entry at the message's current
+  limit and moves the limit past the entry's block, by the block length
+  read from the dimensions. Whatever an entry holds after its block, a
+  nested group or var-data, moves the limit only when it is read, so a
+  reader that does not know a group or var-data appended inside the entry
+  starts the next entry where that appended part begins. A field appended
+  to the entry's block is stepped over, the dimensions carrying the longer
+  block. (`JavaGenerator.java`, the group decoder's `next`, read
+  2026-09-23; the `evolution` corpus cases.)
+* SBE's own rules for growing a schema: fields appended to the end of a
+  message's or a group's block; a group after the existing groups, at the
+  root or nested in a group; var-data after the existing var-data, at the
+  root or in a group. "It is not possible to add fields to a composite type
+  without creating a new message template and schema version", and the
+  message header's encoding cannot change. (sbe-tool's wiki, Message
+  Versioning, and the FIX SBE 1.0 standard, Schema Extension Mechanism,
+  read 2026-09-23.)
 * A `data` element's flyweight members sit on its message's or group's
   classes, named by `JavaUtil.formatPropertyName`, the bulk ones after
   `Generators.toUpperFirstChar` of it. The encoder has static

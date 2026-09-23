@@ -447,6 +447,59 @@ final class AnnotationMistakesTest {
 	}
 
 	@Test
+	void aCompositeCannotBeExtendedInALaterVersion() {
+		assertErrors(
+				schema(1, 0),
+				inMessage(
+						"@SbeField(id = 1) Pad pad",
+						"""
+								@SbeComposite record Pad(
+								@SbeType(primitiveType = INT32) int first,
+								@SbeType(primitiveType = INT32, sinceVersion = 1) int second
+								) {}"""
+				),
+				error(
+						"int second",
+						"a composite cannot be extended in a later version; declare a new composite and append a field of it"
+				)
+		);
+	}
+
+	@Test
+	void aCompositesRefCannotBeNewerThanItsComposite() {
+		assertErrors(
+				schema(1, 0),
+				inMessage(
+						"@SbeField(id = 1) Pad pad",
+						"@SbeType(primitiveType = INT32) final class Qty {}",
+						"""
+								@SbeComposite record Pad(
+								@SbeType(primitiveType = INT32) int first,
+								@SbeRef(value = Qty.class, sinceVersion = 1) int second
+								) {}"""
+				),
+				error(
+						"int second",
+						"a composite cannot be extended in a later version; declare a new composite and append a field of it"
+				)
+		);
+	}
+
+	@Test
+	void aCompositeArrivingInALaterVersionBringsItsMembersAlong() {
+		assertClean(
+				schema(1, 0),
+				inMessage(
+						"@SbeField(id = 1, sinceVersion = 1) Pad pad",
+						"""
+								@SbeComposite(sinceVersion = 1) record Pad(
+								@SbeType(primitiveType = INT32, sinceVersion = 1) int first
+								) {}"""
+				)
+		);
+	}
+
+	@Test
 	void aCompositesLayoutOrdersItsMembers() {
 		Javac.Result result = assertClean(
 				inMessage(
@@ -508,6 +561,25 @@ final class AnnotationMistakesTest {
 								) implements MessageHeader {}"""
 				),
 				error("int blockLength", "a header's blockLength keeps its wire name, not \"length\"")
+		);
+	}
+
+	@Test
+	void aHeaderCannotChangeInALaterVersion() {
+		assertErrors(
+				framedIn("Frame", 1),
+				inMessage(
+						"@SbeField(id = 1) int qty",
+						"""
+								@SbeComposite record Frame(
+								@SbeType(primitiveType = UINT16) int blockLength,
+								@SbeType(primitiveType = UINT16) int templateId,
+								@SbeType(primitiveType = UINT16) int schemaId,
+								@SbeType(primitiveType = UINT16) int version,
+								@SbeType(primitiveType = UINT32, sinceVersion = 1) long sequence
+								) implements MessageHeader {}"""
+				),
+				error("long sequence", "a header cannot change: a reader needs its length before its version")
 		);
 	}
 
@@ -640,12 +712,16 @@ final class AnnotationMistakesTest {
 
 	/** The schema of the snippets, framed in a header of its own. */
 	private static String framedIn(String header) {
+		return framedIn(header, 0);
+	}
+
+	private static String framedIn(String header, int version) {
 		return """
-				@SbeSchema(id = 1, version = 0, headerType = %s.class, codecs = false)
+				@SbeSchema(id = 1, version = %d, headerType = %s.class, codecs = false)
 				package mistakes;
 
 				import net.concini.sbebuddy.SbeSchema;
-				""".formatted(header);
+				""".formatted(version, header);
 	}
 
 	/**

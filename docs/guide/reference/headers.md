@@ -129,10 +129,11 @@ The header's own members carry over unchanged, and the standard four are the mes
 * A `headerType` that is not an `@SbeComposite` record: `headerType must name an @SbeComposite`.
 * A standard member renamed on the wire: `a header's blockLength keeps its wire name, not "length"`.
 * A standard member missing, or of another type than `uint16`: sbe-tool's error, reported on the package.
+* A header, or a member of it, with a `sinceVersion`: `a header cannot change: a reader needs its length before its version`. SBE fixes the header's encoding for good.
 * A composite among the header's own members: the codec refuses it, naming each message. `codecs = false` on `@SbeSchema` keeps the flyweights.
 
 An enum among a header's own members is written as its null value by plain `encode`, and `decodeHeader` reads that back only as the enum's `@UnknownValue` constant; without one it is an `IllegalArgumentException`. Give such an enum an unknown value, or pass a header whenever you encode.
 
 ## Coverage
 
-This page covers the header in front of every message. The schema's other attributes, its byte order among them, are [the schemas page's](schemas.md). A header member appended in a later version is planned with the rest of evolution.
+This page covers the header in front of every message. The schema's other attributes, its byte order among them, are [the schemas page's](schemas.md).

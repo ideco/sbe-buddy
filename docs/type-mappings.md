@@ -252,8 +252,9 @@ plain `encode` writes the header's own members as their null value, and
 standard four, so a header read from one message passes on with another.
 `decodeHeader` reads the whole header and checks nothing, so it reads any
 message of the schema before a codec is chosen. A header's standard member
-renamed on the wire is refused; a composite among its own members is a
-construct the codec lacks.
+renamed on the wire is refused, and so is a header or a member of it with a
+`sinceVersion`: SBE fixes the header's encoding. A composite among its own
+members is a construct the codec lacks.
 
 ## Layout and evolution
 
@@ -272,6 +273,18 @@ construct the codec lacks.
 * A node with `sinceVersion = n` must follow every sibling with a lower
   `sinceVersion`, and `n` is at most the schema version; `deprecated` is at
   least `sinceVersion`. The compiler rejects anything else.
+* A schema grows as SBE's extension mechanism lets it: fields appended to
+  a message's block or a group's entry, groups after the groups at the root
+  or inside an entry, var-data after the var-data at the root or inside an
+  entry. Each decodes to `null` from a message older than it, decided on
+  the acting version, at the root and in every entry.
+* A composite never grows: a member whose `sinceVersion` is above its
+  composite's own is rejected, since the composite's size is part of every
+  block holding it. A new composite, carried by a new field, is the way.
+* A reader of an older version steps over fields appended to a block,
+  through the header's and the dimensions' block lengths, and stops before
+  groups and var-data appended at the root. It cannot step over a group or
+  var-data appended inside an entry, which is SBE's limit.
 * Decoding takes acting block length and acting version from the header;
   encoding always writes the schema's current version. A header version
   below `baselineVersion` is refused.

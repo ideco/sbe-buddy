@@ -47,8 +47,8 @@ final class QuotesTest {
 	private static final Trade TRADE = new Trade(10_060, 300);
 
 	private static final List<Contributor> CONTRIBUTORS = List.of(
-			new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250),
-			new Contributor(Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100, 4_000_000_000L)
+			new Contributor(Venue.XNAS, BID, ASK, 4_000_000_000L, 250, 12L),
+			new Contributor(Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100, 4_000_000_000L, 3L)
 	);
 
 	private static final String REMARK = "Firm to 12:00 — size negotiable";
@@ -139,7 +139,7 @@ final class QuotesTest {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
-				DEPTH, TRADE, List.of(new Contributor(null, BID, ASK, 100, 100)), REMARK
+				DEPTH, TRADE, List.of(new Contributor(null, BID, ASK, 100, 100, 1L)), REMARK
 		);
 
 		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
