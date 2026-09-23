@@ -4,10 +4,10 @@
 
 A schema can put its messages on the wire big-endian, and can frame them in
 a header of its own. The mapping, the XML and sbe-tool's flyweights already
-carry both; the codec refuses both. This increment lifts the
-two refusals and gives the header a Java form: every codec reads the header
-on its own, and encodes a message with the header's extra members supplied
-by the caller.
+carry both; the codec refuses both. This increment lifts the two refusals
+and gives the header a Java form: every codec reads the header on its own,
+and encodes a message with the header's extra members supplied by the
+caller.
 
 ## What the spike showed
 
