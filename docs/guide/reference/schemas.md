@@ -33,46 +33,4 @@ The order applies to every value on the wire: the header, every field, every arr
 
 ## The header
 
-Every message is framed in a header that carries its `blockLength`, `templateId`, `schemaId` and `version`, each a `uint16`. sbe-tool knows the header only by name: the schema's `headerType`, or the composite named `messageHeader` where there is none. The schema sbe-buddy writes always names it.
-
-In Java a header is an `@SbeComposite` record that implements `MessageHeader`. The api's `DefaultMessageHeader` is the standard one, with exactly the four members. A header of your own declares the four as components, which gives it `MessageHeader`'s accessors, and adds members of its own:
-
-```java
-@SbeComposite(name = "applicationHeader")
-record ApplicationHeader(
-        @SbeType(primitiveType = UINT16) int blockLength,
-        @SbeType(primitiveType = UINT16) int templateId,
-        @SbeType(primitiveType = UINT16) int schemaId,
-        @SbeType(primitiveType = UINT16) int version,
-        @SbeType(primitiveType = UINT32) long sequenceNumber
-) implements MessageHeader {
-}
-```
-
-```java
-@SbeSchema(id = 1, version = 0, headerType = ApplicationHeader.class)
-package com.example.feed;
-```
-
-```xml
-<sbe:messageSchema package="com.example.feed" id="1" version="0" headerType="applicationHeader">
-```
-
-A header's own members may come before the standard four, as a length prefix does; the offsets follow the record. A `headerType` that does not implement `MessageHeader` is javac's error on the annotation, and a standard member given another wire name through `name` is refused.
-
-## What the codec writes into a header
-
-Every codec of the schema is a `Codec<T, H>`, `H` the header record:
-
-```java
-OrderCodec codec = new OrderCodec();
-
-codec.encode(order, buffer, offset);                  // the header's own members as their null value
-codec.encode(order, header, buffer, offset);          // the header's own members from header
-
-ApplicationHeader read = codec.decodeHeader(buffer, offset);
-```
-
-The block length, template id, schema id and version are always the message's: both `encode`s write them, and a header passed in has them ignored, so a header read from one message can frame another. `decodeHeader` reads the whole header and checks nothing, so it reads any message of the schema, whichever codec it then goes to. `decode` checks the schema id and template id as before, and ignores the header's own members.
-
-A composite among a header's own members is not supported by the codec yet; set `codecs = false` for such a schema.
+Every message of the schema is framed in the header `headerType` names: the standard `DefaultMessageHeader`, or a record of the schema's own that implements `MessageHeader`. Every codec of the schema is a `Codec<T, H>` over it, and can read the header on its own and write the header's own members. [Headers](headers.md) covers declaring one, what the codec writes into it, and reading it first.
