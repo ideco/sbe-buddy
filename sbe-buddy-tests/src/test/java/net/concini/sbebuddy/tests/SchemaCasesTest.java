@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DynamicContainer;
 import org.junit.jupiter.api.TestFactory;
 
 import net.concini.sbebuddy.Codec;
+import net.concini.sbebuddy.MessageHeader;
 import net.concini.sbebuddy.generator.SchemaXmlAssert;
 import net.concini.sbebuddy.tests.SchemaCase.RoundTrip;
 
@@ -27,7 +28,8 @@ import net.concini.sbebuddy.tests.SchemaCase.RoundTrip;
  * codec contract as a whole: {@code encodedLength} is what {@code encode}
  * writes, at an offset and touching nothing around it; {@code decodedLength}
  * and {@code lastDecodedLength} agree with it; the decoded value equals the
- * original, and encodes to the same bytes.
+ * original, and encodes to the same bytes, both on its own and with the header
+ * {@code decodeHeader} reads, as a relay passes a message on.
  */
 final class SchemaCasesTest {
 
@@ -72,8 +74,10 @@ final class SchemaCasesTest {
 	}
 
 	private static <T> void roundTrips(RoundTrip<T> roundTrip) {
-		Codec<T> codec = roundTrip.codec();
-		T value = roundTrip.value();
+		roundTrips(roundTrip.codec(), roundTrip.value());
+	}
+
+	private static <T, H extends MessageHeader> void roundTrips(Codec<T, H> codec, T value) {
 		int length = codec.encodedLength(value);
 		byte[] bytes = new byte[OFFSET + length + OFFSET];
 		Arrays.fill(bytes, UNTOUCHED);
@@ -93,6 +97,13 @@ final class SchemaCasesTest {
 		Arrays.fill(again, UNTOUCHED);
 		codec.encode(decoded, new UnsafeBuffer(again), 0);
 		assertThat(again).as("the decoded value encodes to the same bytes")
+				.isEqualTo(Arrays.copyOfRange(bytes, OFFSET, OFFSET + length));
+		byte[] relayed = new byte[length];
+		Arrays.fill(relayed, UNTOUCHED);
+		H header = codec.decodeHeader(buffer, OFFSET);
+		assertThat(codec.encode(decoded, header, new UnsafeBuffer(relayed), 0)).as("encode with a header")
+				.isEqualTo(length);
+		assertThat(relayed).as("the decoded value encodes with its decoded header to the same bytes")
 				.isEqualTo(Arrays.copyOfRange(bytes, OFFSET, OFFSET + length));
 	}
 }

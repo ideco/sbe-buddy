@@ -1,85 +1,136 @@
-# Increment 16: Var-data
+# Increment 17: Byte order and header types
 
 ## Goal
 
-A message or a group entry ends in var-data: a length on the wire followed by
-that many bytes, text in a character encoding or opaque bytes. The mapping,
-the XML and sbe-tool's flyweights have carried `@SbeData` since increment 4;
-the codec refuses it. This increment gives the codec var-data wherever the
-schema allows it, through the api's three built-in encodings and any
-`{length, varData}` composite of the user's own, and makes `encodedLength`
-count it without encoding, as it counts groups.
+A schema can put its messages on the wire big-endian, and can frame them in
+a header of its own. The mapping, the XML and sbe-tool's flyweights already
+carry both; the codec refuses both. This increment lifts the two refusals
+and gives the header a Java form: every codec reads the header on its own,
+and encodes a message with the header's extra members supplied by the
+caller.
+
+## What the spike showed
+
+- **Big-endian already works.** The codec reaches the buffer only through
+  the flyweights, which apply the byte order themselves. With the refusal
+  lifted, a `long` round-tripped and read back big-endian at
+  `orderIdEncodingOffset()`. What is missing is the proof.
+- **A custom header almost works.** The templates already take the header's
+  class from the IR, so a codec compiled against `ApplicationHeaderEncoder`
+  and round-tripped. One real bug: sbe-tool's `wrapAndApplyHeader` writes
+  only `blockLength`, `templateId`, `schemaId` and `version`, and an extra
+  member keeps whatever the buffer held. `encode` then claims bytes it never
+  wrote.
+- **The standard four are always `uint16`.** sbe-tool only warns about any
+  other type, and our pipeline makes its warnings fatal, so their Java type
+  is always `int`.
 
 ## Settled before it started
 
-- The face is decided by the `varData` type: a `char` is a `String` in its
-  `characterEncoding`, anything else a `byte[]`, as `FaceRules` already
-  reads a type of `length = 0`. A `uint8` given a `characterEncoding` is
-  still bytes: its flyweight has the byte form too, and the composite's own
-  record says `byte[]`.
-- Data has no presence. It is never `null` on the way out, so a `null`
-  component is an `IllegalArgumentException`, `note is required`, from
-  `encodedLength` and `encode` alike, as a group's list is; an empty string
-  or array is a value. Data appended above the message's baseline decodes to
-  `null` from an older message, decided on the acting version.
-- Text is ASCII or UTF-8. ASCII goes through the existing `ascii` check;
-  UTF-8 is counted by a helper of its own without encoding, and a lone
-  surrogate, which `String.getBytes` would silently turn into `?`, is an
-  `IllegalArgumentException`. Text in any other encoding is a construct the
-  codec lacks, as a fixed-length string outside ASCII already is.
-- Over the length type's maximum is the codec's `IllegalArgumentException`
-  before the flyweight's `IllegalStateException`. The maximum is the
-  length's `lengthMaxValue()` on the encoding's own composite flyweight, the
-  same `applicableMaxValue` the message's flyweight checks, so the codec
-  holds no wire number.
-- Decoding is the flyweight's: text through its `String` form, bytes through
-  `get<Data>` into an array sized by `<data>Length()`. Bytes that are not
-  valid in the encoding decode as the JDK decodes them.
+- **The XML always names the declared header.** sbe-tool finds the header
+  through the schema's `headerType` attribute, and without it takes the
+  composite named `messageHeader`; nothing else marks it. The schema we
+  write always carries `headerType`, the wire name of the record in
+  `@SbeSchema(headerType = …)`, which is `DefaultMessageHeader`'s
+  `messageHeader` when none is declared. `Mapping`'s special case that
+  leaves the attribute out for `messageHeader` goes. No oracle changes:
+  `sbe.xsd` defaults `headerType` to `messageHeader`, and the comparison
+  fills in the XSD's defaults. A hand-written schema in a later partial
+  mode may use either form, since sbe-tool reads both.
+- **The api gains `interface MessageHeader`**, with `int blockLength()`,
+  `int templateId()`, `int schemaId()` and `int version()`. Not `Header`:
+  Aeron's `io.aeron.logbuffer.Header` sits beside a codec in every fragment
+  handler. The built-in record is renamed `DefaultMessageHeader`, keeps its
+  wire name `messageHeader`, and implements the interface. A custom header
+  is a record that implements it too, so a header declaring the four
+  standard components already has the accessors.
+- **`@SbeSchema.headerType` is typed `Class<? extends MessageHeader>`,**
+  default `DefaultMessageHeader.class`. A class that does not implement the
+  interface is then javac's error on the annotation, the first rule layer,
+  with no rule of ours.
+- **`Codec<T, H extends MessageHeader>`.** `H` is the schema's header
+  record. Code that holds the concrete class, or `var`, never writes it;
+  generic code writes `Codec<Order, ?>`.
+- **Two methods join the contract.**
+  - `H decodeHeader(DirectBuffer buffer, int offset)` reads the whole header,
+    the standard four and every extra member the record carries. It checks
+    nothing, so it can peek at any message of any template before choosing
+    a codec, which is what increment 19's dispatch needs.
+  - `int encode(T value, H header, MutableDirectBuffer buffer, int offset)`
+    writes the message with the header's extra members taken from `header`.
+    It returns what `encode` returns; a `null` header is an
+    `IllegalArgumentException`, `header is required`.
+- **The standard four are always the codec's own.** Both `encode`s write the
+  message's `blockLength`, `templateId`, `schemaId` and `version` through
+  `wrapAndApplyHeader`, and ignore the header's values for them. Checking
+  them as constants are checked would break relaying: a header decoded from
+  an older message carries another version. Plain `encode(value, …)` writes
+  every extra member as its null value, so no byte is left as the buffer
+  held it.
+- **The standard four keep their wire names.** A header record's component
+  `blockLength`, `templateId`, `schemaId` or `version` renamed on the wire to
+  something else is refused by `Mapping`, since the interface's accessor
+  would then read another member.
 
 ## What gets built
 
-- **`CodecModel`.** `Member.Data(component, property, path, content,
-  addedSince)`, with `enum Content { BYTES, ASCII, UTF_8 }`; and
-  `Helper.DataMethods(data, encoder, decoder, bulk, lengthEncoder)`, the
-  length, write and, for bytes, read methods of one data member, keyed by
-  its path as a group's are. Each content's check is a helper shared by
-  the codec: the existing `Ascii`, and `Utf8` and `Bytes`, each refusing
-  over the maximum.
-- **`CodecWalk`.** The var-data tokens after the groups become `Data`
-  members, found by wire name among the components. Data appended above
-  the baseline inside a group is a construct the codec lacks, as a field
-  or a group appended there is.
-- **`CodecWriter`.** A body's variable part, its groups and then its data,
-  is read into locals in wire order before the constructor; `encodedLength`
-  adds a term per data member at the message and per entry in a group; the
-  walked `decodedLength` covers data as it covers groups.
-- **`FaceRules`.** `data(Annotated.Data)`: the component is the face of its
-  encoding's `varData`, replacing `Mapping`'s `data must be a String or a
-  byte[]`, which let a `String` reach a flyweight with no `String` form.
-- **The corpus.** `vardata` gets its codecs and its round trips: empty and
-  full, a data member inside a group's entry, the `uint8` length's maximum.
-  A new case, `varencodings`, uses the api's `VarStringEncoding`,
-  `VarAsciiEncoding` and `VarDataEncoding`, one appended in version 1, with
-  the refusals: `null`, over the maximum, a lone surrogate, a non-ASCII
-  character.
-- **The example.** `quotes` version 8 appends a var-data remark, freezing
-  `quotes-v7.xml` with its reference flyweights; `trading`, whose `NewOrder`
-  ends in a note, gets its codecs.
-- **The documents.** `type-mappings.md`'s faces for data; the guide's
-  variable data page; `notes.md` on the var-data flyweights; `intent.md`
-  ticks 16.
+- **The api.** `MessageHeader`, `DefaultMessageHeader`, `headerType`'s new
+  type, and `Codec`'s second type parameter and two methods, each
+  documented as a contract.
+- **`CodecModel`.** The header becomes a node of its own: the header
+  record, its flyweight class and a body over the header flyweight, built
+  as a composite's is. Its extra members are fields; the standard four are
+  read and never written; members under the record's `unmapped` are
+  written as their null value.
+- **`CodecWalk`.** The header body comes from `ir.headerStructure()` and the
+  schema's `headerType` composite, with the composite's shapes, so an extra
+  member may be anything a composite member may be. The refusals of a
+  header of its own and of big-endian go.
+- **`CodecWriter`.** Plain `encode` and `encode` with a header share one
+  body; the header's extras are written after `wrapAndApplyHeader`, from the
+  header or as null. `decodeHeader` builds the record through its canonical
+  constructor. `encodedLength` is unchanged: the header's length is fixed.
+- **`Mapping`.** `headerType` always set from the declared header, and the
+  rule on the standard four's wire names.
+- **The corpus.**
+  - `header` gets its codecs. Round trips through both `encode`s; a test
+    that plain `encode` into a dirty buffer leaves every extra member at
+    its null value; a test that `encode` with a header writes its sequence
+    number and ignores its standard four; a test that `decode` ignores the
+    extras.
+  - A new case, `leadingheader`, whose header puts an extra member before
+    the standard four, so every standard offset moves.
+  - `bigendian` grows to everything whose bytes depend on the order: every
+    multi-byte width, `float` and `double`, a `short[]`, an enum on
+    `uint16`, a set on `uint32`, a composite, a group's dimension and
+    var-data with a `uint16` length. Its own test reads values big-endian
+    at the flyweights' `<field>EncodingOffset()`.
+  - `SchemaCase.RoundTrip` takes a `Codec<T, ?>`, and `SchemaCasesTest`
+    relays every round trip: the decoded value, encoded with the header
+    `decodeHeader` reads, gives the same bytes.
+- **The example.** The rename and the new type parameter only. Neither
+  schema changes its byte order or header: `quotes` cannot without breaking
+  every frozen version, and `trading` would prove nothing the corpus does
+  not.
+- **The documents.** `type-mappings.md`'s `messageSchema` row and header
+  section; `architecture.md`'s codec contract; a guide page for the
+  schema's own attributes, `byteOrder` and `headerType` with what the codec
+  writes into a header, and the rename across the guide; `notes.md` on
+  `wrapAndApplyHeader`; `intent.md` ticks 17.
 
 ## Criteria
 
-- Every var-data round trip passes the whole codec contract, the lengths
-  included, and the refusals are the codec's `IllegalArgumentException`s.
-- The quotes reference tests cross version 7 and 8 in both directions:
-  sbe-tool's flyweights read our var-data, and our codec reads theirs.
+- Every round trip in the corpus passes the whole codec contract, and
+  relays through `decodeHeader` and `encode` with a header to the same
+  bytes.
+- No `encode` leaves a header byte as the buffer held it.
+- The `bigendian` case reads every value big-endian at its offset.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Var-data appended inside a group, with fields and groups appended there, in
-increment 18. Text in encodings other than ASCII and UTF-8. Bindings on
-var-data. Byte order and header types, increment 17.
+Partial mode, and with it the check that a header record matches a
+hand-written schema's header. Bindings on header members. Members appended
+to a header in a later version, increment 18. Family dispatch on
+`decodeHeader`, increment 19.

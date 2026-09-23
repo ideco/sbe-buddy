@@ -118,7 +118,7 @@ the block, one at a time.
 
 **The rest of `sbe.xsd`.**
 
-* [ ] 17. Codec: byte order and header types
+* [x] 17. Codec: byte order and header types
 
 **Evolution, proved.** Through the codecs, not only the flyweights.
 

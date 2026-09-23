@@ -42,6 +42,9 @@ public final class Mapping {
 	// sbe.xsd types a message's and a field's id as xs:unsignedShort.
 	private static final int MAX_ID = 65535;
 
+	private static final Set<String> STANDARD_HEADER_MEMBERS = Set
+			.of("blockLength", "templateId", "schemaId", "version");
+
 	private final List<Problem> problems = new ArrayList<>();
 	private final Map<Object, Object> origins = new IdentityHashMap<>();
 	private final List<Schema.Declaration> types = new ArrayList<>();
@@ -67,6 +70,7 @@ public final class Mapping {
 			);
 		}
 		String headerType = declare(annotated.headerType());
+		standardHeaderNames(annotated.headerType());
 		for (Annotated.Declaration declaration : annotated.types()) {
 			declare(declaration);
 		}
@@ -83,7 +87,7 @@ public final class Mapping {
 				absentIfEmpty(annotated.semanticVersion()),
 				absentIfEmpty(annotated.description()),
 				annotated.byteOrder() == ByteOrder.BIG_ENDIAN ? java.nio.ByteOrder.BIG_ENDIAN : null,
-				headerType.equals("messageHeader") ? null : headerType
+				headerType
 		);
 		origins.put(schema, annotated);
 		return schema;
@@ -348,6 +352,21 @@ public final class Mapping {
 	 * The wire name of a declaration, adding it to {@code types} the first time it
 	 * is reached.
 	 */
+	/**
+	 * The header's four standard members keep their wire names, which sbe-tool
+	 * requires, under the Java names {@code MessageHeader}'s accessors read.
+	 */
+	private void standardHeaderNames(Annotated.Composite header) {
+		for (Annotated.Member member : header.members()) {
+			if (member instanceof Annotated.Type type && STANDARD_HEADER_MEMBERS.contains(type.javaName())
+					&& !type.name().isEmpty() && !type.name().equals(type.javaName())) {
+				problem(
+						type, "a header's " + type.javaName() + " keeps its wire name, not \"" + type.name() + "\""
+				);
+			}
+		}
+	}
+
 	private String declare(Annotated.Declaration declaration) {
 		String known = wireNames.get(declaration);
 		if (known != null) {

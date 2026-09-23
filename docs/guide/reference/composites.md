@@ -107,4 +107,4 @@ Decoding builds the `Decimal` from the flyweight and hands it to `fromWire`; enc
 
 ## Coverage
 
-This page covers composites as fields of a message. The message header and a group's dimension type are composites the schema names on `@SbeSchema` and `@SbeGroup`; the built-in `UuidWire` and the time encodings, with their bindings, have their own page.
+This page covers composites as fields of a message. The message header is a composite the schema names on `@SbeSchema`, and has [its own page](headers.md); a group's dimension type is one `@SbeGroup` names; the built-in `UuidWire` and the time encodings, with their bindings, have their own page.

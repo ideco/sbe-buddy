@@ -1,6 +1,5 @@
 package net.concini.sbebuddy.generator;
 
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -38,7 +37,9 @@ import net.concini.sbebuddy.generator.CodecModel.Shape;
  */
 final class CodecWalk {
 
-	private static final String STANDARD_HEADER = "messageHeader";
+	/** The members every header carries, which the message's flyweight writes. */
+	private static final Set<String> STANDARD_HEADER_MEMBERS = Set
+			.of("blockLength", "templateId", "schemaId", "version");
 
 	private final Ir ir;
 	private final Annotated annotated;
@@ -84,16 +85,8 @@ final class CodecWalk {
 	private record Key(Class<? extends Helper> kind, String name) {
 	}
 
-	private @Nullable CodecModel model(Annotated.Message message) {
-		String header = ir.headerStructure().tokens().get(0).name();
-		if (!header.equals(STANDARD_HEADER)) {
-			problems.add(lacking("a header type of its own"));
-			return null;
-		}
-		if (ir.byteOrder() != ByteOrder.LITTLE_ENDIAN) {
-			problems.add(lacking("big-endian byte order"));
-			return null;
-		}
+	private CodecModel model(Annotated.Message message) {
+		CodecModel.Header header = header();
 		List<Token> tokens = ir.getMessage(message.id());
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		Owner owner = new Owner(
@@ -106,9 +99,68 @@ final class CodecWalk {
 		return new CodecModel(
 				annotated.packageName(), message.javaName() + "Codec",
 				annotated.packageName() + "." + message.javaName(),
-				flyweights, JavaUtil.formatClassName(header), messageClass, annotated.baselineVersion(), fields, body,
+				flyweights, header, messageClass, annotated.baselineVersion(), fields, body,
 				List.copyOf(helpers.values())
 		);
+	}
+
+	// ---- the header
+
+	/**
+	 * The header as the IR resolved it, the schema's {@code headerType} or the
+	 * composite named {@code messageHeader}, read as a composite is. The standard
+	 * four are read and never written; every other member is written from a header
+	 * or as its null value, and a constant is neither.
+	 */
+	private CodecModel.Header header() {
+		List<Token> tokens = ir.headerStructure().tokens();
+		String headerClass = JavaUtil.formatClassName(tokens.get(0).name());
+		Annotated.Composite composite = annotated.headerType();
+		Body body = compositeBody(tokens, composite, headerClass);
+		List<Member> own = new ArrayList<>();
+		List<Member.Unmapped> nulls = new ArrayList<>();
+		for (Member member : body.wireOrder()) {
+			switch (member) {
+				case Member.Field field -> {
+					if (!STANDARD_HEADER_MEMBERS.contains(field.property())) {
+						own.add(field);
+						Shape shape = nullShape(field, headerClass);
+						if (shape != null) {
+							nulls.add(new Member.Unmapped(field.property(), shape));
+						}
+					}
+				}
+				case Member.Unmapped unmapped -> {
+					own.add(unmapped);
+					nulls.add(unmapped);
+				}
+				case Member.Group group -> throw new IllegalStateException("a header holds no group");
+				case Member.Data data -> throw new IllegalStateException("a header holds no var-data");
+			}
+		}
+		return new CodecModel.Header(
+				headerClass, composite.qualifiedName(),
+				new Body(body.encoder(), body.decoder(), own, body.constructorOrder()), nulls
+		);
+	}
+
+	/**
+	 * How a header member is written when no header is given: its null value, an
+	 * array's in every element; a constant needs nothing.
+	 */
+	private @Nullable Shape nullShape(Member.Field field, String headerClass) {
+		return switch (field.shape()) {
+			case Shape.Scalar scalar -> new Shape.Scalar(null);
+			case Shape.Text text -> new Shape.Array(headerClass + Generators.toUpperFirstChar(field.property()));
+			case Shape.Array array -> array;
+			case Shape.Enum enumeration -> enumeration;
+			case Shape.Set set -> set;
+			case Shape.Constant constant -> null;
+			case Shape.Composite composite -> {
+				problems.add(lacking("a composite in a header"));
+				yield null;
+			}
+		};
 	}
 
 	// ---- a message's or a group entry's body

@@ -12,6 +12,7 @@ the same commit.
   XSD's default reaches the model as absent and is omitted from the XML.
 - Annotations are retained at `CLASS`, so a declared type in a library jar
   still resolves, and nothing exists at runtime to reflect over.
-- Only generated code implements `Codec<T>`, so it may grow.
+- Only generated code implements `Codec<T, H>`, so it may grow. `H` is the
+  schema's header, a record implementing `MessageHeader`.
 - Agrona is the only runtime dependency. JSpecify is `optional`, so users do
   not inherit it.

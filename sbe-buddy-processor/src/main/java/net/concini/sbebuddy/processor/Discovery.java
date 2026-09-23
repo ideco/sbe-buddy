@@ -138,7 +138,7 @@ public final class Discovery {
 				schemaPackage.getQualifiedName().toString(),
 				schema.integer("id"),
 				schema.integer("version"),
-				composite(schemaPackage, schema.type("headerType"), "headerType", "MessageHeader"),
+				header(schemaPackage, schema),
 				declared,
 				messages,
 				schema.string("semanticVersion"),
@@ -231,8 +231,24 @@ public final class Discovery {
 			return composite;
 		}
 		problem(at, member + " must name an @SbeComposite");
-		TypeElement standIn = elements.getTypeElement(API_PACKAGE + "." + builtIn);
-		if (standIn == null || !(declaration(standIn) instanceof Annotated.Composite composite)) {
+		return builtIn(builtIn);
+	}
+
+	/**
+	 * The schema's header. Its member is typed to take only a
+	 * {@code MessageHeader}, so a value without a type is one javac refused and
+	 * reported; the built-in stands in for it.
+	 */
+	private Annotated.Composite header(PackageElement schemaPackage, Members schema) {
+		TypeElement type = schema.type("headerType");
+		return type == null
+				? builtIn("DefaultMessageHeader")
+				: composite(schemaPackage, type, "headerType", "DefaultMessageHeader");
+	}
+
+	private Annotated.Composite builtIn(String builtIn) {
+		TypeElement type = elements.getTypeElement(API_PACKAGE + "." + builtIn);
+		if (type == null || !(declaration(type) instanceof Annotated.Composite composite)) {
 			throw new IllegalStateException("the api's " + builtIn + " is not on the classpath");
 		}
 		return composite;
@@ -854,10 +870,13 @@ public final class Discovery {
 			return Enum.valueOf(type, constant.getSimpleName().toString());
 		}
 
-		/** A {@code Class} member as the type it names; null for {@code void.class}. */
+		/**
+		 * A {@code Class} member as the type it names; null for {@code void.class}, and
+		 * for a value javac refused, which it reports itself.
+		 */
 		@Nullable
 		TypeElement type(String member) {
-			return declaredTypeOf((TypeMirror) value(member).getValue());
+			return value(member).getValue() instanceof TypeMirror type ? declaredTypeOf(type) : null;
 		}
 
 		List<String> strings(String member) {
