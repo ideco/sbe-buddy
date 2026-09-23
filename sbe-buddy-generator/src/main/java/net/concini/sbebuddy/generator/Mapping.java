@@ -373,10 +373,6 @@ public final class Mapping {
 		}
 	}
 
-	/**
-	 * The wire name of a declaration, adding it to {@code types} the first time it
-	 * is reached.
-	 */
 	private String declare(Annotated.Declaration declaration) {
 		String known = wireNames.get(declaration);
 		if (known != null) {
