@@ -16,8 +16,8 @@ import net.concini.sbebuddy.PrimitiveType;
  * the enum for an enum, a {@code Set} of the enum for a set, the record for a
  * composite. A component must be its face or bind to it; one that can be absent
  * must hold null, and a face with no null value cannot be optional; a constant
- * needs a value. Applied to a message's or group's fields, a composite's inline
- * types and its refs, each problem on the node.
+ * needs a value. Applied to a message's or group's fields and var-data, a
+ * composite's inline types and its refs, each problem on the node.
  */
 final class FaceRules {
 
@@ -39,7 +39,7 @@ final class FaceRules {
 	private record Face(Kind kind, String javaType, String named, Annotated.@Nullable Declaration declaration) {
 	}
 
-	// ---- the three places a face is checked
+	// ---- the four places a face is checked
 
 	/**
 	 * A field of a message or a group. {@code baseline} is the version below which
@@ -111,6 +111,22 @@ final class FaceRules {
 		Face face = declarationFace(target, declarationName(target));
 		if (!fits(ref.javaType(), face)) {
 			problem(ref, notTheFace(ref.javaType(), face));
+		}
+	}
+
+	/**
+	 * A message's or group's var-data, whose component is the face of its
+	 * encoding's {@code varData}: text for a {@code char}, the bytes otherwise.
+	 */
+	void data(Annotated.Data data) {
+		Annotated.Type varData = varData(data.type());
+		if (varData == null || varData.primitiveType() == PrimitiveType.NONE) {
+			return; // sbe-tool reports an encoding without one
+		}
+		String face = varData.primitiveType() == PrimitiveType.CHAR ? "String" : "byte[]";
+		String named = wireName(data.type().name(), data.type().javaName());
+		if (!javaTypeName(data.javaType()).equals(face)) {
+			problem(data, notTheFace(data.javaType(), new Face(Kind.LENGTH, face, named, null)));
 		}
 	}
 
@@ -347,6 +363,15 @@ final class FaceRules {
 			case Annotated.Enum enumeration -> enumeration.javaName();
 			case Annotated.Set set -> set.javaName();
 		};
+	}
+
+	private static Annotated.@Nullable Type varData(Annotated.Composite encoding) {
+		for (Annotated.Member member : encoding.members()) {
+			if (member instanceof Annotated.Type type && wireName(type.name(), type.javaName()).equals("varData")) {
+				return type;
+			}
+		}
+		return null;
 	}
 
 	private static Annotated.@Nullable Declaration declarationOf(Annotated.JavaType javaType) {

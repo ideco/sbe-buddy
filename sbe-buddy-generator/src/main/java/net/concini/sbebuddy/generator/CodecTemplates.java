@@ -30,7 +30,7 @@ final class CodecTemplates {
 
 						@Override
 						public int encodedLength({record} value) {
-							return {flyweights}.{header}Encoder.ENCODED_LENGTH + {flyweights}.{message}Encoder.BLOCK_LENGTH{groupLengths};
+							return {flyweights}.{header}Encoder.ENCODED_LENGTH + {flyweights}.{message}Encoder.BLOCK_LENGTH{variableLengths};
 						}
 
 						@Override
@@ -50,7 +50,7 @@ final class CodecTemplates {
 							}
 							{refuseBelowBaseline}
 							decoder.wrap(buffer, offset + {flyweights}.{header}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
-							{decodeGroups}
+							{decodeVariable}
 							{record} value = new {record}(
 									{decodeFields}
 							);
@@ -84,11 +84,17 @@ final class CodecTemplates {
 						"{message} version " + headerDecoder.version() + " is below the baseline {baseline}");
 			}""");
 
-	/** Without a group the length is the header's block length, no walk needed. */
+	/**
+	 * Without a group or var-data the length is the header's block length, no walk
+	 * needed.
+	 */
 	static final Template BLOCK_DECODED_LENGTH = Template
 			.of("return {flyweights}.{header}Decoder.ENCODED_LENGTH + headerDecoder.blockLength();");
 
-	/** With one, the flyweight walks every group and restores its limit. */
+	/**
+	 * With either, the flyweight walks every group and var-data and restores its
+	 * limit.
+	 */
 	static final Template WALKED_DECODED_LENGTH = Template.of(
 			"""
 					decoder.wrap(buffer, offset + {flyweights}.{header}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
@@ -161,7 +167,7 @@ final class CodecTemplates {
 	 * over the length; the codec refuses both first.
 	 */
 	static final Template ASCII = Template.of("""
-			private static String ascii(String value, int length, String field) {
+			private static String ascii(String value, long length, String field) {
 				if (value.length() > length) {
 					throw new IllegalArgumentException(field + " is longer than " + length + ": " + value);
 				}
@@ -276,8 +282,6 @@ final class CodecTemplates {
 	static final Template ENCODE_GROUP_FIELD = Template
 			.of("write{path}({source}, encoder.{property}Count({source}.size()));");
 
-	static final Template GROUP_LENGTH_TERM = Template.of(" + {length}(value.{component}())");
-
 	static final Template DECODE_GROUP = Template
 			.of("java.util.List<{record}> {component} = read{path}(decoder.{property}());");
 
@@ -308,7 +312,7 @@ final class CodecTemplates {
 				java.util.List<{record}> entries = new java.util.ArrayList<>(decoder.count());
 				while (decoder.hasNext()) {
 					decoder.next();
-					{groups}
+					{reads}
 					entries.add(new {record}(
 							{arguments}
 					));
@@ -337,9 +341,111 @@ final class CodecTemplates {
 				return length;
 			}""");
 
-	static final Template NESTED_GROUP_LENGTH_TERM = Template.of("length += {length}(value.{component}());");
+	// ---- var-data: methods per data member, keyed by its path, over its body's
+	// classes; its bytes counted without encoding
+
+	static final Template ENCODE_DATA_FIELD = Template.of("write{path}(value.{component}(), encoder);");
+
+	static final Template DECODE_DATA = Template.of("{face} {component} = {read};");
+
+	/** Absent below the acting version, as a group is. */
+	static final Template DECODE_ADDED_DATA = Template.of(
+			"{face} {component} = decoder.actingVersion() < {decoder}.{addedSince}() ? null : {read};"
+	);
+
+	static final Template DECODE_TEXT = Template.of("decoder.{property}()");
+
+	static final Template DECODE_BYTES = Template.of("read{path}(decoder)");
+
+	/**
+	 * The length and the data, checked as the content needs; null has no wire form.
+	 */
+	static final Template DATA_LENGTH = Template.of("""
+			private static int {length}({face} value) {
+				if (value == null) {
+					throw new IllegalArgumentException("{component} is required");
+				}
+				return {encoder}.{property}HeaderLength() + {count};
+			}""");
+
+	static final Template COUNT_ASCII = Template
+			.of("ascii(value, {lengthEncoder}.lengthMaxValue(), \"{component}\").length()");
+
+	static final Template COUNT_UTF_8 = Template.of("utf8(value, {lengthEncoder}.lengthMaxValue(), \"{component}\")");
+
+	static final Template COUNT_BYTES = Template
+			.of("bytes(value, {lengthEncoder}.lengthMaxValue(), \"{component}\")");
+
+	/**
+	 * The length method refuses what the flyweight would refuse with its own
+	 * exception, or write as something else.
+	 */
+	static final Template WRITE_TEXT = Template.of("""
+			private static void write{path}(String value, {encoder} encoder) {
+				{length}(value);
+				encoder.{property}(value);
+			}""");
+
+	static final Template WRITE_DATA_BYTES = Template.of("""
+			private static void write{path}(byte[] value, {encoder} encoder) {
+				{length}(value);
+				encoder.put{bulk}(value, 0, value.length);
+			}""");
+
+	static final Template READ_DATA_BYTES = Template.of("""
+			private static byte[] read{path}({decoder} decoder) {
+				byte[] value = new byte[decoder.{property}Length()];
+				decoder.get{bulk}(value, 0, value.length);
+				return value;
+			}""");
+
+	/**
+	 * What String.getBytes would write, counted: a lone surrogate, which it would
+	 * write as '?', has no UTF-8 form.
+	 */
+	static final Template UTF_8 = Template.of("""
+			private static int utf8(String value, long maxLength, String field) {
+				int length = 0;
+				for (int i = 0; i < value.length(); i++) {
+					char c = value.charAt(i);
+					if (c < 0x80) {
+						length += 1;
+					} else if (c < 0x800) {
+						length += 2;
+					} else if (!Character.isSurrogate(c)) {
+						length += 3;
+					} else if (Character.isHighSurrogate(c) && i + 1 < value.length()
+							&& Character.isLowSurrogate(value.charAt(i + 1))) {
+						length += 4;
+						i++;
+					} else {
+						throw new IllegalArgumentException(field + " has a lone surrogate at index " + i);
+					}
+				}
+				if (length > maxLength) {
+					throw new IllegalArgumentException(
+							field + " is longer than " + maxLength + " bytes in UTF-8: " + length);
+				}
+				return length;
+			}""");
+
+	static final Template BYTES = Template.of(
+			"""
+					private static int bytes(byte[] value, long maxLength, String field) {
+						if (value.length > maxLength) {
+							throw new IllegalArgumentException(field + " is longer than " + maxLength + " bytes: " + value.length);
+						}
+						return value.length;
+					}"""
+	);
 
 	// ---- the shapes over them
+
+	/** A group's or a data member's share of the length, at the message. */
+	static final Template LENGTH_TERM = Template.of(" + {length}(value.{component}())");
+
+	/** A group's or a data member's share of the length, in an entry. */
+	static final Template NESTED_LENGTH_TERM = Template.of("length += {length}(value.{component}());");
 
 	/** A component that may be null on a required field: null has no wire form. */
 	static final Template ENCODE_CHECKED_FIELD = Template.of("""

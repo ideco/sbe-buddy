@@ -108,8 +108,8 @@ field names; boxed where the field can be absent.
 | `enum` | the `@SbeEnum` enum |
 | `set` | `Set<E>` of the `@SbeSet` enum; decoded as an `EnumSet` |
 | `composite` | the `@SbeComposite` record |
-| `data` with `characterEncoding` | `String` |
-| `data` without | `byte[]` |
+| `data` whose `varData` is `char` | `String` in the `characterEncoding`; `IllegalArgumentException` over the length type's maximum in bytes, and outside ASCII for an ASCII encoding or at a lone surrogate for UTF-8 |
+| `data` of any other `varData` | `byte[]`, the bytes as they are, at most the length type's maximum |
 | `group` | `List<E>` |
 
 ## Absence
@@ -122,7 +122,10 @@ an optional field and is an `IllegalArgumentException` for a required one. A
 group has no presence: a group that is present with zero entries is an empty
 list, not `null`, a group whose `sinceVersion` is above the acting version is
 `null`, and encoding a `null` list is an `IllegalArgumentException` from
-`encodedLength` and `encode` alike. The
+`encodedLength` and `encode` alike. Data has no presence either, and is
+treated as a group is: an empty string or array is a value, data whose
+`sinceVersion` is above the acting version is `null`, and encoding `null`
+is an `IllegalArgumentException` from `encodedLength` and `encode` alike. The
 null value is the type's `nullValue` or the primitive's default, exactly as
 sbe-tool applies it. A field left at the default presence takes its named
 type's, as sbe-tool reads the document.

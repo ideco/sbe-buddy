@@ -14,7 +14,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 * [Sets](reference/sets.md) — `@SbeSet`, bit choices and `Set` components
 * [Composites](reference/composites.md) — `@SbeComposite`, members, refs, the record as the field
 * [Groups](reference/groups.md) — `@SbeGroup`, the entry record, nested groups, what a group costs
-* Variable data — strings and byte arrays
+* [Variable data](reference/var-data.md) — `@SbeData`, strings and byte arrays after the block
 * Codecs — the `Codec` contract and its lifecycle
 
 ## How-to

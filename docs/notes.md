@@ -131,6 +131,36 @@ alternatives considered.
   `generateGroupDecoderClassHeader`, `generateGroupEncoderClassHeader`,
   `generateFieldNotPresentCondition`, `generateMessageLength` and the
   decoder's `sbeDecodedLength`, read 2026-09-22.)
+* A `data` element's flyweight members sit on its message's or group's
+  classes, named by `JavaUtil.formatPropertyName`, the bulk ones after
+  `Generators.toUpperFirstChar` of it. The encoder has static
+  `<data>HeaderLength()`; `put<Data>(byte[] src, int srcOffset, int
+  length)` and the same over a `DirectBuffer`, each throwing
+  `IllegalStateException("length > maxValue for type: " + length)` above
+  the length type's `applicableMaxValue`; and, where the `varData` type
+  has a `characterEncoding`, `<data>(String)`, taking `null` as empty,
+  which for an ASCII encoding writes `value.length()` characters through
+  Agrona's `putStringWithoutLengthAscii` and otherwise the bytes of
+  `String.getBytes` in the charset, checking the same maximum. The decoder
+  has static `<data>SinceVersion()` and `<data>HeaderLength()`;
+  `<data>Length()`, which reads the length without moving the limit;
+  `get<Data>(byte[] dst, int dstOffset, int length)`, which copies at most
+  `length` bytes and moves the limit past the whole data; `skip<Data>()`,
+  `wrap<Data>`, and with a `characterEncoding` `String <data>()` through
+  `new String(bytes, charset)`. The same maximum is the static
+  `lengthMaxValue()` of the encoding's own composite flyweight, both
+  `Encoding.applicableMaxValue`: 254 for `uint8`, 65534 for `uint16`, the
+  `maxValue` for `uint32`. A `char` type always has a `characterEncoding`,
+  `US-ASCII` unless given; any other primitive has one only where given.
+  `JavaUtil.isAsciiEncoding` and `isUtf8Encoding` recognise the charsets.
+  (`JavaGenerator.java`, `generateDecoderVarData`, `generateEncoderVarData`,
+  `generateDataDecodeMethods`, `generateDataEncodeMethods`,
+  `generateCharArrayEncodeMethods`, `generatePrimitiveFieldMetaMethod`;
+  `EncodedDataType.java`; `JavaUtil.java`, read 2026-09-23; the `vardata`
+  corpus case.)
+* The JDK's `String.getBytes(UTF_8)` writes a lone surrogate as `?`, and
+  `new String(bytes, UTF_8)` reads a malformed sequence as U+FFFD, neither
+  with an exception. (JDK 21, the `vardata` corpus case, 2026-09-23.)
 * sbe-tool's offset rule, `Message.computeAndValidateOffsets`, treats
   every position after a group or var-data as variable length, so an
   `offset` on a `data` element after a group is accepted whatever its

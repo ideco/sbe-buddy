@@ -174,7 +174,13 @@ public final class Fixtures {
 	public static Annotated.Data annotatedData(
 			String javaName, int id, Annotated.JavaType javaType, Annotated.Composite type
 	) {
-		return new Annotated.Data(javaName, javaType, id, type, "", 0, "", "", 0, 0);
+		return annotatedData(javaName, id, javaType, type, 0);
+	}
+
+	public static Annotated.Data annotatedData(
+			String javaName, int id, Annotated.JavaType javaType, Annotated.Composite type, int sinceVersion
+	) {
+		return new Annotated.Data(javaName, javaType, id, type, "", 0, "", "", sinceVersion, 0);
 	}
 
 	/** An inline type of a composite, with the component's Java type. */

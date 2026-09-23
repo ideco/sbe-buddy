@@ -11,9 +11,11 @@ import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
+import net.concini.sbebuddy.SbeData;
 import net.concini.sbebuddy.SbeField;
 import net.concini.sbebuddy.SbeGroup;
 import net.concini.sbebuddy.SbeMessage;
+import net.concini.sbebuddy.VarStringEncoding;
 
 /**
  * The best bid and offer of one instrument, prices as fixed-point mantissas on
@@ -31,14 +33,17 @@ import net.concini.sbebuddy.SbeMessage;
  * record. Version 7 appended the contributors, a group of each venue's own
  * quote: a message of an earlier version has no group at all, so the list is
  * {@code null} there, and a current message without contributors carries an
- * empty one.
+ * empty one. Version 8 appended the quoting desk's remark, var-data in UTF-8
+ * after the group: {@code null} from a message of an earlier version, and
+ * possibly empty in a current one.
  */
 @SbeMessage(id = 1, description = "The best bid and offer of one instrument", layout = {
 		"instrumentId", "bid", "ask", "bidSize", "askSize", "sequence", "tradeCount", "vwap", "venue", "state",
 		"flags", "symbol", "priceExponent",
 		"bidDepth",
 		"lastTrade",
-		"contributors"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
+		"contributors",
+		"remark"}, unmapped = @SbeField(id = 7, name = "tradeCount", primitiveType = UINT32, sinceVersion = 2, deprecated = 4, description = "Trades of the session so far"))
 public record Quote(
 		@SbeField(id = 1) long instrumentId,
 		@SbeField(id = 2, primitiveType = INT64, binding = Price.class) BigDecimal bid,
@@ -54,6 +59,7 @@ public record Quote(
 		@SbeField(id = 13, type = PriceExponent.class, sinceVersion = 5, description = "The exponent of bid, ask and vwap") byte priceExponent,
 		@SbeField(id = 14, type = Depth.class, sinceVersion = 5, description = "The bid sizes at the five best levels") long @Nullable [] bidDepth,
 		@SbeField(id = 15, sinceVersion = 6, description = "The last trade of the instrument") @Nullable Trade lastTrade,
-		@SbeGroup(id = 16, sinceVersion = 7, description = "The venues' own quotes behind the best") @Nullable List<Contributor> contributors
+		@SbeGroup(id = 16, sinceVersion = 7, description = "The venues' own quotes behind the best") @Nullable List<Contributor> contributors,
+		@SbeData(id = 22, type = VarStringEncoding.class, sinceVersion = 8, description = "The quoting desk's own words on the quote") @Nullable String remark
 ) {
 }

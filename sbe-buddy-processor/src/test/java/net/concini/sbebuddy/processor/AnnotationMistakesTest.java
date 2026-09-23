@@ -510,6 +510,28 @@ final class AnnotationMistakesTest {
 	}
 
 	@Test
+	void aDataComponentIsTheFaceOfItsEncodingsVarData() {
+		assertErrors(
+				inMessage(
+						"""
+								@SbeData(id = 1, type = VarDataEncoding.class) String blob,
+								@SbeData(id = 2, type = VarStringEncoding.class) byte[] note,
+								@SbeData(id = 3, type = VarAsciiEncoding.class) long count"""
+				),
+				error("String blob", "String is not the face of varDataEncoding, which is byte[]"),
+				error("byte[] note", "byte[] is not the face of varStringEncoding, which is String"),
+				error("long count", "long is not the face of varAsciiEncoding, which is String")
+		);
+		assertClean(
+				inMessage(
+						"""
+								@SbeData(id = 1, type = VarDataEncoding.class) byte[] blob,
+								@SbeData(id = 2, type = VarStringEncoding.class) String note"""
+				)
+		);
+	}
+
+	@Test
 	void anIdAboveTheXsdsUnsignedShortIsAProblem() {
 		assertErrors(inMessage("@SbeField(id = 65536) int qty"), error("int qty", "an id is 0 to 65535, not 65536"));
 	}

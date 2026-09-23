@@ -134,35 +134,38 @@ final class GeneratorTest {
 	@Test
 	void aConstructTheCodecLacksLeavesTheOutputUntouched() {
 		// sbe-tool accepts the schema and generates its flyweights; the codec has no
-		// var-data yet, so the flyweights must not reach the output either.
-		Annotated.Composite varStringEncoding = varStringEncoding();
+		// text data in UTF-16 yet, so the flyweights must not reach the output either.
+		Annotated.Composite varUtf16Encoding = annotatedComposite(
+				"VarUtf16Encoding", "p.VarUtf16Encoding", "varUtf16Encoding",
+				annotatedType("length", UINT16, primitive(INT)), annotatedType("varData", CHAR, 0, "UTF-16", text())
+		);
 		Annotated annotated = annotated(
-				0, List.of(varStringEncoding),
+				0, List.of(varUtf16Encoding),
 				annotatedMessage(
 						"M", 1, annotatedField("qty", 1, primitive(INT)),
-						annotatedData("note", 2, text(), varStringEncoding)
+						annotatedData("note", 2, text(), varUtf16Encoding)
 				)
 		);
 
-		assertLacks(annotated, "var-data");
+		assertLacks(annotated, "text data in UTF-16");
 	}
 
 	@Test
-	void varDataInsideAGroupIsAConstructTheCodecLacks() {
-		// The message's own body has none; the walk must look inside the group.
+	void varDataAddedAboveTheBaselineInsideAGroupIsAConstructTheCodecLacks() {
+		// The group's own version is the baseline inside it, as for a field.
 		Annotated.Composite varStringEncoding = varStringEncoding();
 		Annotated annotated = annotated(
-				0, List.of(varStringEncoding),
+				2, List.of(varStringEncoding),
 				annotatedMessage(
 						"M", 1, annotatedField("qty", 1, primitive(INT)),
 						annotatedGroup(
-								"legs", 2, 0, annotatedField("legId", 3, primitive(INT)),
-								annotatedData("note", 4, text(), varStringEncoding)
+								"legs", 2, 1, annotatedField("legId", 3, primitive(INT), 1),
+								annotatedData("note", 4, text(), varStringEncoding, 2)
 						)
 				)
 		);
 
-		assertLacks(annotated, "var-data");
+		assertLacks(annotated, "var-data added above the baseline in a group");
 	}
 
 	@Test

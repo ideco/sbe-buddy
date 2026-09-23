@@ -22,6 +22,7 @@ import uk.co.real_logic.sbe.ir.Token;
 
 import net.concini.sbebuddy.generator.CodecModel.Absence;
 import net.concini.sbebuddy.generator.CodecModel.Body;
+import net.concini.sbebuddy.generator.CodecModel.Content;
 import net.concini.sbebuddy.generator.CodecModel.Helper;
 import net.concini.sbebuddy.generator.CodecModel.Member;
 import net.concini.sbebuddy.generator.CodecModel.Shape;
@@ -112,10 +113,7 @@ final class CodecWalk {
 
 	// ---- a message's or a group entry's body
 
-	/**
-	 * The fields, then the groups, recursing into each; var-data, which the codec
-	 * lacks wherever it is, ends the body.
-	 */
+	/** The fields, then the groups, recursing into each, then the var-data. */
 	private Body body(
 			List<Token> tokens, int index, List<Annotated.Component> components, List<Annotated.Field> unmapped,
 			Owner owner
@@ -126,9 +124,6 @@ final class CodecWalk {
 		int next = GenerationUtil.collectFields(tokens, index, fields);
 		next = GenerationUtil.collectGroups(tokens, next, groups);
 		GenerationUtil.collectVarData(tokens, next, varData);
-		if (!varData.isEmpty()) {
-			problems.add(lacking("var-data"));
-		}
 		List<Member> wireOrder = new ArrayList<>();
 		Map<Annotated.Component, Member> byComponent = new IdentityHashMap<>();
 		for (int i = 0; i < fields.size(); i += fields.get(i).componentTokenCount()) {
@@ -151,6 +146,15 @@ final class CodecWalk {
 			Member.Group member = group(groupTokens, group, owner);
 			wireOrder.add(member);
 			byComponent.put(group, member);
+		}
+		for (int i = 0; i < varData.size(); i += varData.get(i).componentTokenCount()) {
+			List<Token> dataTokens = varData.subList(i, i + varData.get(i).componentTokenCount());
+			Annotated.Data data = data(components, dataTokens.get(0));
+			Member.Data member = data(dataTokens, data, owner);
+			if (member != null) {
+				wireOrder.add(member);
+				byComponent.put(data, member);
+			}
 		}
 		return new Body(owner.encoder(), owner.decoder(), wireOrder, constructorOrder(components, byComponent));
 	}
@@ -250,6 +254,63 @@ final class CodecWalk {
 		);
 		helpers.put(new Key(Helper.GroupMethods.class, path), new Helper.GroupMethods(member));
 		return member;
+	}
+
+	/**
+	 * Var-data through methods of its own, keyed by its path, after the check its
+	 * text needs.
+	 */
+	private Member.@Nullable Data data(List<Token> tokens, Annotated.Data data, Owner owner) {
+		Token token = tokens.get(0);
+		String property = JavaUtil.formatPropertyName(token.name());
+		boolean added = token.version() > owner.baseline();
+		if (added && owner.kind() == Owner.Kind.GROUP) {
+			problems.add(lacking("var-data added above the baseline in a group"));
+		}
+		Content content = content(tokens.get(3), data);
+		if (content == null) {
+			return null;
+		}
+		switch (content) {
+			case ASCII -> helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
+			case UTF_8 -> helpers.putIfAbsent(new Key(Helper.Utf8.class, ""), new Helper.Utf8());
+			case BYTES -> helpers.putIfAbsent(new Key(Helper.Bytes.class, ""), new Helper.Bytes());
+		}
+		String path = owner.prefix() + Generators.toUpperFirstChar(property);
+		Member.Data member = new Member.Data(
+				data.javaName(), property, path, content, added ? property + "SinceVersion" : null
+		);
+		helpers.put(
+				new Key(Helper.DataMethods.class, path),
+				new Helper.DataMethods(
+						member, owner.encoder(), owner.decoder(), Generators.toUpperFirstChar(property),
+						flyweights + "." + JavaUtil.formatClassName(tokens.get(1).applicableTypeName()) + "Encoder"
+				)
+		);
+		return member;
+	}
+
+	/**
+	 * Decided by the component, whose face the rules tied to the varData type: a
+	 * String is text in the type's encoding, which the codec checks in ASCII and
+	 * counts in UTF-8.
+	 */
+	private @Nullable Content content(Token varData, Annotated.Data data) {
+		if (!(data.javaType() instanceof Annotated.Text)) {
+			return Content.BYTES;
+		}
+		String encoding = varData.encoding().characterEncoding();
+		if (encoding == null) {
+			throw new IllegalStateException(data.javaName() + " is text over a varData without an encoding");
+		}
+		if (JavaUtil.isAsciiEncoding(encoding)) {
+			return Content.ASCII;
+		}
+		if (JavaUtil.isUtf8Encoding(encoding)) {
+			return Content.UTF_8;
+		}
+		problems.add(lacking("text data in " + encoding));
+		return null;
 	}
 
 	// ---- how a field or member reaches the wire
@@ -482,6 +543,16 @@ final class CodecWalk {
 			}
 		}
 		throw new IllegalStateException("no component for group " + group.name());
+	}
+
+	private static Annotated.Data data(List<Annotated.Component> components, Token data) {
+		for (Annotated.Component component : components) {
+			if (component instanceof Annotated.Data candidate
+					&& wireName(candidate.name(), candidate.javaName()).equals(data.name())) {
+				return candidate;
+			}
+		}
+		throw new IllegalStateException("no component for data " + data.name());
 	}
 
 	private static Annotated.Field unmappedField(List<Annotated.Field> unmapped, Token field) {

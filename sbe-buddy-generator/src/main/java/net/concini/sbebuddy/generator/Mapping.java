@@ -270,9 +270,7 @@ public final class Mapping {
 	}
 
 	private Schema.Data data(Annotated.Data data) {
-		if (!(data.javaType() instanceof Annotated.Text) && !(data.javaType() instanceof Annotated.Bytes)) {
-			problem(data, "data must be a String or a byte[]");
-		}
+		faces.data(data);
 		Schema.Data result = new Schema.Data(
 				name(data, data.name(), data.javaName()),
 				id(data, data.id()),

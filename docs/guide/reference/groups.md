@@ -111,8 +111,8 @@ An older reader that does not know the group reads the message's block and stops
 * `@SbeGroup` on anything but a `List` of a record: `a group must be a List of a record`.
 * A group before a field, or after var-data, in the same body.
 * A field appended above its group's version on a primitive component: `int cannot hold null, but the field can be absent; use Integer`.
-* Until a later increment, the codec refuses, naming the message: a field or a group added above the baseline inside a group, and var-data, in a message or in a group at any depth. `codecs = false` on `@SbeSchema` keeps the flyweights.
+* Until a later increment, the codec refuses, naming the message: a field, a group or var-data added above the baseline inside a group. `codecs = false` on `@SbeSchema` keeps the flyweights.
 
 ## Coverage
 
-This page covers groups of fields and groups. Var-data inside an entry is the variable data page's; a group under `unmapped`, retiring a whole group from the record, is planned.
+This page covers groups of fields and groups. Var-data inside an entry is [the variable data page's](var-data.md); a group under `unmapped`, retiring a whole group from the record, is planned.
