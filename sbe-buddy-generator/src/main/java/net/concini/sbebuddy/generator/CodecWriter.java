@@ -133,7 +133,7 @@ final class CodecWriter {
 			);
 			case Shape.Set set -> ENCODE_UNMAPPED_SET_FIELD.fill(unmapped);
 			case Shape.Text text -> throw noNullValue(unmapped.property());
-			case Shape.Array array -> throw noNullValue(unmapped.property());
+			case Shape.Array array -> ENCODE_UNMAPPED_ARRAY_FIELD.fill(unmapped, "encoder", body.encoder());
 			case Shape.Composite composite -> throw noNullValue(unmapped.property());
 			case Shape.Constant constant -> throw noNullValue(unmapped.property());
 		};

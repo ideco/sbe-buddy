@@ -210,15 +210,23 @@ final class CodecWalk {
 			return null;
 		}
 		Annotated.Field declared = unmappedField(unmapped, field);
+		String property = JavaUtil.formatPropertyName(field.name());
 		Shape shape = switch (type.signal()) {
-			case ENCODING -> new Shape.Scalar(null);
+			case ENCODING -> unmappedEncoding(type, owner, property);
 			case BEGIN_ENUM -> new Shape.Enum(
 					JavaUtil.formatClassName(type.applicableTypeName()), javaName(declared.type())
 			);
 			case BEGIN_SET -> new Shape.Set(JavaUtil.formatClassName(type.applicableTypeName()));
 			default -> throw new IllegalStateException(declared.name() + " is a field of " + type.signal());
 		};
-		return new Member.Unmapped(JavaUtil.formatPropertyName(field.name()), shape);
+		return new Member.Unmapped(property, shape);
+	}
+
+	/** A primitive takes its null value in one call, an array in every element. */
+	private static Shape unmappedEncoding(Token type, Owner owner, String property) {
+		return type.arrayLength() <= 1
+				? new Shape.Scalar(null)
+				: new Shape.Array(owner.prefix() + Generators.toUpperFirstChar(property));
 	}
 
 	private Member.Group group(List<Token> tokens, Annotated.Group group, Owner owner) {
@@ -398,7 +406,7 @@ final class CodecWalk {
 			Annotated.Member member = member(composite, token.name());
 			if (member == null) {
 				if (!constant(token)) {
-					wireOrder.add(new Member.Unmapped(property, new Shape.Scalar(null)));
+					wireOrder.add(new Member.Unmapped(property, unmappedEncoding(token, owner, property)));
 				}
 				continue;
 			}

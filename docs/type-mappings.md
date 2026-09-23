@@ -242,8 +242,9 @@ nor `dimensionType`.
   constructor keeps their declared order.
 * A field the record does not carry is declared under `unmapped`, complete
   with its `name` and its type, and takes its place through `layout`. It is
-  in the schema like any other field; the codec writes its null value and
-  never reads it. That is how a field SBE cannot remove leaves the record.
+  in the schema like any other field; the codec writes its null value, an
+  array's in every element, and never reads it. That is how a field SBE
+  cannot remove leaves the record.
 * Groups after fields, data after groups, in each message and each group.
 * A node with `sinceVersion = n` must follow every sibling with a lower
   `sinceVersion`, and `n` is at most the schema version; `deprecated` is at
