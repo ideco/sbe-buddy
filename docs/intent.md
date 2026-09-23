@@ -114,7 +114,7 @@ the block, one at a time.
 * [x] 13. Codec: groups, nested
 * [x] 14. The tests module: the corpus compiled by the real build, one schema case per package run against the generated flyweights and codecs; the generator's twins and codec views retire as each case moves
 * [x] 15. The codec model: a walk from the IR and the annotations to a small model of each codec, its grammar in one file, and a writer that renders it through the templates
-* [ ] 16. Codec: var-data, and the built-in var-data encodings
+* [x] 16. Codec: var-data, and the built-in var-data encodings
 
 **The rest of `sbe.xsd`.**
 
@@ -122,7 +122,7 @@ the block, one at a time.
 
 **Evolution, proved.** Through the codecs, not only the flyweights.
 
-* [ ] 18. Evolution through every construct: appended var-data, `sinceVersion` inside groups and composites, every frozen version decoded in both directions
+* [ ] 18. Evolution through every construct: `sinceVersion` inside groups and composites, var-data appended inside a group included, every frozen version decoded in both directions
 
 **Families.**
 

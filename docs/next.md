@@ -1,107 +1,85 @@
-# Increment 15: The codec model
+# Increment 16: Var-data
 
 ## Goal
 
-The codec emitter decides and writes in one pass: it walks sbe-tool's IR,
-finds each token's annotation by name, and writes Java strings as it
-goes. Every construct since increment 6 added a branch to that pass, and
-it now reads as a 1,400-line class whose methods take up to ten
-parameters. This increment splits it in two. A walk builds a small model
-of what each codec must do: per member, its shape on the wire, how it may
-be absent and whether a binding stands in front of it. A writer renders
-the model through the templates the emitter already has. The model is
-the codec's grammar in one file, the way `Schema` is the XSD's and
-`Annotated` the api's, so the shapes the codec can produce are readable at
-a glance, and var-data in increment 16 becomes one more shape rather than
-another branch.
+A message or a group entry ends in var-data: a length on the wire followed by
+that many bytes, text in a character encoding or opaque bytes. The mapping,
+the XML and sbe-tool's flyweights have carried `@SbeData` since increment 4;
+the codec refuses it. This increment gives the codec var-data wherever the
+schema allows it, through the api's three built-in encodings and any
+`{length, varData}` composite of the user's own, and makes `encodedLength`
+count it without encoding, as it counts groups.
 
 ## Settled before it started
 
-- The generated code need not stay identical. No one depends on it, and
-  the tests module proves every codec by behaviour: round trips at their
-  edge values, refusals by message, lengths by the contract. Where the
-  rewrite makes the output simpler, it takes the simpler output.
-- Lean, not general. The model names the shapes this codec has and
-  nothing more: no expression trees, no wrapper chains, no per-node
-  render methods, no import computation, no template engine. Generated
-  code keeps fully qualified names.
-- The model is a third closed grammar beside `Schema` and `Annotated`,
-  and follows their rules: one file, a nested record per node, sealed
-  interfaces switched without `default`, records pure. `java-style.md`
-  names it.
-- Nothing tests the model's shape directly. A test that builds a model
-  and compares it would be the twins the corpus just retired; the model
-  is proven by the codecs it writes.
-- `Mapping`'s face rules stay as they are; consolidating them is a
-  separate pass.
+- The face is decided by the `varData` type: a `char` is a `String` in its
+  `characterEncoding`, anything else a `byte[]`, as `FaceRules` already
+  reads a type of `length = 0`. A `uint8` given a `characterEncoding` is
+  still bytes: its flyweight has the byte form too, and the composite's own
+  record says `byte[]`.
+- Data has no presence. It is never `null` on the way out, so a `null`
+  component is an `IllegalArgumentException`, `note is required`, from
+  `encodedLength` and `encode` alike, as a group's list is; an empty string
+  or array is a value. Data appended above the message's baseline decodes to
+  `null` from an older message, decided on the acting version.
+- Text is ASCII or UTF-8. ASCII goes through the existing `ascii` check;
+  UTF-8 is counted by a helper of its own without encoding, and a lone
+  surrogate, which `String.getBytes` would silently turn into `?`, is an
+  `IllegalArgumentException`. Text in any other encoding is a construct the
+  codec lacks, as a fixed-length string outside ASCII already is.
+- Over the length type's maximum is the codec's `IllegalArgumentException`
+  before the flyweight's `IllegalStateException`. The maximum is the
+  length's `lengthMaxValue()` on the encoding's own composite flyweight, the
+  same `applicableMaxValue` the message's flyweight checks, so the codec
+  holds no wire number.
+- Decoding is the flyweight's: text through its `String` form, bytes through
+  `get<Data>` into an array sized by `<data>Length()`. Bytes that are not
+  valid in the encoding decode as the JDK decodes them.
 
 ## What gets built
 
-- **`CodecModel.java`, the grammar.** Its own file in the generator,
-  holding every node the codec can be made of:
-  - `CodecModel(record, message, flyweights, header, baseline, bindings,
-    body, helpers)`, one message's codec: the record and flyweight
-    classes, the baseline it refuses below, the binding fields in first
-    use, the message's body and the helper methods in first use.
-  - `Body(wireOrder, constructorOrder)`: the members in the order the
-    wire takes them, and the same members in the order the record's
-    constructor takes its components.
-  - `sealed interface Member`: `Field(component, property, shape,
-    absence, binding)`, a component on a field or composite member;
-    `Unmapped(property, shape)`, written as its null value and never
-    read; `Group(component, property, path, entry, added)`, whose entry
-    is a `Body`.
-  - `sealed interface Shape`, what the flyweight call looks like:
-    `Scalar`, `Text` (a char string through `ascii`), `Array(helper)`,
-    `Enum(helper)`, `Set(helper)`, `Composite(helper)`, and
-    `Constant(check)` for a constant, which carries no bytes.
-  - `enum Absence`: `NONE` for a primitive that is always there,
-    `REQUIRED` for a reference that must not be null, `OPTIONAL` for the
-    null value, `ADDED` for a field or group appended above the baseline.
-  - `sealed interface Helper`, one per thing mapped: `EnumPair`,
-    `SetPair`, `ArrayPair`, `Ascii`, `CompositePair(body)`,
-    `GroupMethods(body)`, each carrying what its template needs.
-  Each record's javadoc names what it generates and stops.
-- **`CodecWalk`, IR and annotations to the model.** One pass per message
-  over sbe-tool's tokens with `GenerationUtil`, as today. For each token
-  it finds the annotated component once, by wire name, and settles the
-  member's shape, absence and binding. Helpers are registered in a
-  `LinkedHashMap` keyed by what they map, the declaration or the path,
-  so the first use orders them and a nested helper registers before the
-  one that uses it. A construct the codec does not cover yet is a
-  `Problem` collected once on the message, which then gets no model; the
-  thrown `Rejected` goes. The per-message state, the
-  flyweights package, the helpers and the bindings, is the walk's own,
-  so no method takes it as a parameter.
-- **`CodecWriter`, the model to source.** A switch over the model's
-  types, one template fill per case: absence wraps a field's write and
-  read in one place, a binding wraps them in another, and
-  `encodedLength` is a walk over the bodies, the header and block, then
-  per group its header and each entry's own block and groups.
-- **`CodecTemplates`, the templates.** The emitter's sixty-odd `Template`
-  constants move to a file of their own, grouped as today by shape.
-- **`CodecEmitter`** keeps `emit`, the entry `Generator` calls, and
-  shrinks to it: the walk and the writer per message, the problems
-  gathered, and the all-or-nothing hand-off to the output.
-- **The documents.** `architecture.md`'s generation section describes
-  the walk, the model and the writer; `java-style.md` names the codec
-  model as the third grammar; `intent.md` ticks 15.
+- **`CodecModel`.** `Member.Data(component, property, path, content,
+  addedSince)`, with `enum Content { BYTES, ASCII, UTF_8 }`; and
+  `Helper.DataMethods(data, encoder, decoder, bulk, lengthEncoder)`, the
+  length, write and, for bytes, read methods of one data member, keyed by
+  its path as a group's are. Each content's check is a helper shared by
+  the codec: the existing `Ascii`, and `Utf8` and `Bytes`, each refusing
+  over the maximum.
+- **`CodecWalk`.** The var-data tokens after the groups become `Data`
+  members, found by wire name among the components. Data appended above
+  the baseline inside a group is a construct the codec lacks, as a field
+  or a group appended there is.
+- **`CodecWriter`.** A body's variable part, its groups and then its data,
+  is read into locals in wire order before the constructor; `encodedLength`
+  adds a term per data member at the message and per entry in a group; the
+  walked `decodedLength` covers data as it covers groups.
+- **`FaceRules`.** `data(Annotated.Data)`: the component is the face of its
+  encoding's `varData`, replacing `Mapping`'s `data must be a String or a
+  byte[]`, which let a `String` reach a flyweight with no `String` form.
+- **The corpus.** `vardata` gets its codecs and its round trips: empty and
+  full, a data member inside a group's entry, the `uint8` length's maximum.
+  A new case, `varencodings`, uses the api's `VarStringEncoding`,
+  `VarAsciiEncoding` and `VarDataEncoding`, one appended in version 1, with
+  the refusals: `null`, over the maximum, a lone surrogate, a non-ASCII
+  character.
+- **The example.** `quotes` version 8 appends a var-data remark, freezing
+  `quotes-v7.xml` with its reference flyweights; `trading`, whose `NewOrder`
+  ends in a note, gets its codecs.
+- **The documents.** `type-mappings.md`'s faces for data; the guide's
+  variable data page; `notes.md` on the var-data flyweights; `intent.md`
+  ticks 16.
 
 ## Criteria
 
-- Every test of the tests module, the example and the processor passes
-  unchanged: the round trips, the refusals, the lengths, the snippets.
-- `GeneratorTest`'s problems for the constructs the codec lacks are the
-  same `Problem`s on the same messages.
-- `CodecModel.java` reads as the list of what a codec can contain; the
-  writer's switch reads as what each of those looks like in Java; no
-  method of the walk, the writer or the emitter takes more than five
-  parameters.
+- Every var-data round trip passes the whole codec contract, the lengths
+  included, and the refusals are the codec's `IllegalArgumentException`s.
+- The quotes reference tests cross version 7 and 8 in both directions:
+  sbe-tool's flyweights read our var-data, and our codec reads theirs.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Var-data, increment 16, which this makes one shape, one helper and one
-length term. `Mapping`'s face rules. Imports in generated code. Any
-change to what a codec does, as opposed to how its source reads.
+Var-data appended inside a group, with fields and groups appended there, in
+increment 18. Text in encodings other than ASCII and UTF-8. Bindings on
+var-data. Byte order and header types, increment 17.

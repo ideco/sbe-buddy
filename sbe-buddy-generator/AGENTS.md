@@ -43,7 +43,7 @@ Problem          a mistake on a node of either model
 - Only javac can see it: `Discovery`, in the processor.
 - One node decides it: `Mapping`.
 - It ties a component's Java type to its face: `FaceRules`, which runs on
-  every field, composite member and ref.
+  every field, var-data, composite member and ref.
 - It compares nodes (duplicates, versions, append-only): `Generator.validate`.
 - Everything else is sbe-tool's, reported verbatim on the package. Our
   documents raise nothing there, so anything it reports is our mistake.

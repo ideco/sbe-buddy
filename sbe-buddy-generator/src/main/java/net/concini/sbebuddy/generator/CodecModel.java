@@ -78,6 +78,28 @@ record CodecModel(
 				@Nullable String addedSince
 		) implements Member {
 		}
+
+		/**
+		 * Var-data, read into a local of its component's name before the constructor;
+		 * {@code addedSince} is the flyweight's since-version method when the data was
+		 * appended above the baseline, or null.
+		 */
+		record Data(String component, String property, String path, Content content, @Nullable String addedSince)
+				implements
+					Member {
+		}
+	}
+
+	/**
+	 * What var-data holds: the bytes as they are, or text in one of two encodings.
+	 */
+	enum Content {
+
+		BYTES,
+
+		ASCII,
+
+		UTF_8
 	}
 
 	/** What the flyweight call looks like. */
@@ -161,14 +183,17 @@ record CodecModel(
 		}
 
 		/**
-		 * The pair for one array field; {@code bytes} for an 8-bit element, which has
-		 * bulk accessors, otherwise element by element as {@code face}.
+		 * The pair for one array field, keyed by {@code field}, which a group's or a
+		 * composite's path prefixes; {@code bytes} for an 8-bit element, which has bulk
+		 * accessors named after {@code bulk}, otherwise element by element as
+		 * {@code face}.
 		 */
 		record ArrayPair(
 				String field,
 				String encoder,
 				String decoder,
 				String property,
+				String bulk,
 				String component,
 				String face,
 				boolean bytes
@@ -220,6 +245,25 @@ record CodecModel(
 
 		/** A group's write, read and length methods, over its entry's body. */
 		record GroupMethods(Member.Group group) implements Helper {
+		}
+
+		/**
+		 * The length and write methods of one var-data member, and for bytes its read,
+		 * over the body's flyweights: {@code bulk} is the name the flyweight's
+		 * {@code put} and {@code get} take, and {@code lengthEncoder} the flyweight of
+		 * the encoding, whose length type holds the maximum.
+		 */
+		record DataMethods(Member.Data data, String encoder, String decoder, String bulk, String lengthEncoder)
+				implements
+					Helper {
+		}
+
+		/** The UTF-8 count before text reaches its flyweight. */
+		record Utf8() implements Helper {
+		}
+
+		/** The length check before bytes reach their flyweight. */
+		record Bytes() implements Helper {
 		}
 	}
 }

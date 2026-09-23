@@ -4,7 +4,7 @@
  * a group's entry.
  */
 @NullMarked
-@SbeSchema(id = 1, version = 0, codecs = false)
+@SbeSchema(id = 1, version = 0)
 package corpus.vardata;
 
 import org.jspecify.annotations.NullMarked;

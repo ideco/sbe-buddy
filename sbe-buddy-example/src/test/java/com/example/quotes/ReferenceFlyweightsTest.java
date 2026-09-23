@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -20,14 +21,15 @@ import com.example.quotes.xmlref.QuoteEncoder;
  * The bytes are sbe-tool's: what the codec writes, the flyweights sbe-tool
  * generated from the oracle read, and the reverse; and across versions, a
  * message from an older writer decodes with its later fields absent and its
- * later group {@code null}, an older reader reads a current message's block and
- * stops before the group it does not know, which is SBE's limit, and a version
- * 0 message is below the baseline and refused. The retired trade count is
- * written as its null value and never read; the constant price exponent is on
- * no wire and in every decoded record; the prices are mantissas on the wire and
- * decimals in the record, through the binding both ways, inside the group as
- * outside it. The frozen versions' flyweights, and the reference enums whose
- * simple names are the example's own, are qualified.
+ * later group and remark {@code null}, an older reader reads a current
+ * message's block, or its group, and stops before what it does not know, which
+ * is SBE's limit, and a version 0 message is below the baseline and refused.
+ * The retired trade count is written as its null value and never read; the
+ * constant price exponent is on no wire and in every decoded record; the prices
+ * are mantissas on the wire and decimals in the record, through the binding
+ * both ways, inside the group as outside it; the remark is UTF-8 both ways. The
+ * frozen versions' flyweights, and the reference enums whose simple names are
+ * the example's own, are qualified.
  */
 final class ReferenceFlyweightsTest {
 
@@ -48,9 +50,11 @@ final class ReferenceFlyweightsTest {
 			new Contributor(Venue.XLON, new BigDecimal("1.0025"), new BigDecimal("1.0100"), 100, 4_000_000_000L)
 	);
 
+	private static final String REMARK = "Firm to 12:00 — size negotiable";
+
 	private static final Quote QUOTE = new Quote(
 			42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-			EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE, CONTRIBUTORS
+			EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE, CONTRIBUTORS, REMARK
 	);
 
 	/** The header and the block: what a reader without the group consumes. */
@@ -103,6 +107,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(contributors.bidSize()).isEqualTo(100);
 		assertThat(contributors.askSize()).isEqualTo(4_000_000_000L);
 		assertThat(contributors.hasNext()).isFalse();
+		assertThat(decoder.remark()).isEqualTo(REMARK);
 		assertThat(MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength()).isEqualTo(written);
 		assertThat(MessageHeaderDecoder.ENCODED_LENGTH + decoder.sbeDecodedLength()).isEqualTo(written);
 	}
@@ -115,7 +120,7 @@ final class ReferenceFlyweightsTest {
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(),
 						"ACME",
-						EXPONENT, DEPTH, TRADE, List.of()
+						EXPONENT, DEPTH, TRADE, List.of(), ""
 				),
 				buffer, OFFSET
 		);
@@ -126,6 +131,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(QuoteDecoder.vwapNullValue()).isNaN();
 		assertThat(decoder.flags().isEmpty()).isTrue();
 		assertThat(decoder.contributors().count()).isZero();
+		assertThat(decoder.remarkLength()).isZero();
 	}
 
 	@Test
@@ -144,6 +150,7 @@ final class ReferenceFlyweightsTest {
 				.bidSize(4_000_000_000L).askSize(250);
 		contributors.next().venue(com.example.quotes.xmlref.Venue.XLON).bid(10_025).ask(10_100).bidSize(100)
 				.askSize(4_000_000_000L);
+		encoder.remark(REMARK);
 		QuoteCodec codec = new QuoteCodec();
 
 		Quote decoded = codec.decode(buffer, OFFSET);
@@ -151,7 +158,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoded).usingRecursiveComparison().isEqualTo(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNYS, MarketState.HALTED,
-						EnumSet.of(QuoteFlag.CROSSED), "ACME", EXPONENT, DEPTH, TRADE, CONTRIBUTORS
+						EnumSet.of(QuoteFlag.CROSSED), "ACME", EXPONENT, DEPTH, TRADE, CONTRIBUTORS, REMARK
 				)
 		);
 		int written = MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength();
@@ -203,6 +210,57 @@ final class ReferenceFlyweightsTest {
 	}
 
 	@Test
+	void aVersionSevenMessageDecodesWithoutARemark() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+		com.example.quotes.xmlref.v7.QuoteEncoder encoder = new com.example.quotes.xmlref.v7.QuoteEncoder()
+				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v7.MessageHeaderEncoder());
+		encoder.instrumentId(42).bid(10_050).ask(10_075).bidSize(4_000_000_000L).askSize(250).sequence(7)
+				.vwap(10_060.5).venue(com.example.quotes.xmlref.v7.Venue.XNAS)
+				.state(com.example.quotes.xmlref.v7.MarketState.OPEN);
+		encoder.flags().indicative(true).locked(true);
+		encoder.symbol("ACME").bidDepth(0, 4_000_000_000L).bidDepth(1, 900).bidDepth(2, 800).bidDepth(3, 700)
+				.bidDepth(4, 600);
+		encoder.lastTrade().price(10_060).size(300);
+		encoder.contributorsCount(1).next().venue(com.example.quotes.xmlref.v7.Venue.XNAS).bid(10_050).ask(10_075)
+				.bidSize(4_000_000_000L).askSize(250);
+		QuoteCodec codec = new QuoteCodec();
+
+		Quote decoded = codec.decode(buffer, OFFSET);
+
+		assertThat(decoded).usingRecursiveComparison().isEqualTo(
+				new Quote(
+						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE,
+						CONTRIBUTORS.subList(0, 1), null
+				)
+		);
+		int written = com.example.quotes.xmlref.v7.MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength();
+		assertThat(codec.lastDecodedLength()).isEqualTo(written);
+		assertThat(codec.decodedLength(buffer, OFFSET)).isEqualTo(written);
+	}
+
+	@Test
+	void aVersionSevenReaderReadsACurrentMessagesGroupAndStopsBeforeTheRemark() {
+		QuoteCodec codec = new QuoteCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+		int written = codec.encode(QUOTE, buffer, OFFSET);
+
+		com.example.quotes.xmlref.v7.QuoteDecoder decoder = new com.example.quotes.xmlref.v7.QuoteDecoder()
+				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v7.MessageHeaderDecoder());
+
+		assertThat(decoder.actingVersion()).isEqualTo(8);
+		com.example.quotes.xmlref.v7.QuoteDecoder.ContributorsDecoder contributors = decoder.contributors();
+		assertThat(contributors.count()).isEqualTo(2);
+		assertThat(contributors.next().bid()).isEqualTo(10_050);
+		assertThat(contributors.next().bid()).isEqualTo(10_025);
+		// The group is consumed whole; the remark behind it is beyond what a reader
+		// without it can skip, which is SBE's limit.
+		int remark = QuoteEncoder.remarkHeaderLength() + REMARK.getBytes(StandardCharsets.UTF_8).length;
+		assertThat(com.example.quotes.xmlref.v7.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
+				.isEqualTo(written - remark);
+	}
+
+	@Test
 	void aVersionSixMessageDecodesWithoutContributors() {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
 		com.example.quotes.xmlref.v6.QuoteEncoder encoder = new com.example.quotes.xmlref.v6.QuoteEncoder()
@@ -221,7 +279,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoded).usingRecursiveComparison().isEqualTo(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE, null
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, TRADE, null, null
 				)
 		);
 		int shorter = com.example.quotes.xmlref.v6.MessageHeaderEncoder.ENCODED_LENGTH
@@ -242,7 +300,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.symbol()).isEqualTo("ACME");
 		assertThat(decoder.lastTrade().price()).isEqualTo(10_060);
-		assertThat(decoder.actingVersion()).isEqualTo(7);
+		assertThat(decoder.actingVersion()).isEqualTo(8);
 		// The block is consumed whole; the group behind it is beyond what a reader
 		// without it can skip, which is SBE's limit.
 		assertThat(com.example.quotes.xmlref.v6.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
@@ -268,7 +326,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoded).usingRecursiveComparison().isEqualTo(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, null, null
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), "ACME", EXPONENT, DEPTH, null, null, null
 				)
 		);
 		int shorter = com.example.quotes.xmlref.v5.MessageHeaderEncoder.ENCODED_LENGTH
@@ -287,7 +345,7 @@ final class ReferenceFlyweightsTest {
 				.wrapAndApplyHeader(buffer, OFFSET, new com.example.quotes.xmlref.v5.MessageHeaderDecoder());
 
 		assertThat(decoder.symbol()).isEqualTo("ACME");
-		assertThat(decoder.actingVersion()).isEqualTo(7);
+		assertThat(decoder.actingVersion()).isEqualTo(8);
 		assertThat(com.example.quotes.xmlref.v5.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(BLOCK)
 				.isLessThan(written);
@@ -309,7 +367,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoded).isEqualTo(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null, null, null
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null, null, null, null
 				)
 		);
 		int shorter = com.example.quotes.xmlref.v4.MessageHeaderEncoder.ENCODED_LENGTH
@@ -329,7 +387,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.tradeCount()).isEqualTo(com.example.quotes.xmlref.v4.QuoteDecoder.tradeCountNullValue());
 		assertThat(decoder.venue()).isEqualTo(com.example.quotes.xmlref.v4.Venue.XNAS);
-		assertThat(decoder.actingVersion()).isEqualTo(7);
+		assertThat(decoder.actingVersion()).isEqualTo(8);
 		assertThat(com.example.quotes.xmlref.v4.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(BLOCK)
 				.isLessThan(written);
@@ -351,7 +409,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoded).isEqualTo(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, Venue.XNAS, MarketState.OPEN,
-						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null, null, null
+						EnumSet.of(QuoteFlag.INDICATIVE, QuoteFlag.LOCKED), null, EXPONENT, null, null, null, null
 				)
 		);
 		assertThat(codec.lastDecodedLength()).isLessThan(codec.encodedLength(QUOTE));
@@ -368,7 +426,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.tradeCount()).isEqualTo(com.example.quotes.xmlref.v3.QuoteDecoder.tradeCountNullValue());
 		assertThat(decoder.venue()).isEqualTo(com.example.quotes.xmlref.v3.Venue.XNAS);
-		assertThat(decoder.actingVersion()).isEqualTo(7);
+		assertThat(decoder.actingVersion()).isEqualTo(8);
 		assertThat(com.example.quotes.xmlref.v3.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())
 				.isEqualTo(BLOCK)
 				.isLessThan(written);
@@ -388,7 +446,7 @@ final class ReferenceFlyweightsTest {
 		assertThat(decoded).isEqualTo(
 				new Quote(
 						42, BID, ASK, 4_000_000_000L, 250, 7, 10_060.5, null, null, null, null, EXPONENT, null, null,
-						null
+						null, null
 				)
 		);
 		int shorter = com.example.quotes.xmlref.v2.MessageHeaderEncoder.ENCODED_LENGTH
@@ -409,7 +467,8 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoded).isEqualTo(
 				new Quote(
-						42, BID, ASK, 4_000_000_000L, 250, 7, null, null, null, null, null, EXPONENT, null, null, null
+						42, BID, ASK, 4_000_000_000L, 250, 7, null, null, null, null, null, EXPONENT, null, null, null,
+						null
 				)
 		);
 		int shorter = com.example.quotes.xmlref.v1.MessageHeaderEncoder.ENCODED_LENGTH
@@ -429,7 +488,7 @@ final class ReferenceFlyweightsTest {
 
 		assertThat(decoder.instrumentId()).isEqualTo(42);
 		assertThat(decoder.sequence()).isEqualTo(7);
-		assertThat(decoder.actingVersion()).isEqualTo(7);
+		assertThat(decoder.actingVersion()).isEqualTo(8);
 		// The acting block length is the header's, so the longer block is consumed
 		// whole; the group behind it is not.
 		assertThat(com.example.quotes.xmlref.v1.MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength())

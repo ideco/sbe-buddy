@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.concini.sbebuddy.generator.CodecModel.Body;
+import net.concini.sbebuddy.generator.CodecModel.Content;
 import net.concini.sbebuddy.generator.CodecModel.Helper;
 import net.concini.sbebuddy.generator.CodecModel.Member;
 import net.concini.sbebuddy.generator.CodecModel.Shape;
@@ -35,9 +36,9 @@ final class CodecWriter {
 		for (CodecModel.Binding binding : model.bindings()) {
 			bindings.add(BINDING_FIELD.fill(binding));
 		}
-		List<String> groupLengths = new ArrayList<>();
-		for (Member.Group group : groups(body)) {
-			groupLengths.add(GROUP_LENGTH_TERM.fill(group, "length", lengthOf(group)));
+		List<String> variableLengths = new ArrayList<>();
+		for (Member member : variable(body)) {
+			variableLengths.add(lengthTerm(LENGTH_TERM, member));
 		}
 		List<String> helpers = new ArrayList<>();
 		for (Helper helper : model.helpers()) {
@@ -46,15 +47,15 @@ final class CodecWriter {
 		return CODEC.fill(
 				model,
 				"bindings", String.join("\n", bindings),
-				"groupLengths", String.join("", groupLengths),
+				"variableLengths", String.join("", variableLengths),
 				"encodeFields", writes(body),
 				"refuseBelowBaseline", model.baseline() == 0
 						? ""
 						: REFUSE_BELOW_BASELINE.fill(model, "baseline", String.valueOf(model.baseline())),
-				"decodeGroups", groupReads(body),
+				"decodeVariable", variableReads(body),
 				"decodeFields", arguments(body),
 				"decodedLength",
-				groups(body).isEmpty() ? BLOCK_DECODED_LENGTH.fill(model) : WALKED_DECODED_LENGTH.fill(model),
+				variable(body).isEmpty() ? BLOCK_DECODED_LENGTH.fill(model) : WALKED_DECODED_LENGTH.fill(model),
 				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers)
 		);
 	}
@@ -71,6 +72,7 @@ final class CodecWriter {
 				case Member.Group group -> ENCODE_CHECKED_FIELD.fill(
 						group, "call", ENCODE_GROUP_FIELD.fill(group, "source", SOURCE.fill(group))
 				);
+				case Member.Data data -> ENCODE_DATA_FIELD.fill(data);
 			});
 		}
 		return String.join("\n", writes);
@@ -148,6 +150,7 @@ final class CodecWriter {
 			arguments.add(switch (member) {
 				case Member.Field field -> read(body, field);
 				case Member.Group group -> group.component();
+				case Member.Data data -> data.component();
 				case Member.Unmapped unmapped -> throw new IllegalStateException(
 						unmapped.property() + " is read though no component carries it"
 				);
@@ -205,16 +208,25 @@ final class CodecWriter {
 	}
 
 	/**
-	 * The body's groups read into locals, in wire order, before the constructor.
+	 * The body's groups and var-data read into locals, in wire order, before the
+	 * constructor: the flyweight reads them one after another.
 	 */
-	private String groupReads(Body body) {
+	private String variableReads(Body body) {
 		List<String> reads = new ArrayList<>();
-		for (Member.Group group : groups(body)) {
-			reads.add(
-					group.addedSince() == null
-							? DECODE_GROUP.fill(group)
-							: DECODE_ADDED_GROUP.fill(group, "decoder", body.decoder())
-			);
+		for (Member member : variable(body)) {
+			reads.add(switch (member) {
+				case Member.Group group -> group.addedSince() == null
+						? DECODE_GROUP.fill(group)
+						: DECODE_ADDED_GROUP.fill(group, "decoder", body.decoder());
+				case Member.Data data -> {
+					String read = data.content() == Content.BYTES ? DECODE_BYTES.fill(data) : DECODE_TEXT.fill(data);
+					yield data.addedSince() == null
+							? DECODE_DATA.fill(data, "face", face(data), "read", read)
+							: DECODE_ADDED_DATA.fill(data, "face", face(data), "decoder", body.decoder(), "read", read);
+				}
+				case Member.Field field -> throw notVariable(field.component());
+				case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
+			});
 		}
 		return String.join("\n", reads);
 	}
@@ -239,6 +251,9 @@ final class CodecWriter {
 					)
 			);
 			case Helper.GroupMethods methods -> groupMethods(methods.group());
+			case Helper.DataMethods methods -> dataMethods(methods);
+			case Helper.Utf8 utf8 -> UTF_8.fill();
+			case Helper.Bytes bytes -> BYTES.fill();
 		};
 	}
 
@@ -295,37 +310,86 @@ final class CodecWriter {
 	private String groupMethods(Member.Group group) {
 		Body entry = group.entry();
 		List<String> terms = new ArrayList<>();
-		for (Member.Group nested : groups(entry)) {
-			terms.add(NESTED_GROUP_LENGTH_TERM.fill(nested, "length", lengthOf(nested)));
+		for (Member member : variable(entry)) {
+			terms.add(lengthTerm(NESTED_LENGTH_TERM, member));
 		}
 		String length = terms.isEmpty()
-				? GROUP_LENGTH.fill(group, "length", lengthOf(group), "encoder", entry.encoder())
+				? GROUP_LENGTH.fill(group, "length", lengthOf(group.path()), "encoder", entry.encoder())
 				: NESTED_GROUP_LENGTH.fill(
-						group, "length", lengthOf(group), "encoder", entry.encoder(), "terms", String.join("\n", terms)
+						group, "length", lengthOf(group.path()), "encoder", entry.encoder(), "terms",
+						String.join("\n", terms)
 				);
 		return String.join(
 				"\n\n",
 				WRITE_GROUP.fill(group, "encoder", entry.encoder(), "body", writes(entry)),
 				READ_GROUP.fill(
-						group, "decoder", entry.decoder(), "groups", groupReads(entry), "arguments", arguments(entry)
+						group, "decoder", entry.decoder(), "reads", variableReads(entry), "arguments", arguments(entry)
 				),
 				length
 		);
 	}
 
-	private static List<Member.Group> groups(Body body) {
-		List<Member.Group> groups = new ArrayList<>();
+	/**
+	 * The length, write and read of one var-data member, each checking what its
+	 * content needs.
+	 */
+	private String dataMethods(Helper.DataMethods methods) {
+		Member.Data data = methods.data();
+		String length = lengthOf(data.path());
+		String count = switch (data.content()) {
+			case BYTES -> COUNT_BYTES.fill(methods, "component", data.component());
+			case ASCII -> COUNT_ASCII.fill(methods, "component", data.component());
+			case UTF_8 -> COUNT_UTF_8.fill(methods, "component", data.component());
+		};
+		String lengthMethod = DATA_LENGTH.fill(
+				methods, "length", length, "face", face(data), "component", data.component(), "property",
+				data.property(), "count", count
+		);
+		if (data.content() != Content.BYTES) {
+			return String.join(
+					"\n\n", lengthMethod,
+					WRITE_TEXT.fill(methods, "path", data.path(), "length", length, "property", data.property())
+			);
+		}
+		return String.join(
+				"\n\n", lengthMethod,
+				WRITE_DATA_BYTES.fill(methods, "path", data.path(), "length", length),
+				READ_DATA_BYTES.fill(methods, "path", data.path(), "property", data.property())
+		);
+	}
+
+	/** The members that follow the block, groups and var-data, in wire order. */
+	private static List<Member> variable(Body body) {
+		List<Member> variable = new ArrayList<>();
 		for (Member member : body.wireOrder()) {
-			if (member instanceof Member.Group group) {
-				groups.add(group);
+			if (member instanceof Member.Group || member instanceof Member.Data) {
+				variable.add(member);
 			}
 		}
-		return groups;
+		return variable;
+	}
+
+	/** A group's or a data member's share of the length, through its method. */
+	private static String lengthTerm(Template term, Member member) {
+		return switch (member) {
+			case Member.Group group -> term.fill(group, "length", lengthOf(group.path()));
+			case Member.Data data -> term.fill(data, "length", lengthOf(data.path()));
+			case Member.Field field -> throw notVariable(field.component());
+			case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
+		};
 	}
 
 	/** {@code legsLength} for the path {@code Legs}. */
-	private static String lengthOf(Member.Group group) {
-		return Character.toLowerCase(group.path().charAt(0)) + group.path().substring(1) + "Length";
+	private static String lengthOf(String path) {
+		return Character.toLowerCase(path.charAt(0)) + path.substring(1) + "Length";
+	}
+
+	private static String face(Member.Data data) {
+		return data.content() == Content.BYTES ? "byte[]" : "String";
+	}
+
+	private static IllegalStateException notVariable(String name) {
+		return new IllegalStateException(name + " is in the block, not after it");
 	}
 
 	private static IllegalStateException noNullValue(String name) {

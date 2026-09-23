@@ -364,23 +364,29 @@ final class PlacementTest {
 		String source = """
 				package placement;
 
-				import net.concini.sbebuddy.SbeData;
+				import static net.concini.sbebuddy.PrimitiveType.CHAR;
+
 				import net.concini.sbebuddy.SbeField;
 				import net.concini.sbebuddy.SbeMessage;
-				import net.concini.sbebuddy.VarStringEncoding;
+				import net.concini.sbebuddy.SbeType;
 
 				@SbeMessage(id = 1)
 				record Order(
 						@SbeField(id = 1) long orderId,
-						@SbeData(id = 2, type = VarStringEncoding.class) String note
+						@SbeField(id = 2, type = Name.class) String name
 				) {
+				}
+
+				@SbeType(primitiveType = CHAR, length = 8, characterEncoding = "UTF-8")
+				final class Name {
 				}
 				""";
 
 		Javac.Result result = compile(source);
 
 		assertOnlyError(
-				result, source, "@SbeMessage(id = 1)", "no codec for var-data yet; set codecs = false on @SbeSchema"
+				result, source, "@SbeMessage(id = 1)",
+				"no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"
 		);
 	}
 

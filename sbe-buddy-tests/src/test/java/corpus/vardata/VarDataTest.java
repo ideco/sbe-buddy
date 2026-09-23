@@ -1,14 +1,28 @@
 package corpus.vardata;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.Arrays;
 import java.util.List;
 
+import org.agrona.concurrent.UnsafeBuffer;
+import org.junit.jupiter.api.Test;
+
 import net.concini.sbebuddy.tests.SchemaCase;
+
+import corpus.vardata.VarData.Attachment;
+import corpus.vardata.sbe.MessageHeaderDecoder;
+import corpus.vardata.sbe.VarDataDecoder;
 
 /**
  * Variable-length data: text with a character encoding, opaque bytes without
  * one, a length type wide enough to need its own maxValue, and var-data inside
- * a group's entry. {@code codecs = false}: the oracle check only, until
- * increment 16.
+ * a group's entry. The round trips carry every data empty, UTF-8 text of every
+ * width a character takes with bytes of every value, and attachments empty and
+ * full beside a signature at its length type's maximum; the tests hold a null
+ * refused in the message and in an entry, the maxima of bytes and of UTF-8
+ * text, a lone surrogate, and the note's UTF-8 as the flyweight reads it.
  */
 final class VarDataTest implements SchemaCase {
 
@@ -62,8 +76,130 @@ final class VarDataTest implements SchemaCase {
 		return ORACLE;
 	}
 
+	private static final int OFFSET = 8;
+
 	@Override
 	public List<RoundTrip<?>> roundTrips() {
-		return List.of();
+		return List.of(
+				new RoundTrip<>(
+						"every data empty, no attachments", new VarDataCodec(),
+						new VarData(1, List.of(), "", new byte[0], new byte[0])
+				),
+				new RoundTrip<>(
+						"text of one, two, three and four bytes a character, bytes of every value", new VarDataCodec(),
+						new VarData(2, List.of(), "a é € 😀", everyByte(), new byte[]{-1, 0, 1})
+				),
+				new RoundTrip<>(
+						"attachments empty and full, the signature at the uint8 length's maximum", new VarDataCodec(),
+						new VarData(
+								3, List.of(new Attachment(1, new byte[0]), new Attachment(2, filled(254))), "note",
+								new byte[]{42}, filled(254)
+						)
+				)
+		);
+	}
+
+	@Test
+	void aNullNoteIsRefused() {
+		VarDataCodec codec = new VarDataCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+		VarData value = new VarData(1, List.of(), null, new byte[0], new byte[0]);
+
+		assertThatThrownBy(() -> codec.encodedLength(value))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note is required");
+		assertThatThrownBy(() -> codec.encode(value, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note is required");
+	}
+
+	@Test
+	void aNullContentInAnAttachmentIsRefused() {
+		VarDataCodec codec = new VarDataCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+		VarData value = new VarData(1, List.of(new Attachment(1, null)), "", new byte[0], new byte[0]);
+
+		assertThatThrownBy(() -> codec.encodedLength(value))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("content is required");
+		assertThatThrownBy(() -> codec.encode(value, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("content is required");
+	}
+
+	@Test
+	void aSignatureLongerThanItsLengthTypeHoldsIsRefused() {
+		VarDataCodec codec = new VarDataCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[512]);
+		VarData value = new VarData(1, List.of(), "", new byte[0], filled(255));
+
+		assertThatThrownBy(() -> codec.encodedLength(value))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("signature is longer than 254 bytes: 255");
+		assertThatThrownBy(() -> codec.encode(value, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("signature is longer than 254 bytes: 255");
+	}
+
+	@Test
+	void aNoteLongerInUtf8ThanItsLengthTypeHoldsIsRefused() {
+		// 32,767 two-byte characters fit in 65,534 bytes; one more does not.
+		VarDataCodec codec = new VarDataCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[70_000]);
+		VarData fits = new VarData(1, List.of(), "é".repeat(32_767), new byte[0], new byte[0]);
+		VarData over = new VarData(1, List.of(), "é".repeat(32_768), new byte[0], new byte[0]);
+
+		assertThat(codec.encode(fits, buffer, OFFSET)).isEqualTo(codec.encodedLength(fits));
+		assertThatThrownBy(() -> codec.encodedLength(over))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note is longer than 65534 bytes in UTF-8: 65536");
+		assertThatThrownBy(() -> codec.encode(over, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note is longer than 65534 bytes in UTF-8: 65536");
+	}
+
+	@Test
+	void aLoneSurrogateIsRefused() {
+		// String.getBytes would write each as '?', a silent loss.
+		VarDataCodec codec = new VarDataCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+
+		assertThatThrownBy(
+				() -> codec.encode(new VarData(1, List.of(), "a\uD83D", new byte[0], new byte[0]), buffer, OFFSET)
+		)
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note has a lone surrogate at index 1");
+		assertThatThrownBy(() -> codec.encodedLength(new VarData(1, List.of(), "\uDE00a", new byte[0], new byte[0])))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note has a lone surrogate at index 0");
+	}
+
+	@Test
+	void theNoteIsUtf8OnTheWire() {
+		VarDataCodec codec = new VarDataCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+		codec.encode(new VarData(1, List.of(), "é😀", new byte[0], new byte[0]), buffer, OFFSET);
+		MessageHeaderDecoder header = new MessageHeaderDecoder().wrap(buffer, OFFSET);
+		VarDataDecoder decoder = new VarDataDecoder().wrap(
+				buffer, OFFSET + MessageHeaderDecoder.ENCODED_LENGTH, header.blockLength(), header.version()
+		);
+		decoder.attachments();
+
+		assertThat(decoder.noteLength()).isEqualTo(6);
+		assertThat(decoder.note()).isEqualTo("é😀");
+	}
+
+	private static byte[] everyByte() {
+		byte[] bytes = new byte[256];
+		for (int i = 0; i < bytes.length; i++) {
+			bytes[i] = (byte) i;
+		}
+		return bytes;
+	}
+
+	private static byte[] filled(int length) {
+		byte[] bytes = new byte[length];
+		Arrays.fill(bytes, (byte) 7);
+		return bytes;
 	}
 }
