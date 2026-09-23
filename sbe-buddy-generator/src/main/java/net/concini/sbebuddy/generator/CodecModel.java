@@ -58,8 +58,8 @@ record CodecModel(
 		}
 
 		/**
-		 * A field or member no component carries: written as its null value, never
-		 * read.
+		 * A field or member no component carries: written as its null value, an array's
+		 * in every element, and never read.
 		 */
 		record Unmapped(String property, Shape shape) implements Member {
 		}

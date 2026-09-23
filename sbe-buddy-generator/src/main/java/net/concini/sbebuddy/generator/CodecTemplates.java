@@ -139,6 +139,12 @@ final class CodecTemplates {
 	static final Template ENCODE_UNMAPPED_FIELD = Template
 			.of("encoder.{property}({encoder}.{property}NullValue());");
 
+	/** Any array, a char string in any encoding included, element by element. */
+	static final Template ENCODE_UNMAPPED_ARRAY_FIELD = Template.of("""
+			for (int i = 0; i < {encoder}.{property}Length(); i++) {
+				encoder.{property}(i, {encoder}.{property}NullValue());
+			}""");
+
 	static final Template ENCODE_UNMAPPED_ENUM_FIELD = Template
 			.of("encoder.{property}({flyweights}.{enumClass}.NULL_VAL);");
 
