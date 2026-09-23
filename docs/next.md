@@ -1,136 +1,112 @@
-# Increment 17: Byte order and header types
+# Increment 18: Evolution through every construct
 
 ## Goal
 
-A schema can put its messages on the wire big-endian, and can frame them in
-a header of its own. The mapping, the XML and sbe-tool's flyweights already
-carry both; the codec refuses both. This increment lifts the two refusals
-and gives the header a Java form: every codec reads the header on its own,
-and encodes a message with the header's extra members supplied by the
-caller.
+A schema evolves the ways SBE allows, and the codec reads every earlier
+version of it. Today the codec refuses anything appended inside a group, and
+reads a member appended to a composite from older messages without a guard.
+This increment follows SBE's own rules: what the standard lets a schema
+append, the codec reads from older and newer messages alike; what it forbids
+is refused by the compiler with the official way instead.
+
+## What SBE allows
+
+From the FIX standard's schema extension mechanism and sbe-tool's versioning
+guide:
+
+- **Fields** may be appended to the end of a message's root block or of a
+  group's block. The header's and the dimension's block lengths let a
+  reader of either version step over the difference.
+- **A group** may be appended after the existing groups, at the root or
+  nested within a group; **var-data** after the existing var-data, at the
+  root or within a group.
+- **A composite cannot be extended**: "It is not possible to add fields to a
+  composite type without creating a new message template and schema
+  version." The official way is a new composite, carried by a new field.
+- **The header's encoding cannot change.**
 
 ## What the spike showed
 
-- **Big-endian already works.** The codec reaches the buffer only through
-  the flyweights, which apply the byte order themselves. With the refusal
-  lifted, a `long` round-tripped and read back big-endian at
-  `orderIdEncodingOffset()`. What is missing is the proof.
-- **A custom header almost works.** The templates already take the header's
-  class from the IR, so a codec compiled against `ApplicationHeaderEncoder`
-  and round-tripped. One real bug: sbe-tool's `wrapAndApplyHeader` writes
-  only `blockLength`, `templateId`, `schemaId` and `version`, and an extra
-  member keeps whatever the buffer held. `encode` then claims bytes it never
-  wrote.
-- **The standard four are always `uint16`.** sbe-tool only warns about any
-  other type, and our pipeline makes its warnings fatal, so their Java type
-  is always `int`.
+- **Appending inside a group almost works.** With the codec's three
+  refusals lifted, a field, a nested group and var-data appended inside a
+  group's entry compiled and round-tripped, and a hand-built version 0
+  message decoded to `null` for all three with the right lengths. sbe-tool's
+  group decoders guard every appended member by the message's acting
+  version, which the codec's added-member templates already read.
+- **An appended composite member is read from bytes it does not own.**
+  sbe-tool puts no version guard inside a composite (`JavaGenerator.java`,
+  `generateFieldNotPresentCondition`), and the walk never marks a
+  composite's member as added, so a member appended in version 1 read
+  `0x5A5A5A5A` from a version 0 message: the bytes after its block. The
+  compiler accepted an `int` for it.
+- **An older reader cannot skip a group or var-data appended inside an
+  entry.** sbe-tool's `next()` starts an entry at the message's limit
+  (`JavaGenerator.java`, the group decoder's `next`), and an older reader
+  never reads the unknown nested part, so it reads that as the next entry.
+  The standard allows the append; older sbe-tool readers of a group with
+  more than one entry, or with anything after it, do not survive it.
+  Appending fields to an entry is safe both ways.
 
 ## Settled before it started
 
-- **The XML always names the declared header.** sbe-tool finds the header
-  through the schema's `headerType` attribute, and without it takes the
-  composite named `messageHeader`; nothing else marks it. The schema we
-  write always carries `headerType`, the wire name of the record in
-  `@SbeSchema(headerType = …)`, which is `DefaultMessageHeader`'s
-  `messageHeader` when none is declared. `Mapping`'s special case that
-  leaves the attribute out for `messageHeader` goes. No oracle changes:
-  `sbe.xsd` defaults `headerType` to `messageHeader`, and the comparison
-  fills in the XSD's defaults. A hand-written schema in a later partial
-  mode may use either form, since sbe-tool reads both.
-- **The api gains `interface MessageHeader`**, with `int blockLength()`,
-  `int templateId()`, `int schemaId()` and `int version()`. Not `Header`:
-  Aeron's `io.aeron.logbuffer.Header` sits beside a codec in every fragment
-  handler. The built-in record is renamed `DefaultMessageHeader`, keeps its
-  wire name `messageHeader`, and implements the interface. A custom header
-  is a record that implements it too, so a header declaring the four
-  standard components already has the accessors.
-- **`@SbeSchema.headerType` is typed `Class<? extends MessageHeader>`,**
-  default `DefaultMessageHeader.class`. A class that does not implement the
-  interface is then javac's error on the annotation, the first rule layer,
-  with no rule of ours.
-- **`Codec<T, H extends MessageHeader>`.** `H` is the schema's header
-  record. Code that holds the concrete class, or `var`, never writes it;
-  generic code writes `Codec<Order, ?>`.
-- **Two methods join the contract.**
-  - `H decodeHeader(DirectBuffer buffer, int offset)` reads the whole header,
-    the standard four and every extra member the record carries. It checks
-    nothing, so it can peek at any message of any template before choosing
-    a codec, which is what increment 19's dispatch needs.
-  - `int encode(T value, H header, MutableDirectBuffer buffer, int offset)`
-    writes the message with the header's extra members taken from `header`.
-    It returns what `encode` returns; a `null` header is an
-    `IllegalArgumentException`, `header is required`.
-- **The standard four are always the codec's own.** Both `encode`s write the
-  message's `blockLength`, `templateId`, `schemaId` and `version` through
-  `wrapAndApplyHeader`, and ignore the header's values for them. Checking
-  them as constants are checked would break relaying: a header decoded from
-  an older message carries another version. Plain `encode(value, …)` writes
-  every extra member as its null value, so no byte is left as the buffer
-  held it.
-- **The standard four keep their wire names.** A header record's component
-  `blockLength`, `templateId`, `schemaId` or `version` renamed on the wire to
-  something else is refused by `Mapping`, since the interface's accessor
-  would then read another member.
+- **Inside a group, everything SBE allows.** The codec's refusals of a
+  field, a group and var-data appended above the baseline inside a group
+  go. Each decodes to `null` from a message older than it, decided on the
+  acting version, and the compiler asks for a box on a field that can be
+  absent, as it already does.
+- **A composite's member is never newer than its composite.** A member,
+  inline or a ref, whose `sinceVersion` is above its composite's own is
+  refused by `Mapping`: `a composite cannot be extended in a later version;
+  declare a new composite and append a field of it`. The composite's own
+  `sinceVersion`, the version the whole type arrived in, stays as it is.
+- **A header's member is never versioned.** A header member with a
+  `sinceVersion` is refused by `Mapping`: `a header cannot change: a reader
+  needs its length before its version`.
+- **The older-reader limit is documented, not warned about.** The guide
+  recommends appending fields to an entry, and says what a nested group or
+  var-data appended inside an entry costs readers of the older version.
 
 ## What gets built
 
-- **The api.** `MessageHeader`, `DefaultMessageHeader`, `headerType`'s new
-  type, and `Codec`'s second type parameter and two methods, each
-  documented as a contract.
-- **`CodecModel`.** The header becomes a node of its own: the header
-  record, its flyweight class and a body over the header flyweight, built
-  as a composite's is. Its extra members are fields; the standard four are
-  read and never written; members under the record's `unmapped` are
-  written as their null value.
-- **`CodecWalk`.** The header body comes from `ir.headerStructure()` and the
-  schema's `headerType` composite, with the composite's shapes, so an extra
-  member may be anything a composite member may be. The refusals of a
-  header of its own and of big-endian go.
-- **`CodecWriter`.** Plain `encode` and `encode` with a header share one
-  body; the header's extras are written after `wrapAndApplyHeader`, from the
-  header or as null. `decodeHeader` builds the record through its canonical
-  constructor. `encodedLength` is unchanged: the header's length is fixed.
-- **`Mapping`.** `headerType` always set from the declared header, and the
-  rule on the standard four's wire names.
-- **The corpus.**
-  - `header` gets its codecs. Round trips through both `encode`s; a test
-    that plain `encode` into a dirty buffer leaves every extra member at
-    its null value; a test that `encode` with a header writes its sequence
-    number and ignores its standard four; a test that `decode` ignores the
-    extras.
-  - A new case, `leadingheader`, whose header puts an extra member before
-    the standard four, so every standard offset moves.
-  - `bigendian` grows to everything whose bytes depend on the order: every
-    multi-byte width, `float` and `double`, a `short[]`, an enum on
-    `uint16`, a set on `uint32`, a composite, a group's dimension and
-    var-data with a `uint16` length. Its own test reads values big-endian
-    at the flyweights' `<field>EncodingOffset()`.
-  - `SchemaCase.RoundTrip` takes a `Codec<T, ?>`, and `SchemaCasesTest`
-    relays every round trip: the decoded value, encoded with the header
-    `decodeHeader` reads, gives the same bytes.
-- **The example.** The rename and the new type parameter only. Neither
-  schema changes its byte order or header: `quotes` cannot without breaking
-  every frozen version, and `trading` would prove nothing the corpus does
-  not.
-- **The documents.** `type-mappings.md`'s `messageSchema` row and header
-  section; `architecture.md`'s codec contract; a guide page for the
-  schema's own attributes, `byteOrder` and `headerType` with what the codec
-  writes into a header, and the rename across the guide; `notes.md` on
-  `wrapAndApplyHeader`; `intent.md` ticks 17.
+- **`CodecWalk`.** The three refusals inside a group go.
+- **`Mapping`.** The two rules, each on the member it names.
+- **The corpus.** One schema at three versions, each its own package with
+  its own records, codecs and oracle, so every version reads every other
+  through our codecs:
+  - `evolution.v0`: a message whose group's entry holds a field and a
+    composite.
+  - `evolution.v1`: the entry appends a field after the composite, and the
+    nested entries of a group already there append one too.
+  - `evolution`, version 2: the entry appends a nested group and var-data.
+  - Their tests cross: v0 and v1 each read the other's messages; the
+    current version reads v0's and v1's, with every appended member `null`;
+    lengths agree in every direction the readers support.
+- **The snippets.** A composite member newer than its composite, a ref
+  newer than its composite, a versioned header member.
+- **The example.** `quotes` version 9 appends a field to the contributors
+  entry, freezing `quotes-v8.xml` with its reference flyweights. The
+  reference tests cross versions 8 and 9 both ways: sbe-tool's version 8
+  reader steps over the appended field by the entry's block length, and our
+  codec reads version 8's entries with the field `null`.
+- **The documents.** `type-mappings.md`'s evolution rules; the guide's
+  groups, composites and headers pages, and the stale line of the
+  retire-a-field how-to about composites without a layout; `notes.md` on
+  the group decoder's `next` and the composite without a guard; `intent.md`
+  ticks 18.
 
 ## Criteria
 
-- Every round trip in the corpus passes the whole codec contract, and
-  relays through `decodeHeader` and `encode` with a header to the same
-  bytes.
-- No `encode` leaves a header byte as the buffer held it.
-- The `bigendian` case reads every value big-endian at its offset.
+- Every appended member of every construct SBE lets grow decodes from every
+  older version of the corpus's schema, and every version a reader supports
+  crosses both ways with its lengths.
+- The quotes reference tests cross versions 8 and 9 in both directions.
+- Nothing a composite or a header gains in a later version compiles.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Partial mode, and with it the check that a header record matches a
-hand-written schema's header. Bindings on header members. Members appended
-to a header in a later version, increment 18. Family dispatch on
-`decodeHeader`, increment 19.
+A new message template as the way to replace a message wholesale, which
+families in increment 19 give a home. Deprecation beyond the attribute. A
+set choice or enum value added in a later version stays under the
+unknown-value contract of `type-mappings.md`.

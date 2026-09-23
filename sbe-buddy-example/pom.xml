@@ -128,6 +128,24 @@
             </configuration>
           </execution>
           <execution>
+            <id>quotes-v8-reference</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <systemProperties combine.children="append">
+                <systemProperty>
+                  <key>sbe.target.namespace</key>
+                  <value>com.example.quotes.xmlref.v8</value>
+                </systemProperty>
+              </systemProperties>
+              <arguments>
+                <argument>${project.basedir}/src/main/sbe/quotes-v8.xml</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
             <id>quotes-v6-reference</id>
             <phase>generate-test-sources</phase>
             <goals>

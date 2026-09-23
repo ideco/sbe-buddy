@@ -122,7 +122,7 @@ the block, one at a time.
 
 **Evolution, proved.** Through the codecs, not only the flyweights.
 
-* [ ] 18. Evolution through every construct: `sinceVersion` inside groups and composites, var-data appended inside a group included, every frozen version decoded in both directions
+* [x] 18. Evolution through every construct: `sinceVersion` inside groups and composites, var-data appended inside a group included, every frozen version decoded in both directions
 
 **Families.**
 

@@ -16,6 +16,10 @@ against the flyweights and codecs the processor generated for it.
   increment in its Javadoc.
 - One case per XSD feature, and one per shape worth taking from sbe-tool's
   test schemas, written fresh and never copied.
+- A schema's versions are sibling packages, `evolution.v0`, `evolution.v1`
+  beside the current `evolution`, each a case with its own records, codecs
+  and oracle, so the versions cross through our codecs with no reference
+  build.
 
 ## The oracle
 

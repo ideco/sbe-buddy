@@ -104,6 +104,9 @@ Decoding builds the `Decimal` from the flyweight and hands it to `fromWire`; enc
 * A `ref` whose component is not the face of what it refers to.
 * A field of a composite whose component is not the record, `Price is a composite; use Price`, or that is optional.
 * A binding on a composite field that does not take the record as `W`.
+* A member newer than its composite: `a composite cannot be extended in a later version; declare a new composite and append a field of it`.
+
+A composite does not evolve. SBE has no way to grow one in place, since its size is part of every block that holds it, so a member's `sinceVersion` may not be above its composite's own. The official way is a new composite, carried by a new field appended to the message or the entry; the old field stays as it is, or retires through `unmapped`. A composite introduced in a later version, `@SbeComposite(sinceVersion = 7)`, brings its members along at that version.
 
 ## Coverage
 

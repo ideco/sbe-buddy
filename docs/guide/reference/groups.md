@@ -20,6 +20,8 @@ import static net.concini.sbebuddy.PrimitiveType.UINT32;
 
 import java.math.BigDecimal;
 
+import org.jspecify.annotations.Nullable;
+
 import net.concini.sbebuddy.SbeField;
 
 public record Contributor(
@@ -27,7 +29,8 @@ public record Contributor(
         @SbeField(id = 18, primitiveType = INT64, binding = Price.class) BigDecimal bid,
         @SbeField(id = 19, primitiveType = INT64, binding = Price.class) BigDecimal ask,
         @SbeField(id = 20, primitiveType = UINT32) long bidSize,
-        @SbeField(id = 21, primitiveType = UINT32) long askSize) {}
+        @SbeField(id = 21, primitiveType = UINT32) long askSize,
+        @SbeField(id = 23, primitiveType = UINT32, sinceVersion = 9, description = "The orders behind the venue's bid") @Nullable Long bidOrders) {}
 ```
 
 The schema writes the group inside the message, after its fields:
@@ -39,6 +42,7 @@ The schema writes the group inside the message, after its fields:
     <field name="ask" id="19" type="int64"/>
     <field name="bidSize" id="20" type="uint32"/>
     <field name="askSize" id="21" type="uint32"/>
+    <field name="bidOrders" id="23" type="uint32" sinceVersion="9" description="The orders behind the venue's bid"/>
 </group>
 ```
 
@@ -102,16 +106,21 @@ A group has no presence: it cannot be optional, and a group present with zero en
 
 A group appended above the baseline, as `contributors` was in version 7, is absent from every earlier message: the codec decodes it to `null`, decided on the acting version, and the component is nullable. A current message without contributors carries the dimensions with a count of zero and decodes to an empty list; the two are different messages and different values.
 
-Inside a group the baseline is the group's own `sinceVersion` where that is higher than the schema's: an entry exists only in a message that carries the group, so a field at its group's version is never absent and stays a plain primitive. A field added in a later version than its group would be absent in entries an older writer wrote, and the compiler asks for a box; the codec for it is a later increment's.
+Inside a group the baseline is the group's own `sinceVersion` where that is higher than the schema's: an entry exists only in a message that carries the group, so a field at its group's version is never absent and stays a plain primitive. A field added in a later version than its group, as `bidOrders` was in version 9, is absent in entries an older writer wrote: the compiler asks for a box, and the codec decodes it to `null` in every such entry.
 
 An older reader that does not know the group reads the message's block and stops before it: it cannot skip a group it has no schema for, which is SBE's limit, not sbe-buddy's. A newer reader reading an older message skips nothing, since there is nothing there.
+
+## Evolving a group
+
+SBE lets a group grow three ways, each after what the group already holds: a field appended to the entry's block, a group nested in the entry, var-data at the entry's end. The codec reads all three from older messages, each `null` in an entry an older writer wrote.
+
+They are not equally kind to older readers. A field appended to the entry is stepped over: the group's dimensions carry the entry's block length, so a reader of version 8 reads version 9's contributors field by field and finds the remark behind them where it expects it. A group or var-data appended inside the entry is not: a reader that does not know it starts the next entry where the unknown part begins, so it misreads every entry after the first and whatever follows the group. That is sbe-tool's reader as much as ours. Append fields to an entry where readers of the older version still read the messages, and nest a new group or var-data only where they no longer do.
 
 ## What the compiler and the codec refuse
 
 * `@SbeGroup` on anything but a `List` of a record: `a group must be a List of a record`.
 * A group before a field, or after var-data, in the same body.
 * A field appended above its group's version on a primitive component: `int cannot hold null, but the field can be absent; use Integer`.
-* Until a later increment, the codec refuses, naming the message: a field, a group or var-data added above the baseline inside a group. `codecs = false` on `@SbeSchema` keeps the flyweights.
 
 ## Coverage
 

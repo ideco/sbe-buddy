@@ -290,9 +290,6 @@ final class CodecWalk {
 		String property = JavaUtil.formatPropertyName(token.name());
 		String path = owner.prefix() + Generators.toUpperFirstChar(property);
 		boolean added = token.version() > owner.baseline();
-		if (added && owner.kind() == Owner.Kind.GROUP) {
-			problems.add(lacking("a group added above the baseline in a group"));
-		}
 		String groupClass = JavaUtil.formatClassName(token.name());
 		Owner entry = new Owner(
 				owner.encoder() + "." + groupClass + "Encoder", owner.decoder() + "." + groupClass + "Decoder", path,
@@ -316,9 +313,6 @@ final class CodecWalk {
 		Token token = tokens.get(0);
 		String property = JavaUtil.formatPropertyName(token.name());
 		boolean added = token.version() > owner.baseline();
-		if (added && owner.kind() == Owner.Kind.GROUP) {
-			problems.add(lacking("var-data added above the baseline in a group"));
-		}
 		Content content = content(tokens.get(3), data);
 		if (content == null) {
 			return null;
@@ -370,8 +364,8 @@ final class CodecWalk {
 	/**
 	 * Decided by the wire and the component: a constant or a primitive is always
 	 * there, the null value makes a field optional, and a field appended above the
-	 * body's baseline is absent from older messages, which a composite's flyweight
-	 * cannot tell and a group's codec does not read yet.
+	 * body's baseline is absent from older messages. A composite's member is never
+	 * newer than its composite, which the mapping sees to.
 	 */
 	private Absence absence(Token field, Annotated.JavaType javaType, Owner owner) {
 		boolean primitive = javaType instanceof Annotated.Primitive plain && !plain.boxed();
@@ -382,9 +376,6 @@ final class CodecWalk {
 			return Absence.OPTIONAL;
 		}
 		if (owner.kind() != Owner.Kind.COMPOSITE && field.version() > owner.baseline()) {
-			if (owner.kind() == Owner.Kind.GROUP) {
-				problems.add(lacking("a field added above the baseline in a group"));
-			}
 			return Absence.ADDED;
 		}
 		return primitive ? Absence.NONE : Absence.REQUIRED;
