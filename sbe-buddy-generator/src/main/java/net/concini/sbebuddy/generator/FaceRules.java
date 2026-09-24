@@ -15,10 +15,9 @@ import net.concini.sbebuddy.PrimitiveType;
  * face: the flyweight's accessor type for a primitive or a type with a length,
  * the enum for an enum, a {@code Set} of the enum for a set, the record for a
  * composite. A component must be its face or bind to it, whatever its kind; one
- * that can be absent must hold null, and a face with no null value cannot be
- * optional; a constant needs a value. Applied to a message's or group's fields
- * and var-data, a composite's inline types and its refs, each problem on the
- * node.
+ * that can be absent must hold null; a constant needs a value. Applied to a
+ * message's or group's fields and var-data, a composite's inline types and its
+ * refs, each problem on the node.
  */
 final class FaceRules {
 
@@ -63,9 +62,6 @@ final class FaceRules {
 				binding(field, binding, face);
 			} else if (!fits(field.javaType(), face)) {
 				problem(field, notTheFieldsFace(field.javaType(), face));
-			}
-			if (wirePresence(field) == Presence.OPTIONAL) {
-				optional(field, face);
 			}
 		}
 		boxing(field, field.javaType(), canBeAbsent(field, baseline), "field");
@@ -253,17 +249,6 @@ final class FaceRules {
 	}
 
 	// ---- absence
-
-	/** An optional field of a face that has no null value. */
-	private void optional(Annotated.Field field, Face face) {
-		switch (face.kind()) {
-			case LENGTH -> problem(field, face.named() + " has a length; a field of it cannot be optional");
-			case SET -> problem(field, "a set has no null value; a set field cannot be optional");
-			case COMPOSITE -> problem(field, face.named() + " is a composite; a field of it cannot be optional");
-			case PRIMITIVE, ENUM -> {
-			}
-		}
-	}
 
 	/**
 	 * What can be absent decodes to null, so a primitive component must be its box;

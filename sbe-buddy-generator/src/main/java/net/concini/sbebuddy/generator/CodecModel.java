@@ -61,7 +61,8 @@ record CodecModel(
 			String primitiveType,
 			String characterEncoding,
 			String epoch,
-			String timeUnit
+			String timeUnit,
+			String presence
 	) {
 	}
 
@@ -227,7 +228,14 @@ record CodecModel(
 		OPTIONAL,
 
 		/** Appended above the baseline: null when the message predates it. */
-		ADDED
+		ADDED,
+
+		/**
+		 * Optional on a face with no null value of its own, a composite, a set or an
+		 * array: the binding writes and reads what represents null, and without one
+		 * null is refused.
+		 */
+		NO_NULL_VALUE
 	}
 
 	/** A method the codec declares once, however many members call it. */

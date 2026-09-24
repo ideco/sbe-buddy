@@ -250,7 +250,7 @@ final class CodecWalk {
 		if (binding != null) {
 			bound = bound(
 					binding, owner.prefix() + Generators.toUpperFirstChar(property), name, typeTokens.get(0),
-					field.encoding().epoch(), field.encoding().timeUnit()
+					field.encoding().epoch(), field.encoding().timeUnit(), field.encoding().presence()
 			);
 			if (bound == null) {
 				return null;
@@ -261,7 +261,7 @@ final class CodecWalk {
 			return null;
 		}
 		return new Member.Field(
-				name, property, shape, absence(field, component.javaType(), owner),
+				name, property, shape, withoutNullValue(absence(field, component.javaType(), owner), shape),
 				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
 	}
@@ -308,7 +308,7 @@ final class CodecWalk {
 		Bound bound = null;
 		Annotated.Binding binding = group.binding();
 		if (binding != null) {
-			bound = bound(binding, path, group.javaName(), null, null, null);
+			bound = bound(binding, path, group.javaName(), null, null, null, null);
 			if (bound == null) {
 				return null;
 			}
@@ -358,7 +358,7 @@ final class CodecWalk {
 			Token varData = tokens.get(3);
 			bound = bound(
 					binding, path, data.javaName(), content == Content.BYTES ? null : varData,
-					tokens.get(0).encoding().epoch(), tokens.get(0).encoding().timeUnit()
+					tokens.get(0).encoding().epoch(), tokens.get(0).encoding().timeUnit(), null
 			);
 			if (bound == null) {
 				return null;
@@ -451,6 +451,16 @@ final class CodecWalk {
 	}
 
 	// ---- how a field or member reaches the wire
+
+	/**
+	 * An optional field whose face has no null value of its own, a composite, a set
+	 * or an array, leaves null to its binding.
+	 */
+	private static Absence withoutNullValue(Absence absence, Shape shape) {
+		boolean noNullValue = shape instanceof Shape.Composite || shape instanceof Shape.Set
+				|| shape instanceof Shape.Array || shape instanceof Shape.Text;
+		return absence == Absence.OPTIONAL && noNullValue ? Absence.NO_NULL_VALUE : absence;
+	}
 
 	/**
 	 * Decided by the wire and the component: a constant or a primitive is always
@@ -613,7 +623,8 @@ final class CodecWalk {
 			if (binding != null) {
 				// A member has no epoch or time unit: the schema gives them to fields.
 				bound = bound(
-						binding, owner.prefix() + Generators.toUpperFirstChar(property), name, token, null, null
+						binding, owner.prefix() + Generators.toUpperFirstChar(property), name, token, null, null,
+						token.encoding().presence()
 				);
 				if (bound == null) {
 					continue;
@@ -672,7 +683,7 @@ final class CodecWalk {
 	 */
 	private @Nullable Bound bound(
 			Annotated.Binding binding, String path, String component, @Nullable Token type, @Nullable String epoch,
-			@Nullable String timeUnit
+			@Nullable String timeUnit, Encoding.@Nullable Presence presence
 	) {
 		String simpleName = simpleName(binding.qualifiedName());
 		String name = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
@@ -699,7 +710,8 @@ final class CodecWalk {
 				new CodecModel.Context(
 						context, literal(component),
 						primitive == null ? "null" : "net.concini.sbebuddy.PrimitiveType." + primitive.name(),
-						literal(characterEncoding), literal(epoch), literal(timeUnit)
+						literal(characterEncoding), literal(epoch), literal(timeUnit),
+						presence == null ? "null" : "net.concini.sbebuddy.Presence." + presence.name()
 				)
 		);
 		return new Bound(name, context);
