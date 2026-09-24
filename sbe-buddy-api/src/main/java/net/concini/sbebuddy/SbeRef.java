@@ -22,4 +22,10 @@ public @interface SbeRef {
 	int sinceVersion() default 0;
 
 	int deprecated() default 0;
+
+	/**
+	 * A {@link TypeBinding} between the component's type and the face of the type
+	 * referred to. The Java side; contributes nothing to the schema.
+	 */
+	Class<?> binding() default void.class;
 }

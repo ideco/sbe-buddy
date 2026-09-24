@@ -369,6 +369,14 @@ public final class Discovery {
 	}
 
 	private Annotated.Type type(Members type, String javaName, Annotated.@Nullable JavaType javaType, Element at) {
+		Annotated.Binding binding = null;
+		if (javaType == null) {
+			if (type.type("binding") != null) {
+				problem(at, "@SbeType on a class declares a type; a binding goes on a component that uses it");
+			}
+		} else {
+			binding = binding(type, javaType, at, "member");
+		}
 		Annotated.Type result = new Annotated.Type(
 				javaName,
 				javaType,
@@ -386,7 +394,8 @@ public final class Discovery {
 				type.string("semanticType"),
 				type.string("description"),
 				type.integer("sinceVersion"),
-				type.integer("deprecated")
+				type.integer("deprecated"),
+				binding
 		);
 		remember(result, at, type.mirror);
 		return result;
@@ -473,7 +482,8 @@ public final class Discovery {
 				ref.string("name"),
 				ref.integer("offset"),
 				ref.integer("sinceVersion"),
-				ref.integer("deprecated")
+				ref.integer("deprecated"),
+				binding(ref, javaType(component.asType()), component, "member")
 		);
 		remember(result, component, ref.mirror);
 		return result;
@@ -668,28 +678,31 @@ public final class Discovery {
 				field.string("description"),
 				field.integer("sinceVersion"),
 				field.integer("deprecated"),
-				binding(field, javaType, at)
+				binding(field, javaType, at, "field")
 		);
 		remember(result, at, field.mirror);
 		return result;
 	}
 
 	/**
-	 * The field's binding, checked as far as javac can: a class of its own, not a
+	 * A component's binding, checked as far as javac can: a class of its own, not a
 	 * declaration, concrete, constructible without arguments from the schema
 	 * package, a {@code TypeBinding} or one of its specializations whose {@code J}
 	 * is the component's type, where a primitive component matches its box. The
 	 * face it binds goes down as a Java type for the face rule, a primitive unboxed
-	 * for a specialization.
+	 * for a specialization. {@code what} names the component for an unmapped one,
+	 * which has nothing to bind.
 	 */
-	private Annotated.@Nullable Binding binding(Members field, Annotated.JavaType javaType, Element at) {
-		TypeElement type = field.type("binding");
+	private Annotated.@Nullable Binding binding(
+			Members annotation, Annotated.JavaType javaType, Element at, String what
+	) {
+		TypeElement type = annotation.type("binding");
 		if (type == null) {
 			return null;
 		}
 		String name = type.getQualifiedName().toString();
 		if (javaType instanceof Annotated.Unmapped) {
-			problem(at, "an unmapped field has no component to bind");
+			problem(at, "an unmapped " + what + " has no component to bind");
 			return null;
 		}
 		if (isDeclaration(type)) {
@@ -769,12 +782,26 @@ public final class Discovery {
 		return false;
 	}
 
+	/**
+	 * A group, whose entry record is the {@code List}'s the component is, or with a
+	 * binding the one it binds.
+	 */
 	private Annotated.Group group(RecordComponentElement component) {
 		Members group = members(component, SbeGroup.class);
-		TypeElement entry = listEntryRecord(component.asType());
+		Annotated.JavaType javaType = javaType(component.asType());
+		Annotated.Binding binding = binding(group, javaType, component, "group");
+		TypeMirror face = component.asType();
+		TypeElement bindingType = group.type("binding");
+		if (binding != null && bindingType != null) {
+			ExecutableType toWire = toWire(bindingType);
+			if (toWire != null) {
+				face = toWire.getReturnType();
+			}
+		}
+		TypeElement entry = listEntryRecord(face);
 		Annotated.Group result = new Annotated.Group(
 				component.getSimpleName().toString(),
-				javaType(component.asType()),
+				javaType,
 				group.integer("id"),
 				entry == null ? List.of() : components(entry),
 				unmapped(group, component),
@@ -785,7 +812,8 @@ public final class Discovery {
 				group.string("semanticType"),
 				group.string("description"),
 				group.integer("sinceVersion"),
-				group.integer("deprecated")
+				group.integer("deprecated"),
+				binding
 		);
 		remember(result, component, group.mirror);
 		return result;
@@ -793,9 +821,10 @@ public final class Discovery {
 
 	private Annotated.Data data(RecordComponentElement component) {
 		Members data = members(component, SbeData.class);
+		Annotated.JavaType javaType = javaType(component.asType());
 		Annotated.Data result = new Annotated.Data(
 				component.getSimpleName().toString(),
-				javaType(component.asType()),
+				javaType,
 				data.integer("id"),
 				composite(component, data.type("type"), "type", "VarDataEncoding"),
 				data.string("name"),
@@ -803,7 +832,8 @@ public final class Discovery {
 				data.string("semanticType"),
 				data.string("description"),
 				data.integer("sinceVersion"),
-				data.integer("deprecated")
+				data.integer("deprecated"),
+				binding(data, javaType, component, "data")
 		);
 		remember(result, component, data.mirror);
 		return result;

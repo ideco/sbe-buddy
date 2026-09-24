@@ -5,6 +5,8 @@ import static net.concini.sbebuddy.generator.CodecTemplates.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
+
 import net.concini.sbebuddy.generator.CodecModel.Body;
 import net.concini.sbebuddy.generator.CodecModel.Content;
 import net.concini.sbebuddy.generator.CodecModel.Helper;
@@ -38,6 +40,10 @@ final class CodecWriter {
 		for (CodecModel.Binding binding : model.bindings()) {
 			bindings.add(BINDING_FIELD.fill(binding));
 		}
+		List<String> contexts = new ArrayList<>();
+		for (CodecModel.Context context : model.contexts()) {
+			contexts.add(CONTEXT_FIELD.fill(context));
+		}
 		List<String> variableLengths = new ArrayList<>();
 		for (Member member : variable(body)) {
 			variableLengths.add(lengthTerm(LENGTH_TERM, member));
@@ -51,6 +57,7 @@ final class CodecWriter {
 				"headerClass", headerClass,
 				"headerRecord", header.record(),
 				"bindings", String.join("\n", bindings),
+				"contexts", String.join("\n", contexts),
 				"variableLengths", String.join("", variableLengths),
 				"writeNullHeader", header.nulls().isEmpty() ? "" : WRITE_NULL_HEADER_CALL.fill(),
 				"writeHeader", header.body().wireOrder().isEmpty() ? "" : WRITE_HEADER_CALL.fill(),
@@ -102,9 +109,12 @@ final class CodecWriter {
 				case Member.Field field -> write(body, field);
 				case Member.Unmapped unmapped -> writeNull(body, unmapped);
 				case Member.Group group -> ENCODE_CHECKED_FIELD.fill(
-						group, "call", ENCODE_GROUP_FIELD.fill(group, "source", SOURCE.fill(group))
+						group, "call",
+						ENCODE_GROUP_FIELD.fill(
+								group, "source", group.binding() == null ? SOURCE.fill(group) : BOUND_SOURCE.fill(group)
+						)
 				);
-				case Member.Data data -> ENCODE_DATA_FIELD.fill(data);
+				case Member.Data data -> ENCODE_DATA_FIELD.fill(data, "source", nullableSource(data, data.binding()));
 			});
 		}
 		return String.join("\n", writes);
@@ -123,7 +133,7 @@ final class CodecWriter {
 				case Shape.Scalar scalar ->
 					ENCODE_OPTIONAL_FIELD.fill(field, "source", source, "encoder", body.encoder());
 				case Shape.Enum enumeration -> ENCODE_OPTIONAL_ENUM_FIELD.fill(
-						field, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass()
+						field, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass(), "source", source
 				);
 				case Shape.Text text -> throw noNullValue(field.component());
 				case Shape.Array array -> throw noNullValue(field.component());
@@ -138,15 +148,22 @@ final class CodecWriter {
 	private String write(Body body, Member.Field field, Shape shape, String source) {
 		return switch (shape) {
 			case Shape.Scalar scalar -> ENCODE_FIELD.fill(field, "source", source);
-			case Shape.Text text -> ENCODE_STRING_FIELD.fill(field, "source", source, "encoder", body.encoder());
+			case Shape.Text text -> text.charset() == null
+					? ENCODE_STRING_FIELD.fill(field, "source", source, "encoder", body.encoder())
+					: ENCODE_ENCODED_STRING_FIELD.fill(
+							field, "source", source, "encoder", body.encoder(), "charset", text.charset(), "bulk",
+							text.bulk()
+					);
 			case Shape.Array array -> ENCODE_ARRAY_FIELD.fill(array, "source", source);
-			case Shape.Enum enumeration -> ENCODE_ENUM_FIELD.fill(field, "enumClass", enumeration.enumClass());
-			case Shape.Set set -> ENCODE_SET_FIELD.fill(field, "setClass", set.setClass());
+			case Shape.Enum enumeration -> ENCODE_ENUM_FIELD
+					.fill(field, "enumClass", enumeration.enumClass(), "source", source);
+			case Shape.Set set -> ENCODE_SET_FIELD.fill(field, "setClass", set.setClass(), "source", source);
 			case Shape.Composite composite -> ENCODE_COMPOSITE_FIELD
 					.fill(field, "compositeClass", composite.compositeClass(), "source", source);
 			case Shape.Constant constant -> switch (constant.read()) {
 				case Shape.Enum enumeration -> CHECK_CONSTANT_ENUM_FIELD.fill(
-						field, "javaEnum", enumeration.javaEnum(), "constant", String.valueOf(constant.enumConstant())
+						field, "javaEnum", enumeration.javaEnum(), "constant", String.valueOf(constant.enumConstant()),
+						"source", source
 				);
 				case Shape.Text text -> CHECK_CONSTANT_STRING_FIELD.fill(field, "source", source);
 				case Shape.Scalar scalar -> CHECK_CONSTANT_FIELD.fill(field, "source", source);
@@ -181,8 +198,8 @@ final class CodecWriter {
 		for (Member member : body.constructorOrder()) {
 			arguments.add(switch (member) {
 				case Member.Field field -> read(body, field);
-				case Member.Group group -> group.component();
-				case Member.Data data -> data.component();
+				case Member.Group group -> boundLocal(group, group.binding(), group.addedSince());
+				case Member.Data data -> boundLocal(data, data.binding(), data.addedSince());
 				case Member.Unmapped unmapped -> throw new IllegalStateException(
 						unmapped.property() + " is read though no component carries it"
 				);
@@ -282,9 +299,11 @@ final class CodecWriter {
 							composite, "decoder", composite.body().decoder(), "members", arguments(composite.body())
 					)
 			);
-			case Helper.GroupMethods methods -> groupMethods(methods.group());
+			case Helper.GroupMethods methods -> groupMethods(methods);
 			case Helper.DataMethods methods -> dataMethods(methods);
 			case Helper.Utf8 utf8 -> UTF_8.fill();
+			case Helper.Encoded encoded -> ENCODED.fill();
+			case Helper.CharsetConstant charset -> CHARSET_CONSTANT.fill(charset);
 			case Helper.Bytes bytes -> BYTES.fill();
 		};
 	}
@@ -339,7 +358,8 @@ final class CodecWriter {
 	 * sized by the count, and summed without encoding, each nested group through
 	 * its own length.
 	 */
-	private String groupMethods(Member.Group group) {
+	private String groupMethods(Helper.GroupMethods methods) {
+		Member.Group group = methods.group();
 		Body entry = group.entry();
 		List<String> terms = new ArrayList<>();
 		for (Member member : variable(entry)) {
@@ -353,7 +373,7 @@ final class CodecWriter {
 				);
 		return String.join(
 				"\n\n",
-				WRITE_GROUP.fill(group, "encoder", entry.encoder(), "body", writes(entry)),
+				WRITE_GROUP.fill(group, "encoder", entry.encoder(), "parent", methods.parent(), "body", writes(entry)),
 				READ_GROUP.fill(
 						group, "decoder", entry.decoder(), "reads", variableReads(entry), "arguments", arguments(entry)
 				),
@@ -372,11 +392,22 @@ final class CodecWriter {
 			case BYTES -> COUNT_BYTES.fill(methods, "component", data.component());
 			case ASCII -> COUNT_ASCII.fill(methods, "component", data.component());
 			case UTF_8 -> COUNT_UTF_8.fill(methods, "component", data.component());
+			case ENCODED -> COUNT_ENCODED
+					.fill(methods, "component", data.component(), "charset", String.valueOf(data.charset()));
 		};
 		String lengthMethod = DATA_LENGTH.fill(
 				methods, "length", length, "face", face(data), "component", data.component(), "property",
 				data.property(), "count", count
 		);
+		if (data.content() == Content.ENCODED) {
+			return String.join(
+					"\n\n", lengthMethod,
+					WRITE_ENCODED_TEXT.fill(
+							methods, "path", data.path(), "component", data.component(), "charset",
+							String.valueOf(data.charset())
+					)
+			);
+		}
 		if (data.content() != Content.BYTES) {
 			return String.join(
 					"\n\n", lengthMethod,
@@ -404,11 +435,33 @@ final class CodecWriter {
 	/** A group's or a data member's share of the length, through its method. */
 	private static String lengthTerm(Template term, Member member) {
 		return switch (member) {
-			case Member.Group group -> term.fill(group, "length", lengthOf(group.path()));
-			case Member.Data data -> term.fill(data, "length", lengthOf(data.path()));
+			case Member.Group group -> term
+					.fill(group, "length", lengthOf(group.path()), "source", nullableSource(group, group.binding()));
+			case Member.Data data -> term
+					.fill(data, "length", lengthOf(data.path()), "source", nullableSource(data, data.binding()));
 			case Member.Field field -> throw notVariable(field.component());
 			case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 		};
+	}
+
+	/**
+	 * What a group or var-data member hands its method: the component, or its
+	 * binding's view of it, a null component passed on as null for the method to
+	 * refuse.
+	 */
+	private static String nullableSource(Record member, @Nullable String binding) {
+		return binding == null ? SOURCE.fill(member) : NULLABLE_BOUND_SOURCE.fill(member);
+	}
+
+	/**
+	 * A group's or var-data's constructor argument: the local it was read into, or
+	 * that local through its binding, an absent one staying null.
+	 */
+	private static String boundLocal(Record member, @Nullable String binding, @Nullable String addedSince) {
+		if (binding == null) {
+			return LOCAL.fill(member);
+		}
+		return addedSince == null ? BOUND_LOCAL.fill(member) : BOUND_ADDED_LOCAL.fill(member);
 	}
 
 	/** {@code legsLength} for the path {@code Legs}. */

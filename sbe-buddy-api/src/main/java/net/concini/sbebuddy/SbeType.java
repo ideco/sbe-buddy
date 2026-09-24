@@ -44,4 +44,12 @@ public @interface SbeType {
 	int sinceVersion() default 0;
 
 	int deprecated() default 0;
+
+	/**
+	 * On a composite's component, a {@link TypeBinding} between the component's
+	 * type and the face of the type. A class carrying {@code @SbeType} is a
+	 * declaration, not a use of one, and takes none. The Java side; contributes
+	 * nothing to the schema.
+	 */
+	Class<?> binding() default void.class;
 }

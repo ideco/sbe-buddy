@@ -42,9 +42,9 @@ memory.
 | --- | --- | --- |
 | `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`) |
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` (the body in wire order, by name; empty for declaration order), `unmapped` (complete `@SbeField`s no component carries) |
-| `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
-| `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message |
-| `data` | `@SbeData` on a `String` or `byte[]` component | `id`, `name`, `type` (a `@SbeComposite` class of the `{length, varData}` shape), `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
+| `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit` (`@Deprecated`, as the XSD deprecates it), `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `binding` |
+| `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message, and `binding` |
+| `data` | `@SbeData` on a `String` or `byte[]` component | `id`, `name`, `type` (a `@SbeComposite` class of the `{length, varData}` shape), `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `binding` |
 
 A field, group or data component whose `type` and `primitiveType` are both
 absent uses its component type: for an `@SbeEnum`, `@SbeSet` or
@@ -55,9 +55,9 @@ primitive it is the default mapping below; anything else is an error.
 
 | XSD | Java | Members |
 | --- | --- | --- |
-| `type` | `@SbeType` on a `final` class, or on a component of an `@SbeComposite` record (an inline element) | `name`, `primitiveType`, `length` (1), `characterEncoding`, `nullValue`, `minValue`, `maxValue`, `presence`, `value` (the constant), `valueRef`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
+| `type` | `@SbeType` on a `final` class, or on a component of an `@SbeComposite` record (an inline element) | `name`, `primitiveType`, `length` (1), `characterEncoding`, `nullValue`, `minValue`, `maxValue`, `presence`, `value` (the constant), `valueRef`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and, on a composite's component only, `binding` |
 | `composite` | `@SbeComposite` on a record | `name`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` and `unmapped` for its inline `type` members, as on a message |
-| `ref` | `@SbeRef` on a component of an `@SbeComposite` record | `value` (the declared type's class; omitted when the component type is itself the `@SbeEnum`, `@SbeSet` or `@SbeComposite`), `name`, `offset`, `sinceVersion`, `deprecated` |
+| `ref` | `@SbeRef` on a component of an `@SbeComposite` record | `value` (the declared type's class; omitted when the component type is itself the `@SbeEnum`, `@SbeSet` or `@SbeComposite`), `name`, `offset`, `sinceVersion`, `deprecated`; and `binding` |
 | `enum` | `@SbeEnum` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `validValue` | `@SbeEnumValue` on each constant | `value`, `name`, `description`, `sinceVersion`, `deprecated` |
 | `set` | `@SbeSet` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
@@ -102,13 +102,13 @@ field names; boxed where the field can be absent.
 | `int8`, `int16`, `int32`, `int64`, `float`, `double` | `byte`, `short`, `int`, `long`, `float`, `double` |
 | `uint8`, `uint16`, `uint32`, `uint64` | `short`, `int`, `long`, `long` (sbe-tool's widening; `uint64` is the bit pattern) |
 | `char` (`length` 1) | `byte` |
-| `char`, `length = N` | `String`: decoded up to the first NUL, encoded NUL-padded; `IllegalArgumentException` over `N` or outside `characterEncoding` |
+| `char`, `length = N` | `String`: decoded up to the first NUL, encoded NUL-padded; `IllegalArgumentException` over `N` bytes or for a character the `characterEncoding` cannot hold; any encoding the JDK knows, except one that writes a zero byte inside a character, UTF-16 or UTF-32, which the decoding cannot tell from the padding |
 | `int8` or `uint8`, `length = N` | `byte[]`, the bytes as they are, exactly `N` long |
 | any other primitive, `length = N` | the array of the element's face (`short[]`, `int[]`, `long[]`, `float[]`, `double[]`), exactly `N` long |
 | `enum` | the `@SbeEnum` enum |
 | `set` | `Set<E>` of the `@SbeSet` enum; decoded as an `EnumSet` |
 | `composite` | the `@SbeComposite` record |
-| `data` whose `varData` is `char` | `String` in the `characterEncoding`; `IllegalArgumentException` over the length type's maximum in bytes, and outside ASCII for an ASCII encoding or at a lone surrogate for UTF-8 |
+| `data` whose `varData` is `char` | `String` in the `characterEncoding`, any the JDK knows; `IllegalArgumentException` over the length type's maximum in bytes, and for a character the encoding cannot hold, a lone surrogate included |
 | `data` of any other `varData` | `byte[]`, the bytes as they are, at most the length type's maximum |
 | `group` | `List<E>` |
 
@@ -196,40 +196,62 @@ and its face is `String`.
 ## Bindings: the Java side
 
 ```java
-public interface TypeBinding<J, W> { W toWire(J value); J fromWire(W wire); }
+public interface TypeBinding<J, W> {
+    W toWire(J value, BindingContext context);
+    J fromWire(W wire, BindingContext context);
+}
+
+public record BindingContext(String name, @Nullable PrimitiveType primitiveType,
+        @Nullable String characterEncoding, @Nullable String epoch, @Nullable String timeUnit) {}
 ```
 
-`@SbeField(binding = X.class)` names a stateless binding with a no-arg
-constructor the schema package can call, public when the class lives
-elsewhere; `J` is the component type, and the face of the field's SBE type
-decides the interface: a primitive face takes its specialization,
-`TypeBinding.OfLong<J>` with `long toWire(J)` and `J fromWire(long)` for
-`int64`, `uint64` and `uint32`, `OfInt` for `int32` and `uint16`, `OfShort`
-for `int16` and `uint8`, `OfByte` for `int8` and `char`, `OfFloat` and
-`OfDouble`, so nothing is boxed on the way; a reference face, a `String` or
-an array, takes `TypeBinding<J, W>` with the face as `W`; a composite face
-takes its record as `W`, so a binding over a composite goes through the
-face record, one built per call on either side, which is the only form a
-binding shipped in the api can take. A binding is a
-class of its own: a declaration never implements `TypeBinding`, and a binding never
-carries a declaration annotation, so what is schema and what is Java stay
-apart, and the field alone says which binding it wants over which wire. A
-binding may check a schema attribute it depends on (`timeUnit`,
-`characterEncoding`) and never supplies one. Absence passes through as
-`null` without calling the binding; the codec holds one instance of each
-binding class it uses, and whatever a binding throws passes through
-unwrapped. A field of an enum or a set takes no binding: their faces are
-the user's types already.
+`binding = X.class` names a stateless binding with a no-arg constructor the
+schema package can call, public when the class lives elsewhere, on any
+component that carries a value: `@SbeField`, `@SbeData` and `@SbeGroup` on
+a message's or a group's component, `@SbeType` and `@SbeRef` on a
+composite's. `J` is the component type, and the face of the component's
+SBE type decides the interface: a primitive face takes its specialization,
+`TypeBinding.OfLong<J>` with `long toWire(J, BindingContext)` and
+`J fromWire(long, BindingContext)` for `int64`, `uint64` and `uint32`,
+`OfInt` for `int32` and `uint16`, `OfShort` for `int16` and `uint8`,
+`OfByte` for `int8` and `char`, `OfFloat` and `OfDouble`, so nothing is
+boxed on the way; any other face takes `TypeBinding<J, W>` with the face as
+`W`: a `String` or an array, the user's enum, a `Set` of a set's enum, a
+composite's record, one built per call on either side, and a group's
+`List` of its entry record, whose entries the binding's `W` names. A binding
+is refused only where it cannot mean anything: on an `unmapped` field or
+member, which has no component, and on an `@SbeType` class, which declares
+a type rather than uses one. A binding is a class of its own: a declaration
+never implements `TypeBinding`, and a binding never carries a declaration
+annotation, so what is schema and what is Java stay apart, and the
+component alone says which binding it wants over which wire.
 
-Built-ins in the api: the standard `DefaultMessageHeader` and `GroupSizeEncoding`
-composites; `VarStringEncoding` (UTF-8), `VarAsciiEncoding`,
-`VarDataEncoding` for `@SbeData`; `UuidWire` `{int64 msb, int64 lsb}` with
-`Uuid` binding `UUID`; and for `Instant`, `LocalDate` and `LocalTime` the
-SBE specification's standard time encodings, `UTCTimestamp`, `LocalMktDate`
-and `UTCTimeOnly`, each a wire type with its `timeUnit` explicit and a
-binding beside it. Nothing else: a fixed-scale `BigDecimal` such as `Cents`
-in the example below, or an `OffsetDateTime` over a `TZTimestamp` composite,
-is a binding a user writes.
+Every call is handed the component's `BindingContext`: its name as the
+codec's messages give it, the wire primitive after a named type is resolved
+(an array's or a string's element, an enum's or a set's encoding; `null` for
+a composite and a group), the type's `characterEncoding` for `char` arrays
+and text var-data, and the field's `epoch` and `timeUnit` as the schema
+writes them, `null` where absent, never a default filled in. sbe-buddy
+interprets none of it; a binding reads what it needs and never supplies
+anything to the schema. The codec holds one `static final` context per
+bound component and one instance of each binding class it uses. Absence
+passes through as `null` without calling the binding, and so does an enum's
+unknown value, which the unknown-value contract settles first; whatever a
+binding throws passes through unwrapped. A constant with a binding is
+checked on its wire side, `toWire(value)` against the constant.
+
+`timeUnit` on `@SbeField` is `@Deprecated`, as `sbe.xsd` deprecates it on
+`field`, kept for schemas written against release candidate 2; it still
+reaches the schema and the context. `epoch` is not deprecated.
+
+Built-ins in the api are SBE's framing and nothing else: the standard
+`DefaultMessageHeader` and `GroupSizeEncoding` composites, and
+`VarStringEncoding` (UTF-8), `VarAsciiEncoding`, `VarDataEncoding` for
+`@SbeData`. sbe-buddy ships no bindings and no wire types for JDK types: a
+time, a date, a UUID or a fixed-scale `BigDecimal` such as `Cents` in the
+example below is a binding a user writes, over a wire the schema declares,
+since whatever sbe-buddy picked, the unit, the epoch, the layout or the
+rounding would be someone's wrong choice.
 They carry SBE's conventional wire names through `name`, `messageHeader`,
 `groupSizeEncoding`, `varStringEncoding`, `varAsciiEncoding` and
 `varDataEncoding`, so a group that uses the standard dimensions writes no
@@ -330,7 +352,7 @@ record PlaceOrder(
     @SbeField(id = 2) int quantity,
     @SbeField(id = 3, primitiveType = UINT16) int venue,
     @SbeField(id = 4, primitiveType = INT64, binding = CentsBinding.class) BigDecimal price,
-    @SbeField(id = 5, type = UuidWire.class, binding = Uuid.class) UUID orderId,
+    @SbeField(id = 5, type = OrderId.class, binding = OrderIdBinding.class) UUID orderId,
     @SbeField(id = 6) Side side,
     @SbeField(id = 7, type = Symbol.class, presence = OPTIONAL) String symbol,
     @SbeField(id = 8, type = Cents.class, sinceVersion = 1, binding = CentsBinding.class) BigDecimal commission,
@@ -351,8 +373,20 @@ final class Symbol {}
 @SbeType(primitiveType = INT64)
 final class Cents {}
 
+@SbeComposite
+record OrderId(
+    @SbeType(primitiveType = INT64) long msb,
+    @SbeType(primitiveType = INT64) long lsb) {}
+
 final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
-    public long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
-    public BigDecimal fromWire(long wire) { return BigDecimal.valueOf(wire, 2); }
+    public long toWire(BigDecimal value, BindingContext context) { return value.movePointRight(2).longValueExact(); }
+    public BigDecimal fromWire(long wire, BindingContext context) { return BigDecimal.valueOf(wire, 2); }
+}
+
+final class OrderIdBinding implements TypeBinding<UUID, OrderId> {
+    public OrderId toWire(UUID value, BindingContext context) {
+        return new OrderId(value.getMostSignificantBits(), value.getLeastSignificantBits());
+    }
+    public UUID fromWire(OrderId wire, BindingContext context) { return new UUID(wire.msb(), wire.lsb()); }
 }
 ```

@@ -169,7 +169,8 @@ public final class Fixtures {
 	) {
 		return new Annotated.Group(
 				javaName, new Annotated.ListOfRecord(Character.toUpperCase(javaName.charAt(0)) + javaName.substring(1)),
-				id, List.of(components), List.of(), List.of(), GROUP_SIZE_ENCODING, "", 0, "", "", sinceVersion, 0
+				id, List.of(components), List.of(), List.of(), GROUP_SIZE_ENCODING, "", 0, "", "", sinceVersion, 0,
+				null
 		);
 	}
 
@@ -182,7 +183,7 @@ public final class Fixtures {
 	public static Annotated.Data annotatedData(
 			String javaName, int id, Annotated.JavaType javaType, Annotated.Composite type, int sinceVersion
 	) {
-		return new Annotated.Data(javaName, javaType, id, type, "", 0, "", "", sinceVersion, 0);
+		return new Annotated.Data(javaName, javaType, id, type, "", 0, "", "", sinceVersion, 0, null);
 	}
 
 	/** An inline type of a composite, with the component's Java type. */
@@ -202,7 +203,7 @@ public final class Fixtures {
 	) {
 		return new Annotated.Type(
 				javaName, javaType, apiPrimitive(primitiveType), "", "", length, characterEncoding,
-				Presence.REQUIRED, "", "", "", "", 0, "", "", 0, 0
+				Presence.REQUIRED, "", "", "", "", 0, "", "", 0, 0, null
 		);
 	}
 

@@ -13,7 +13,7 @@ docs/guide/            the user guide: getting started, one page per construct, 
 docs/rpc.md            parked idea, out of scope
 
 sbe-buddy-generator    the core: the schema model, the annotations as data, the mapping between them, the XML, the codec emitter, the corpus; no javac
-sbe-buddy-api          what users compile against: annotations, Codec, TypeBinding, built-ins
+sbe-buddy-api          what users compile against: annotations, Codec, TypeBinding, SBE's framing
 sbe-buddy-processor    javac elements to the annotations as data; the only place javac appears
 sbe-buddy-example      a realistic annotated schema with its oracle; the integration proof
 sbe-buddy-tests        the corpus compiled by the real build: a schema package, its oracle and its round trips per case, run against the generated code

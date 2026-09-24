@@ -1,10 +1,12 @@
 package net.concini.sbebuddy.generator;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,6 +48,7 @@ final class CodecWalk {
 	private final String flyweights;
 	private final Map<Object, Helper> helpers = new LinkedHashMap<>();
 	private final Map<String, String> bindings = new LinkedHashMap<>();
+	private final Map<String, CodecModel.Context> contexts = new LinkedHashMap<>();
 	private final Set<String> problems = new LinkedHashSet<>();
 
 	private CodecWalk(Ir ir, Annotated annotated) {
@@ -85,6 +88,10 @@ final class CodecWalk {
 	private record Key(Class<? extends Helper> kind, String name) {
 	}
 
+	/** A bound component's binding field and context constant. */
+	private record Bound(String binding, String context) {
+	}
+
 	private CodecModel model(Annotated.Message message) {
 		CodecModel.Header header = header();
 		List<Token> tokens = ir.getMessage(message.id());
@@ -99,8 +106,8 @@ final class CodecWalk {
 		return new CodecModel(
 				annotated.packageName(), message.javaName() + "Codec",
 				message.qualifiedName(),
-				flyweights, header, messageClass, annotated.baselineVersion(), fields, body,
-				List.copyOf(helpers.values())
+				flyweights, header, messageClass, annotated.baselineVersion(), fields, List.copyOf(contexts.values()),
+				body, List.copyOf(helpers.values())
 		);
 	}
 
@@ -196,8 +203,10 @@ final class CodecWalk {
 			List<Token> groupTokens = groups.subList(i, i + groups.get(i).componentTokenCount());
 			Annotated.Group group = group(components, groupTokens.get(0));
 			Member.Group member = group(groupTokens, group, owner);
-			wireOrder.add(member);
-			byComponent.put(group, member);
+			if (member != null) {
+				wireOrder.add(member);
+				byComponent.put(group, member);
+			}
 		}
 		for (int i = 0; i < varData.size(); i += varData.get(i).componentTokenCount()) {
 			List<Token> dataTokens = varData.subList(i, i + varData.get(i).componentTokenCount());
@@ -229,24 +238,31 @@ final class CodecWalk {
 		return order;
 	}
 
+	/**
+	 * A field of a message or a group, its binding handed the field's epoch and
+	 * time unit beside what its type says.
+	 */
 	private @Nullable Member field(Token field, List<Token> typeTokens, Annotated.Field component, Owner owner) {
 		String name = component.javaName();
+		String property = JavaUtil.formatPropertyName(field.name());
+		Bound bound = null;
 		Annotated.Binding binding = component.binding();
-		String bindingName = binding == null ? null : bindingName(binding);
-		if (binding != null && bindingName == null) {
-			problems.add(
-					"two bindings share the simple name " + simpleName(binding.qualifiedName())
-							+ " in one codec; the second is " + binding.qualifiedName()
+		if (binding != null) {
+			bound = bound(
+					binding, owner.prefix() + Generators.toUpperFirstChar(property), name, typeTokens.get(0),
+					field.encoding().epoch(), field.encoding().timeUnit()
 			);
-			return null;
+			if (bound == null) {
+				return null;
+			}
 		}
 		Shape shape = shape(field, typeTokens, declarationOf(component), name, owner);
 		if (shape == null) {
 			return null;
 		}
 		return new Member.Field(
-				name, JavaUtil.formatPropertyName(field.name()), shape, absence(field, component.javaType(), owner),
-				bindingName
+				name, property, shape, absence(field, component.javaType(), owner),
+				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
 	}
 
@@ -285,10 +301,18 @@ final class CodecWalk {
 				: new Shape.Array(owner.prefix() + Generators.toUpperFirstChar(property));
 	}
 
-	private Member.Group group(List<Token> tokens, Annotated.Group group, Owner owner) {
+	private Member.@Nullable Group group(List<Token> tokens, Annotated.Group group, Owner owner) {
 		Token token = tokens.get(0);
 		String property = JavaUtil.formatPropertyName(token.name());
 		String path = owner.prefix() + Generators.toUpperFirstChar(property);
+		Bound bound = null;
+		Annotated.Binding binding = group.binding();
+		if (binding != null) {
+			bound = bound(binding, path, group.javaName(), null, null, null);
+			if (bound == null) {
+				return null;
+			}
+		}
 		boolean added = token.version() > owner.baseline();
 		String groupClass = JavaUtil.formatClassName(token.name());
 		Owner entry = new Owner(
@@ -299,9 +323,10 @@ final class CodecWalk {
 		Member.Group member = new Member.Group(
 				group.javaName(), property, path, entryRecord(group),
 				body(tokens, 1 + tokens.get(1).componentTokenCount(), group.components(), group.unmapped(), entry),
-				added ? JavaUtil.formatPropertyName(groupClass + "Decoder") + "SinceVersion" : null
+				added ? JavaUtil.formatPropertyName(groupClass + "Decoder") + "SinceVersion" : null,
+				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
-		helpers.put(new Key(Helper.GroupMethods.class, path), new Helper.GroupMethods(member));
+		helpers.put(new Key(Helper.GroupMethods.class, path), new Helper.GroupMethods(member, owner.encoder()));
 		return member;
 	}
 
@@ -314,17 +339,34 @@ final class CodecWalk {
 		String property = JavaUtil.formatPropertyName(token.name());
 		boolean added = token.version() > owner.baseline();
 		Content content = content(tokens.get(3), data);
-		if (content == null) {
-			return null;
-		}
+		String charset = null;
 		switch (content) {
 			case ASCII -> helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
 			case UTF_8 -> helpers.putIfAbsent(new Key(Helper.Utf8.class, ""), new Helper.Utf8());
 			case BYTES -> helpers.putIfAbsent(new Key(Helper.Bytes.class, ""), new Helper.Bytes());
+			case ENCODED -> {
+				charset = charset(characterEncoding(tokens.get(3), data.javaName()), false);
+				if (charset == null) {
+					return null;
+				}
+			}
 		}
 		String path = owner.prefix() + Generators.toUpperFirstChar(property);
+		Bound bound = null;
+		Annotated.Binding binding = data.binding();
+		if (binding != null) {
+			Token varData = tokens.get(3);
+			bound = bound(
+					binding, path, data.javaName(), content == Content.BYTES ? null : varData,
+					tokens.get(0).encoding().epoch(), tokens.get(0).encoding().timeUnit()
+			);
+			if (bound == null) {
+				return null;
+			}
+		}
 		Member.Data member = new Member.Data(
-				data.javaName(), property, path, content, added ? property + "SinceVersion" : null
+				data.javaName(), property, path, content, charset, added ? property + "SinceVersion" : null,
+				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
 		helpers.put(
 				new Key(Helper.DataMethods.class, path),
@@ -337,26 +379,75 @@ final class CodecWalk {
 	}
 
 	/**
-	 * Decided by the component, whose face the rules tied to the varData type: a
-	 * String is text in the type's encoding, which the codec checks in ASCII and
-	 * counts in UTF-8.
+	 * Decided by the face, which the rules tied to the varData type: a String is
+	 * text in the type's encoding, which the codec checks in ASCII, counts in UTF-8
+	 * and encodes to count in any other.
 	 */
-	private @Nullable Content content(Token varData, Annotated.Data data) {
-		if (!(data.javaType() instanceof Annotated.Text)) {
+	private static Content content(Token varData, Annotated.Data data) {
+		Annotated.Binding binding = data.binding();
+		Annotated.JavaType face = binding == null ? data.javaType() : binding.wire();
+		if (!(face instanceof Annotated.Text)) {
 			return Content.BYTES;
 		}
-		String encoding = varData.encoding().characterEncoding();
-		if (encoding == null) {
-			throw new IllegalStateException(data.javaName() + " is text over a varData without an encoding");
-		}
+		String encoding = characterEncoding(varData, data.javaName());
 		if (JavaUtil.isAsciiEncoding(encoding)) {
 			return Content.ASCII;
 		}
-		if (JavaUtil.isUtf8Encoding(encoding)) {
-			return Content.UTF_8;
+		return JavaUtil.isUtf8Encoding(encoding) ? Content.UTF_8 : Content.ENCODED;
+	}
+
+	private static String characterEncoding(Token text, String component) {
+		String encoding = text.encoding().characterEncoding();
+		if (encoding == null) {
+			throw new IllegalStateException(component + " is text without an encoding");
 		}
-		problems.add(lacking("text data in " + encoding));
-		return null;
+		return encoding;
+	}
+
+	/**
+	 * The codec's constant for text in an encoding other than ASCII and UTF-8,
+	 * declared once, with the method that encodes through it. Null, with the
+	 * problem, for an encoding the JDK does not know or cannot write, and for a
+	 * char array one that writes a zero byte inside a character: sbe-tool's
+	 * flyweight reads a char array up to its first zero byte.
+	 */
+	private @Nullable String charset(String encoding, boolean charArray) {
+		Charset charset;
+		try {
+			charset = Charset.forName(encoding);
+		} catch (IllegalArgumentException e) {
+			// Charset's own exceptions for a name it does not know, or cannot read.
+			problems.add(noCodec("text in " + encoding + ": the JDK knows no such encoding"));
+			return null;
+		}
+		if (!charset.canEncode()) {
+			problems.add(noCodec("text in " + encoding + ": the JDK can read it but not write it"));
+			return null;
+		}
+		if (charArray && containsZero("A".getBytes(charset))) {
+			problems.add(
+					noCodec(
+							"a char array in " + encoding
+									+ ": it writes zero bytes inside a character, and sbe-tool's flyweight ends a char array at its first zero byte"
+					)
+			);
+			return null;
+		}
+		String constant = charset.name().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "_") + "_CHARSET";
+		helpers.putIfAbsent(new Key(Helper.Encoded.class, ""), new Helper.Encoded());
+		helpers.putIfAbsent(
+				new Key(Helper.CharsetConstant.class, constant), new Helper.CharsetConstant(constant, literal(encoding))
+		);
+		return constant;
+	}
+
+	private static boolean containsZero(byte[] bytes) {
+		for (byte b : bytes) {
+			if (b == 0) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ---- how a field or member reaches the wire
@@ -401,7 +492,8 @@ final class CodecWalk {
 
 	/**
 	 * A scalar through its accessor, a char string through the flyweight's String
-	 * form in ASCII, and any other array through a pair of its own.
+	 * form in ASCII and as encoded bytes in any other encoding, and any other array
+	 * through a pair of its own.
 	 */
 	private @Nullable Shape encoding(Token type, Owner owner, String property, String component) {
 		PrimitiveType primitive = type.encoding().primitiveType();
@@ -412,13 +504,14 @@ final class CodecWalk {
 			);
 		}
 		if (primitive == PrimitiveType.CHAR) {
-			String encoding = type.encoding().characterEncoding();
-			if (!JavaUtil.isAsciiEncoding(encoding)) {
-				problems.add(lacking("a string in " + encoding));
-				return null;
+			String encoding = characterEncoding(type, component);
+			String bulk = Generators.toUpperFirstChar(property);
+			if (JavaUtil.isAsciiEncoding(encoding)) {
+				helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
+				return new Shape.Text(null, bulk);
 			}
-			helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
-			return new Shape.Text();
+			String charset = charset(encoding, true);
+			return charset == null ? null : new Shape.Text(charset, bulk);
 		}
 		String field = owner.prefix() + Generators.toUpperFirstChar(property);
 		helpers.putIfAbsent(
@@ -515,9 +608,23 @@ final class CodecWalk {
 				continue;
 			}
 			String name = javaName(member);
+			Bound bound = null;
+			Annotated.Binding binding = bindingOf(member);
+			if (binding != null) {
+				// A member has no epoch or time unit: the schema gives them to fields.
+				bound = bound(
+						binding, owner.prefix() + Generators.toUpperFirstChar(property), name, token, null, null
+				);
+				if (bound == null) {
+					continue;
+				}
+			}
 			Shape shape = shape(token, memberTokens, declarationOf(member), name, owner);
 			if (shape != null) {
-				Member field = new Member.Field(name, property, shape, absence(token, javaTypeOf(member), owner), null);
+				Member field = new Member.Field(
+						name, property, shape, absence(token, javaTypeOf(member), owner),
+						bound == null ? null : bound.binding(), bound == null ? null : bound.context()
+				);
 				wireOrder.add(field);
 				byMember.put(member, field);
 			}
@@ -539,7 +646,11 @@ final class CodecWalk {
 				Encoding encoding = type.encoding();
 				boolean text = encoding.primitiveType() == PrimitiveType.CHAR
 						&& encoding.constValue().byteArrayValue(PrimitiveType.CHAR).length > 1;
-				yield new Shape.Constant(text ? new Shape.Text() : new Shape.Scalar(null), null);
+				// A constant is only compared, through the flyweight's String form.
+				Shape read = text
+						? new Shape.Text(null, Generators.toUpperFirstChar(JavaUtil.formatPropertyName(field.name())))
+						: new Shape.Scalar(null);
+				yield new Shape.Constant(read, null);
 			}
 			case BEGIN_ENUM -> {
 				Annotated.Enum enumeration = declared(declaration, Annotated.Enum.class, component);
@@ -553,17 +664,63 @@ final class CodecWalk {
 
 	/**
 	 * The codec's field for the binding, named after the class,
-	 * {@code priceBinding} for {@code Price}, and declared on first use; null when
-	 * another class of that simple name already has the name.
+	 * {@code priceBinding} for {@code Price} and declared on first use, and the
+	 * component's context, named after its path, {@code legsPriceContext}, from its
+	 * type's token: the primitive of a scalar, an array, an enum or a set, none for
+	 * a composite, and a {@code char} array's encoding. Null, with the problem,
+	 * when another class of the binding's simple name already has its field.
 	 */
-	private @Nullable String bindingName(Annotated.Binding binding) {
+	private @Nullable Bound bound(
+			Annotated.Binding binding, String path, String component, @Nullable Token type, @Nullable String epoch,
+			@Nullable String timeUnit
+	) {
 		String simpleName = simpleName(binding.qualifiedName());
 		String name = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
 		if (!name.endsWith("Binding")) {
 			name += "Binding";
 		}
 		String declared = bindings.putIfAbsent(name, binding.qualifiedName());
-		return declared == null || declared.equals(binding.qualifiedName()) ? name : null;
+		if (declared != null && !declared.equals(binding.qualifiedName())) {
+			problems.add(
+					"two bindings share the simple name " + simpleName + " in one codec; the second is "
+							+ binding.qualifiedName()
+			);
+			return null;
+		}
+		PrimitiveType primitive = type == null || type.signal() == Signal.BEGIN_COMPOSITE
+				? null
+				: type.encoding().primitiveType();
+		String characterEncoding = type != null && primitive == PrimitiveType.CHAR && type.arrayLength() != 1
+				? type.encoding().characterEncoding()
+				: null;
+		String context = Character.toLowerCase(path.charAt(0)) + path.substring(1) + "Context";
+		contexts.putIfAbsent(
+				context,
+				new CodecModel.Context(
+						context, literal(component),
+						primitive == null ? "null" : "net.concini.sbebuddy.PrimitiveType." + primitive.name(),
+						literal(characterEncoding), literal(epoch), literal(timeUnit)
+				)
+		);
+		return new Bound(name, context);
+	}
+
+	/** Text as a Java string literal, or {@code null}. */
+	private static String literal(@Nullable String text) {
+		if (text == null) {
+			return "null";
+		}
+		StringBuilder literal = new StringBuilder("\"");
+		for (char c : text.toCharArray()) {
+			if (c == '"' || c == '\\') {
+				literal.append('\\').append(c);
+			} else if (c < 0x20 || c > 0x7e) {
+				literal.append(String.format("\\u%04x", (int) c));
+			} else {
+				literal.append(c);
+			}
+		}
+		return literal.append('"').toString();
 	}
 
 	// ---- the annotation a token came from, by wire name
@@ -664,6 +821,20 @@ final class CodecWalk {
 		};
 	}
 
+	/**
+	 * A member's binding: an inline type's or a ref's; an inline enum, set or
+	 * composite carries no annotation to name one.
+	 */
+	private static Annotated.@Nullable Binding bindingOf(Annotated.Member member) {
+		return switch (member) {
+			case Annotated.Type type -> type.binding();
+			case Annotated.Ref ref -> ref.binding();
+			case Annotated.Enum enumeration -> null;
+			case Annotated.Set set -> null;
+			case Annotated.Composite composite -> null;
+		};
+	}
+
 	/** The component's type behind a member: an inline declaration is its own. */
 	private static Annotated.JavaType javaTypeOf(Annotated.Member member) {
 		return switch (member) {
@@ -692,7 +863,9 @@ final class CodecWalk {
 
 	/** The entry record's name as code names it; the mapping saw to the shape. */
 	private static String entryRecord(Annotated.Group group) {
-		if (group.javaType() instanceof Annotated.ListOfRecord list) {
+		Annotated.Binding binding = group.binding();
+		Annotated.JavaType face = binding == null ? group.javaType() : binding.wire();
+		if (face instanceof Annotated.ListOfRecord list) {
 			return list.qualifiedName();
 		}
 		throw new IllegalStateException(group.javaName() + " is a group that is not a List of a record");
@@ -740,5 +913,9 @@ final class CodecWalk {
 
 	private static String lacking(String construct) {
 		return "no codec for " + construct + " yet; set codecs = false on @SbeSchema";
+	}
+
+	private static String noCodec(String construct) {
+		return "no codec for " + construct + "; set codecs = false on @SbeSchema";
 	}
 }

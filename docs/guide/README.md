@@ -10,7 +10,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 * [Headers](reference/headers.md) — the message header, a header of your own, reading it first and passing a message on
 * [Primitives](reference/primitives.md) — scalar primitive fields, their Java types and absence
 * [Named types](reference/named-types.md) — `@SbeType`, fixed-length strings and arrays, constants
-* [Bindings](reference/bindings.md) — `TypeBinding` and `binding`, a record's own types over the wire's faces
+* [Bindings](reference/bindings.md) — `TypeBinding`, `binding` on any component and the `BindingContext` it is handed, a record's own types over the wire's faces
 * [Enums](reference/enums.md) — `@SbeEnum`, explicit wire values and unknown values
 * [Sets](reference/sets.md) — `@SbeSet`, bit choices and `Set` components
 * [Composites](reference/composites.md) — `@SbeComposite`, members, refs, the record as the field

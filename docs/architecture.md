@@ -109,7 +109,9 @@ public interface Codec<T, H extends MessageHeader> {
 }
 ```
 
-A codec is a stateful instance, one per thread; bindings are stateless. Its
+A codec is a stateful instance, one per thread; bindings are stateless, and
+each call hands one the `BindingContext` of its component, a constant of the
+codec built from the IR. Its
 one exception of its own is `IllegalArgumentException`, for a value it
 cannot represent or bytes that are not its message; everything else passes
 through unwrapped. `H` is the schema's header record; the standard four

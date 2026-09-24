@@ -1,10 +1,13 @@
 # sbe-buddy-api
 
 What users compile against: the annotations, `PrimitiveType`, `Presence`,
-`ByteOrder`, the built-in composites, `Codec` and `TypeBinding`. Everything
-here is public API, so a change updates `type-mappings.md` and the guide in
-the same commit.
+`ByteOrder`, SBE's framing composites, `Codec`, `TypeBinding` and
+`BindingContext`. Everything here is public API, so a change updates
+`type-mappings.md` and the guide in the same commit.
 
+- No built-in bindings and no wire types for JDK types: whatever the api
+  picked, a unit, an epoch, a layout, would be someone's wrong choice. The
+  framing composites are here because every schema needs them in some form.
 - Annotation members are typed as the XSD types them: enumerations are enums,
   type references are classes, required attributes are required members. Most
   of sbe-tool's name-resolution errors then cannot be written.

@@ -31,9 +31,11 @@ fixed-length arrays, groups, var-data, constants, optional presence, schema
 evolution (`sinceVersion`, `deprecated`, acting version, `semanticVersion`),
 byte order, custom header types. Plus unions of messages as sealed interfaces
 with a dispatching codec, the one Java-side feature. Then what makes the
-codec worth using: built-in bindings for the JDK types the SBE specification
-gives a standard encoding, and a real FIX order-entry schema as the proof
-that the whole thing holds. The target Java representation of all of it is
+codec worth using: a binding on any component, told what the schema says
+about it, so a record holds its own types over any wire the schema declares,
+and a real FIX order-entry schema as the proof that the whole thing holds.
+sbe-buddy stays agnostic of FIX: `sbe.xsd` and sbe-tool are the contract,
+and FIX's datatypes are a user's schema like any other. The target Java representation of all of it is
 `type-mappings.md`.
 
 ## Out of scope
@@ -128,11 +130,11 @@ the block, one at a time.
 
 * [x] 19. Unions: `@SbeUnion` on a sealed interface and its dispatching codec, composed from the message codecs; `canDecode` on every codec
 
-**JDK bindings.** Built on the normal SBE model, no special cases; the wire
-representation stays explicit, above all for timestamps and their
-precision.
+**Bindings everywhere.** Built on the normal SBE model, no special cases;
+the wire stays what the schema declares, and what a value means is the
+user's binding's to decide. No built-in bindings.
 
-* [ ] 20. Built-in wire types and bindings for `UUID`, `Instant`, `LocalDate` and `LocalTime`, each over the SBE specification's standard encoding with its `timeUnit`. A fixed-scale `BigDecimal` and an `OffsetDateTime` over a `TZTimestamp` composite are the examples of a custom binding, not built-ins
+* [x] 20. A binding on every component that carries a value, enums, sets, var-data, groups and composite members included, each call handed a `BindingContext` from the schema; `timeUnit` deprecated as `sbe.xsd` has it; text in any encoding the JDK knows; `UuidWire` out of the api
 
 **A real schema.**
 

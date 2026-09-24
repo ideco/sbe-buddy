@@ -125,6 +125,6 @@ SBE generates a separate enum in the schema’s `.sbe` package. The record codec
 
 `@UnknownValue` applies to the record codec. It does not change the generated flyweight enum: its typed accessor still rejects unknown values. Use the flyweight’s raw field accessor when you need the original encoded value.
 
-## Current limitation
+## Bindings
 
-Constant enum fields declared through `presence = CONSTANT` and `valueRef` are supported for schema and flyweight generation, but not yet by record codecs. Schemas using them must currently set `codecs = false`.
+A field of an enum may hold another type through a [binding](bindings.md) over the enum, a `boolean` over a yes-or-no enum, say. The unknown-value contract above runs first, so the binding sees only constants; a constant field with a binding is checked on its wire side, the binding's enum against the `valueRef`.

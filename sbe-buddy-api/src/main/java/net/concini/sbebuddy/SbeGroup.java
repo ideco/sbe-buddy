@@ -45,4 +45,11 @@ public @interface SbeGroup {
 	 * through {@link #layout()}. The Java side; contributes nothing to the schema.
 	 */
 	SbeField[] unmapped() default {};
+
+	/**
+	 * A {@link TypeBinding} between the component's type and the face of the group,
+	 * a {@code List} of the entry record. The Java side; contributes nothing to the
+	 * schema.
+	 */
+	Class<?> binding() default void.class;
 }

@@ -52,8 +52,9 @@ Text is written in its encoding and read back as sbe-tool's flyweight reads it. 
 
 * **UTF-8.** The codec counts the bytes without encoding, so `encodedLength` costs a pass over the characters and no allocation. A lone surrogate, which the JDK would silently write as `?`, is an `IllegalArgumentException`: `note has a lone surrogate at index 1`.
 * **ASCII.** A character above 127, which the flyweight would silently write as `?`, is an `IllegalArgumentException`: `symbol is not ASCII: café`.
+* **Any other encoding the JDK knows.** The codec encodes the text itself, refusing a character the encoding cannot hold, and a lone surrogate, which the flyweight would write as `?`: `wide cannot be written in UTF-16: a\uD834`. Counting the bytes takes encoding them, so `encodedLength` allocates for such text, and `encode` encodes it again.
 
-Text in any other encoding is a construct the codec does not cover yet; the compiler says so, naming the message, and `codecs = false` on `@SbeSchema` keeps the flyweights.
+An encoding the JDK does not know has no codec; the compiler says so, naming the message, and `codecs = false` on `@SbeSchema` keeps the flyweights.
 
 Decoding is the flyweight's: bytes that are not valid in the encoding decode as the JDK decodes them, U+FFFD for malformed UTF-8, never an exception.
 
@@ -77,8 +78,8 @@ An older reader that does not know the data reads the message up to it and stops
 
 * A component that is not the face of its encoding's `varData`.
 * A field or a group after data in the same body: `a field must come before every group and data`, `a group must come before every data`.
-* Until a later increment, the codec refuses, naming the message: text in an encoding other than ASCII or UTF-8, and data added above the baseline inside a group. `codecs = false` on `@SbeSchema` keeps the flyweights.
+* The codec refuses, naming the message, text in an encoding the JDK does not know. `codecs = false` on `@SbeSchema` keeps the flyweights.
 
 ## Coverage
 
-This page covers `data` in messages and in groups' entries, with the api's encodings and your own. A binding over data is not part of `@SbeData`.
+This page covers `data` in messages and in groups' entries, with the api's encodings and your own. `@SbeData(binding = …)` names a [binding](bindings.md) over the `String` or `byte[]`.

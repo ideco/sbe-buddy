@@ -340,8 +340,8 @@ final class AnnotationMistakesTest {
 						CENTS_BINDING, SYMBOL,
 						"""
 								final class BoxedCents implements TypeBinding<BigDecimal, Long> {
-									public Long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
-									public BigDecimal fromWire(Long wire) { return BigDecimal.valueOf(wire, 2); }
+									public Long toWire(BigDecimal value, BindingContext context) { return value.movePointRight(2).longValueExact(); }
+									public BigDecimal fromWire(Long wire, BindingContext context) { return BigDecimal.valueOf(wire, 2); }
 								}"""
 				),
 				error(
@@ -363,26 +363,172 @@ final class AnnotationMistakesTest {
 						CENTS_BINDING, RGB, "record Colour(int red, int green, int blue) {}",
 						"""
 								final class ColourBinding implements TypeBinding<Colour, byte[]> {
-									public byte[] toWire(Colour value) { return new byte[] {(byte) value.red(), (byte) value.green(), (byte) value.blue()}; }
-									public Colour fromWire(byte[] wire) { return new Colour(wire[0], wire[1], wire[2]); }
+									public byte[] toWire(Colour value, BindingContext context) { return new byte[] {(byte) value.red(), (byte) value.green(), (byte) value.blue()}; }
+									public Colour fromWire(byte[] wire, BindingContext context) { return new Colour(wire[0], wire[1], wire[2]); }
 								}"""
 				)
 		);
 	}
 
 	@Test
-	void aFieldOfAnEnumOrASetTakesNoBinding() {
+	void anEnumOrASetBindsOverItsFace() {
 		assertErrors(
 				inMessage(
-						"@SbeField(id = 1, binding = SideBinding.class) Side side", SIDE,
+						"@SbeField(id = 1, type = Side.class, binding = SideBinding.class) boolean buy,\n@SbeField(id = 2, type = Flags.class, binding = FlagsBinding.class) boolean firm",
+						SIDE, FLAGS,
 						"""
-								final class SideBinding implements TypeBinding.OfShort<Side> {
-									public short toWire(Side value) { return (short) value.ordinal(); }
-									public Side fromWire(short wire) { return Side.values()[wire]; }
+								final class SideBinding implements TypeBinding.OfShort<Boolean> {
+									public short toWire(Boolean value, BindingContext context) { return value ? (short) 1 : 0; }
+									public Boolean fromWire(short wire, BindingContext context) { return wire == 1; }
+								}
+								final class FlagsBinding implements TypeBinding<Boolean, Flags> {
+									public Flags toWire(Boolean value, BindingContext context) { return Flags.firm; }
+									public Boolean fromWire(Flags wire, BindingContext context) { return true; }
 								}"""
 				),
-				error("Side side", "Side is an enum; a field of it takes no binding")
+				error(
+						"boolean buy",
+						"SideBinding binds the wire as short, but the face of Side is Side; implement TypeBinding over Side"
+				),
+				error(
+						"boolean firm",
+						"FlagsBinding binds the wire as Flags, but the face of Flags is Set<Flags>; implement TypeBinding over Set<Flags>"
+				)
 		);
+		assertClean(
+				inMessage(
+						"@SbeField(id = 1, type = Side.class, binding = SideBinding.class) boolean buy,\n@SbeField(id = 2, type = Flags.class, binding = FlagsBinding.class) boolean firm",
+						SIDE, FLAGS,
+						"""
+								final class SideBinding implements TypeBinding<Boolean, Side> {
+									public Side toWire(Boolean value, BindingContext context) { return value ? Side.Buy : Side.Sell; }
+									public Boolean fromWire(Side wire, BindingContext context) { return wire == Side.Buy; }
+								}
+								final class FlagsBinding implements TypeBinding<Boolean, Set<Flags>> {
+									public Set<Flags> toWire(Boolean value, BindingContext context) { return value ? EnumSet.of(Flags.firm) : EnumSet.noneOf(Flags.class); }
+									public Boolean fromWire(Set<Flags> wire, BindingContext context) { return wire.contains(Flags.firm); }
+								}"""
+				)
+		);
+	}
+
+	@Test
+	void varDataAndAGroupBindOverTheirFaces() {
+		assertErrors(
+				inMessage(
+						"""
+								@SbeGroup(id = 1, binding = LegsBinding.class) Map<Integer, Leg> legs,
+								@SbeData(id = 2, type = VarStringEncoding.class, binding = NoteBinding.class) Note note""",
+						LEG, "record Note(String text) {}",
+						"""
+								final class LegsBinding implements TypeBinding<Map<Integer, Leg>, Set<Leg>> {
+									public Set<Leg> toWire(Map<Integer, Leg> value, BindingContext context) { return Set.copyOf(value.values()); }
+									public Map<Integer, Leg> fromWire(Set<Leg> wire, BindingContext context) { return Map.of(); }
+								}
+								final class NoteBinding implements TypeBinding<Note, byte[]> {
+									public byte[] toWire(Note value, BindingContext context) { return value.text().getBytes(); }
+									public Note fromWire(byte[] wire, BindingContext context) { return new Note(new String(wire)); }
+								}"""
+				),
+				error("Map<Integer, Leg> legs", "a group's binding must bind a List of a record"),
+				error(
+						"Note note",
+						"NoteBinding binds the wire as byte[], but the face of varStringEncoding is String; implement TypeBinding over String"
+				)
+		);
+		assertClean(
+				inMessage(
+						"""
+								@SbeGroup(id = 1, binding = LegsBinding.class) Map<Integer, Leg> legs,
+								@SbeData(id = 2, type = VarStringEncoding.class, binding = NoteBinding.class) Note note""",
+						LEG, "record Note(String text) {}",
+						"""
+								final class LegsBinding implements TypeBinding<Map<Integer, Leg>, List<Leg>> {
+									public List<Leg> toWire(Map<Integer, Leg> value, BindingContext context) { return List.copyOf(value.values()); }
+									public Map<Integer, Leg> fromWire(List<Leg> wire, BindingContext context) { return Map.of(); }
+								}
+								final class NoteBinding implements TypeBinding<Note, String> {
+									public String toWire(Note value, BindingContext context) { return value.text(); }
+									public Note fromWire(String wire, BindingContext context) { return new Note(wire); }
+								}"""
+				)
+		);
+	}
+
+	@Test
+	void aCompositesInlineMemberAndRefBindOverTheirFaces() {
+		assertErrors(
+				inMessage(
+						"@SbeField(id = 1, type = Quote.class) Quote quote", SIDE, CENTS_BINDING,
+						"""
+								@SbeComposite record Quote(
+								@SbeType(primitiveType = INT32, binding = CentsBinding.class) BigDecimal bid,
+								@SbeRef(value = Side.class, binding = CentsBinding.class) BigDecimal side
+								) {}"""
+				),
+				error(
+						"BigDecimal bid",
+						"CentsBinding binds the wire as long, but the face of bid is int; implement TypeBinding.OfInt"
+				),
+				error(
+						"BigDecimal side",
+						"CentsBinding binds the wire as long, but the face of Side is Side; implement TypeBinding over Side"
+				)
+		);
+		assertClean(
+				inMessage(
+						"@SbeField(id = 1, type = Quote.class) Quote quote", CENTS_BINDING,
+						"""
+								@SbeComposite record Quote(
+								@SbeType(primitiveType = INT64, binding = CentsBinding.class) BigDecimal bid,
+								@SbeRef(value = Cents.class, binding = CentsBinding.class) BigDecimal ask
+								) {}
+								@SbeType(primitiveType = INT64) final class Cents {}"""
+				)
+		);
+	}
+
+	@Test
+	void aDeclarationOrAnUnmappedMemberTakesNoBinding() {
+		assertErrors(
+				inMessage(
+						"@SbeField(id = 1, type = Cents.class) long price,\n@SbeField(id = 2, type = Quote.class) Quote quote",
+						CENTS_BINDING,
+						"@SbeType(primitiveType = INT64, binding = CentsBinding.class) final class Cents {}",
+						"""
+								@SbeComposite(layout = {"bid", "ask"}, unmapped = @SbeType(name = "ask", primitiveType = INT64, binding = CentsBinding.class)) record Quote(@SbeType(primitiveType = INT64) long bid) {}"""
+				),
+				error(
+						"final class Cents {}",
+						"@SbeType on a class declares a type; a binding goes on a component that uses it"
+				),
+				error("record Quote(", "an unmapped member has no component to bind")
+		);
+	}
+
+	@Test
+	void timeUnitIsDeprecatedAsSbeXsdDeprecatesIt() {
+		// javac reports a deprecated member's use when it compiles, not under
+		// -proc:only; the member still works.
+		String source = inMessage("@SbeField(id = 1, primitiveType = UINT64, timeUnit = \"nanosecond\") long sentAt");
+		Javac.Result result = Javac.compile(
+				List.of(
+						Javac.unit("mistakes/package-info.java", schema(0, 0)),
+						Javac.unit("mistakes/Order.java", source)
+				),
+				new SbeProcessor(), List.of("-Xlint:deprecation")
+		);
+
+		assertThat(result.errors()).isEmpty();
+		// Deprecation is one of javac's mandatory warnings, a kind of its own.
+		List<Diagnostic<? extends JavaFileObject>> deprecations = result.diagnostics().stream()
+				.filter(diagnostic -> diagnostic.getKind() == Diagnostic.Kind.MANDATORY_WARNING)
+				.toList();
+		// Once for each place javac copies the component's annotation to.
+		assertThat(located(source, deprecations)).isNotEmpty().containsOnly(
+				located(source, error("long sentAt", "timeUnit() in net.concini.sbebuddy.SbeField has been deprecated"))
+		);
+		assertThat(schemaXml(result)).contains("timeUnit=\"nanosecond\"");
 	}
 
 	// ---- composites
@@ -440,8 +586,8 @@ final class AnnotationMistakesTest {
 						DECIMAL,
 						"""
 								final class DecimalBinding implements TypeBinding<BigDecimal, Decimal> {
-									public Decimal toWire(BigDecimal value) { return new Decimal(value.unscaledValue().longValueExact()); }
-									public BigDecimal fromWire(Decimal wire) { return BigDecimal.valueOf(wire.mantissa()); }
+									public Decimal toWire(BigDecimal value, BindingContext context) { return new Decimal(value.unscaledValue().longValueExact()); }
+									public BigDecimal fromWire(Decimal wire, BindingContext context) { return BigDecimal.valueOf(wire.mantissa()); }
 								}"""
 				)
 		);
@@ -791,11 +937,14 @@ final class AnnotationMistakesTest {
 		assertErrors(
 				WITH_CODECS,
 				HEADER + """
-						@SbeType(primitiveType = CHAR, length = 8, characterEncoding = "UTF-8") final class Name {}
+						@SbeType(primitiveType = CHAR, length = 8, characterEncoding = "x-klingon") final class Name {}
 						@SbeUnion sealed interface Orders permits Order {}
 						@SbeMessage(id = 1) record Order(@SbeField(id = 1, type = Name.class) String name) implements Orders {}
 						""",
-				error("@SbeMessage(id = 1)", "no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"),
+				error(
+						"@SbeMessage(id = 1)",
+						"no codec for text in x-klingon: the JDK knows no such encoding; set codecs = false on @SbeSchema"
+				),
 				error("@SbeUnion sealed interface Orders", "no codec for Orders: its message Order has none")
 		);
 	}
@@ -816,8 +965,8 @@ final class AnnotationMistakesTest {
 
 	private static final String CENTS_BINDING = """
 			final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
-				public long toWire(BigDecimal value) { return value.movePointRight(2).longValueExact(); }
-				public BigDecimal fromWire(long wire) { return BigDecimal.valueOf(wire, 2); }
+				public long toWire(BigDecimal value, BindingContext context) { return value.movePointRight(2).longValueExact(); }
+				public BigDecimal fromWire(long wire, BindingContext context) { return BigDecimal.valueOf(wire, 2); }
 			}""";
 
 	// ---- the snippet around the mistake

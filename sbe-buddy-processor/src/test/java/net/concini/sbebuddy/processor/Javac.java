@@ -48,6 +48,14 @@ public final class Javac {
 	}
 
 	public static Result compile(List<JavaFileObject> units, Processor processor) {
+		return compile(units, processor, List.of("-proc:only"));
+	}
+
+	/**
+	 * With options of the test's own in place of {@code -proc:only}, for what javac
+	 * reports only when it compiles, such as a deprecated member's use.
+	 */
+	public static Result compile(List<JavaFileObject> units, Processor processor, List<String> compilerOptions) {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
 		Map<String, String> outputs = new LinkedHashMap<>();
@@ -55,7 +63,8 @@ public final class Javac {
 				StandardJavaFileManager standard = compiler
 						.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8);
 				InMemoryOutput files = new InMemoryOutput(standard, outputs)) {
-			List<String> options = List.of("-proc:only", "-classpath", System.getProperty("java.class.path"));
+			List<String> options = new ArrayList<>(compilerOptions);
+			options.addAll(List.of("-classpath", System.getProperty("java.class.path")));
 			JavaCompiler.CompilationTask task = compiler.getTask(null, files, diagnostics, options, null, units);
 			task.setProcessors(List.of(processor));
 			task.call();

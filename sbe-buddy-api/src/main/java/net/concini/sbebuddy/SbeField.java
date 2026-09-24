@@ -30,10 +30,21 @@ public @interface SbeField {
 
 	int offset() default 0;
 
-	/** SBE's default, {@code unix}, applies when this is left empty. */
+	/**
+	 * Free text, left out of the schema when empty; sbe-buddy interprets none, and
+	 * a binding reads it from its {@link BindingContext}.
+	 */
 	String epoch() default "";
 
-	/** SBE's default, {@code nanosecond}, applies when this is left empty. */
+	/**
+	 * Free text, left out of the schema when empty; sbe-buddy interprets none, and
+	 * a binding reads it from its {@link BindingContext}.
+	 *
+	 * @deprecated {@code sbe.xsd} deprecates it on {@code field}, kept for schemas
+	 *             written against release candidate 2; a unit belongs to the type,
+	 *             for instance as a member of a composite.
+	 */
+	@Deprecated
 	String timeUnit() default "";
 
 	String semanticType() default "";

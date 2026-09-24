@@ -206,7 +206,7 @@ final class QuotesTest {
 	}
 
 	@Test
-	void aPriceWithMoreDecimalsThanTheExponentAllowsIsTheBindingsOwnException() {
+	void aPriceWithMoreDecimalsThanTheExponentAllowsIsRefusedByTheBindingNamingTheField() {
 		QuoteCodec codec = new QuoteCodec();
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
 		Quote quote = new Quote(
@@ -214,7 +214,9 @@ final class QuotesTest {
 				Set.of(), "ACME", EXPONENT, DEPTH, TRADE, List.of(), REMARK
 		);
 
-		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET)).isInstanceOf(ArithmeticException.class);
+		assertThatThrownBy(() -> codec.encode(quote, buffer, OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("bid has no wire form with 4 decimals: 1.00505");
 	}
 
 	@Test

@@ -20,12 +20,14 @@ record CodecModel(
 		String message,
 		int baseline,
 		List<Binding> bindings,
+		List<Context> contexts,
 		Body body,
 		List<Helper> helpers
 ) {
 
 	CodecModel {
 		bindings = List.copyOf(bindings);
+		contexts = List.copyOf(contexts);
 		helpers = List.copyOf(helpers);
 	}
 
@@ -49,6 +51,21 @@ record CodecModel(
 	}
 
 	/**
+	 * The {@code BindingContext} of one bound component, a constant of the codec
+	 * named {@code name}; the rest are its arguments as Java expressions, the text
+	 * quoted, {@code null} where absent.
+	 */
+	record Context(
+			String name,
+			String component,
+			String primitiveType,
+			String characterEncoding,
+			String epoch,
+			String timeUnit
+	) {
+	}
+
+	/**
 	 * A message's, a composite's or a group entry's members over its flyweights: in
 	 * the order the wire takes them, and in the order the record's constructor
 	 * takes its components, which leaves out what no component carries.
@@ -65,11 +82,17 @@ record CodecModel(
 
 		/**
 		 * A record component on a field or a composite member; {@code binding} is the
-		 * codec's field for the binding in front of it, or null.
+		 * codec's field for the binding in front of it and {@code context} the constant
+		 * it is handed, both or neither null.
 		 */
-		record Field(String component, String property, Shape shape, Absence absence, @Nullable String binding)
-				implements
-					Member {
+		record Field(
+				String component,
+				String property,
+				Shape shape,
+				Absence absence,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Member {
 		}
 
 		/**
@@ -82,7 +105,8 @@ record CodecModel(
 		/**
 		 * A repeating group read into a local of its component's name before the
 		 * constructor; {@code addedSince} is the flyweight's since-version method when
-		 * the group was appended above the baseline, or null.
+		 * the group was appended above the baseline, or null; {@code binding} and
+		 * {@code context} as on a field, the binding over the list.
 		 */
 		record Group(
 				String component,
@@ -90,23 +114,35 @@ record CodecModel(
 				String path,
 				String record,
 				Body entry,
-				@Nullable String addedSince
+				@Nullable String addedSince,
+				@Nullable String binding,
+				@Nullable String context
 		) implements Member {
 		}
 
 		/**
 		 * Var-data, read into a local of its component's name before the constructor;
-		 * {@code addedSince} is the flyweight's since-version method when the data was
-		 * appended above the baseline, or null.
+		 * {@code charset} is the codec's constant for text in another encoding, or
+		 * null; {@code addedSince} is the flyweight's since-version method when the
+		 * data was appended above the baseline, or null; {@code binding} and
+		 * {@code context} as on a field.
 		 */
-		record Data(String component, String property, String path, Content content, @Nullable String addedSince)
-				implements
-					Member {
+		record Data(
+				String component,
+				String property,
+				String path,
+				Content content,
+				@Nullable String charset,
+				@Nullable String addedSince,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Member {
 		}
 	}
 
 	/**
-	 * What var-data holds: the bytes as they are, or text in one of two encodings.
+	 * What var-data holds: the bytes as they are, text in ASCII or UTF-8, counted
+	 * without encoding, or text in any other encoding, encoded to be counted.
 	 */
 	enum Content {
 
@@ -114,7 +150,9 @@ record CodecModel(
 
 		ASCII,
 
-		UTF_8
+		UTF_8,
+
+		ENCODED
 	}
 
 	/** What the flyweight call looks like. */
@@ -128,10 +166,12 @@ record CodecModel(
 		}
 
 		/**
-		 * A char string through the flyweight's String form, checked by {@code ascii}
-		 * first.
+		 * A char string: in ASCII, {@code charset} null, through the flyweight's String
+		 * form, checked by {@code ascii} first; in another encoding through the codec's
+		 * {@code charset} constant, encoded and padded, and written as bytes named
+		 * after {@code bulk}. Either is read through the flyweight's String form.
 		 */
-		record Text() implements Shape {
+		record Text(@Nullable String charset, String bulk) implements Shape {
 		}
 
 		/**
@@ -258,8 +298,11 @@ record CodecModel(
 		record CompositePair(String compositeClass, String record, Body body) implements Helper {
 		}
 
-		/** A group's write, read and length methods, over its entry's body. */
-		record GroupMethods(Member.Group group) implements Helper {
+		/**
+		 * A group's write, read and length methods, over its entry's body;
+		 * {@code parent} is the encoder of the body the group is in, which sizes it.
+		 */
+		record GroupMethods(Member.Group group, String parent) implements Helper {
 		}
 
 		/**
@@ -275,6 +318,17 @@ record CodecModel(
 
 		/** The UTF-8 count before text reaches its flyweight. */
 		record Utf8() implements Helper {
+		}
+
+		/**
+		 * Text in an encoding other than ASCII and UTF-8, through a reporting
+		 * {@code CharsetEncoder}, and padded to a char array's length.
+		 */
+		record Encoded() implements Helper {
+		}
+
+		/** The codec's constant for one encoding, by the name the schema gives it. */
+		record CharsetConstant(String constant, String name) implements Helper {
 		}
 
 		/** The length check before bytes reach their flyweight. */

@@ -195,15 +195,16 @@ final class PlacementTest {
 
 				import net.concini.sbebuddy.SbeField;
 				import net.concini.sbebuddy.SbeMessage;
+				import net.concini.sbebuddy.BindingContext;
 				import net.concini.sbebuddy.TypeBinding;
 
 				final class CentsBinding implements TypeBinding.OfLong<BigDecimal> {
 
-					public long toWire(BigDecimal value) {
+					public long toWire(BigDecimal value, BindingContext context) {
 						return value.movePointRight(2).longValueExact();
 					}
 
-					public BigDecimal fromWire(long wire) {
+					public BigDecimal fromWire(long wire, BindingContext context) {
 						return BigDecimal.valueOf(wire, 2);
 					}
 				}
@@ -232,15 +233,16 @@ final class PlacementTest {
 				import net.concini.sbebuddy.SbeField;
 				import net.concini.sbebuddy.SbeMessage;
 				import net.concini.sbebuddy.SbeType;
+				import net.concini.sbebuddy.BindingContext;
 				import net.concini.sbebuddy.TypeBinding;
 
 				@SbeType(primitiveType = INT64) final class Cents implements TypeBinding<BigDecimal, Long> {
 
-					public Long toWire(BigDecimal value) {
+					public Long toWire(BigDecimal value, BindingContext context) {
 						return value.movePointRight(2).longValueExact();
 					}
 
-					public BigDecimal fromWire(Long wire) {
+					public BigDecimal fromWire(Long wire, BindingContext context) {
 						return BigDecimal.valueOf(wire, 2);
 					}
 				}
@@ -377,7 +379,7 @@ final class PlacementTest {
 				) {
 				}
 
-				@SbeType(primitiveType = CHAR, length = 8, characterEncoding = "UTF-8")
+				@SbeType(primitiveType = CHAR, length = 8, characterEncoding = "x-klingon")
 				final class Name {
 				}
 				""";
@@ -386,7 +388,7 @@ final class PlacementTest {
 
 		assertOnlyError(
 				result, source, "@SbeMessage(id = 1)",
-				"no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"
+				"no codec for text in x-klingon: the JDK knows no such encoding; set codecs = false on @SbeSchema"
 		);
 	}
 

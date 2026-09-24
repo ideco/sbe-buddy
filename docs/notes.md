@@ -336,6 +336,29 @@ alternatives considered.
   `valueRef` resolves to an enum valid value, but nothing downstream uses
   them for a data field. (`Message.java` and `Field.java`, read 2026-09-20,
   and the corpus.)
+* `sbe.xsd` types `epoch` and `timeUnit` on `field` as free `xs:string`s,
+  defaults `unix` and `nanosecond`, and annotates `timeUnit` "Deprecated -
+  only for back compatibility with RC2". The parser reads both with
+  `getAttributeValueOrNull`, so an absent one is null in the IR, never the
+  XSD's default; nothing validates either value; `IrGenerator` copies them
+  into the field's encoding, and `JavaGenerator` exposes them only as
+  `MetaAttribute` strings. The SBE 1.0 standard's field attributes list
+  neither. (`fpl/sbe.xsd`, `Message.java`, `IrGenerator.java`,
+  `JavaGenerator.java`, read 2026-09-24; the standard's `04MessageSchema.md`.)
+* A name that is a Java keyword, a valid value called `false` or `true`
+  among them, makes `JavaUtil.formatForJavaKeyword` throw unless the system
+  property `sbe.keyword.append.token` is set, so such a schema generates no
+  Java flyweights as sbe-buddy runs sbe-tool. (`JavaUtil.java`, read
+  2026-09-24.)
+* A `char` array's `String` getter reads up to the first zero byte and
+  decodes in the type's encoding, so an encoding that writes a zero byte
+  inside a character, UTF-16 or UTF-32, does not come back from a char
+  array. Its `String` setter, outside ASCII, and var-data's, in any
+  encoding, go through `String.getBytes`, which writes a character the
+  encoding cannot hold as `?`. For any encoding sbe-tool also generates
+  `put<Name>(byte[], int)` on a char array and `put<Name>(byte[], int, int)`
+  on var-data. (`JavaGenerator.java`, read 2026-09-24, and the generated
+  flyweights.)
 * The Java face of each primitive, `JavaUtil.javaTypeName`: `char` and
   `int8` are `byte`, `int16` is `short`, `int32` is `int`, `int64` is
   `long`, `uint8` is `short`, `uint16` is `int`, `uint32` and `uint64` are
@@ -385,6 +408,10 @@ alternatives considered.
 
 ## javac
 
+* The use of a deprecated annotation member is a
+  `Diagnostic.Kind.MANDATORY_WARNING`, reported only when javac compiles,
+  not under `-proc:only`, and once for each place javac copies a record
+  component's annotation to. (The processor's snippet test, JDK 21.)
 * No annotation processor runs after an error: a negative compile test sees
   only the diagnostics of the round that failed. (Spike, 2026-09.)
 * `Filer.createSourceFile` throws `FilerException` for a name already

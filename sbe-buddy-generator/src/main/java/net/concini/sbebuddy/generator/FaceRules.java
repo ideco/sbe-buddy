@@ -14,10 +14,11 @@ import net.concini.sbebuddy.PrimitiveType;
  * The rules between a component's Java type and what the wire hands it, its
  * face: the flyweight's accessor type for a primitive or a type with a length,
  * the enum for an enum, a {@code Set} of the enum for a set, the record for a
- * composite. A component must be its face or bind to it; one that can be absent
- * must hold null, and a face with no null value cannot be optional; a constant
- * needs a value. Applied to a message's or group's fields and var-data, a
- * composite's inline types and its refs, each problem on the node.
+ * composite. A component must be its face or bind to it, whatever its kind; one
+ * that can be absent must hold null, and a face with no null value cannot be
+ * optional; a constant needs a value. Applied to a message's or group's fields
+ * and var-data, a composite's inline types and its refs, each problem on the
+ * node.
  */
 final class FaceRules {
 
@@ -89,7 +90,10 @@ final class FaceRules {
 			return;
 		}
 		Face face = typeFace(member, wireName(member.name(), member.javaName()));
-		if (!fits(javaType, face)) {
+		Annotated.Binding binding = member.binding();
+		if (binding != null) {
+			binding(member, binding, face);
+		} else if (!fits(javaType, face)) {
 			problem(member, notTheFace(javaType, face));
 		}
 		boolean optional = member.presence() == Presence.OPTIONAL;
@@ -109,7 +113,10 @@ final class FaceRules {
 			return;
 		}
 		Face face = declarationFace(target, declarationName(target));
-		if (!fits(ref.javaType(), face)) {
+		Annotated.Binding binding = ref.binding();
+		if (binding != null) {
+			binding(ref, binding, face);
+		} else if (!fits(ref.javaType(), face)) {
 			problem(ref, notTheFace(ref.javaType(), face));
 		}
 	}
@@ -123,10 +130,13 @@ final class FaceRules {
 		if (varData == null || varData.primitiveType() == PrimitiveType.NONE) {
 			return; // sbe-tool reports an encoding without one
 		}
-		String face = varData.primitiveType() == PrimitiveType.CHAR ? "String" : "byte[]";
-		String named = wireName(data.type().name(), data.type().javaName());
-		if (!javaTypeName(data.javaType()).equals(face)) {
-			problem(data, notTheFace(data.javaType(), new Face(Kind.LENGTH, face, named, null)));
+		String javaType = varData.primitiveType() == PrimitiveType.CHAR ? "String" : "byte[]";
+		Face face = new Face(Kind.LENGTH, javaType, wireName(data.type().name(), data.type().javaName()), null);
+		Annotated.Binding binding = data.binding();
+		if (binding != null) {
+			binding(data, binding, face);
+		} else if (!fits(data.javaType(), face)) {
+			problem(data, notTheFace(data.javaType(), face));
 		}
 	}
 
@@ -224,34 +234,22 @@ final class FaceRules {
 
 	/**
 	 * A binding stands for the component: it must hand the flyweight the face, a
-	 * primitive face through its specialization so nothing is boxed on the way; an
-	 * enum or a set takes none.
+	 * primitive face through its specialization so nothing is boxed on the way.
 	 */
-	private void binding(Annotated.Field field, Annotated.Binding binding, Face face) {
-		String boundTo = binding.qualifiedName().substring(binding.qualifiedName().lastIndexOf('.') + 1)
-				+ " binds the wire as " + boundName(binding.wire()) + ", but the face of " + face.named() + " is "
-				+ face.javaType() + "; implement ";
-		switch (face.kind()) {
-			case PRIMITIVE -> {
-				if (!boundName(binding.wire()).equals(face.javaType())) {
-					String specialization = face.javaType().equals("int") ? "Int" : box(face.javaType());
-					problem(field, boundTo + "TypeBinding.Of" + specialization);
-				}
-			}
-			case LENGTH -> {
-				if (!boundName(binding.wire()).equals(face.javaType())) {
-					problem(field, boundTo + "TypeBinding over " + face.javaType());
-				}
-			}
-			case COMPOSITE -> {
-				if (!(binding.wire() instanceof Annotated.Declared declared
-						&& declared.declaration() == face.declaration())) {
-					problem(field, boundTo + "TypeBinding over " + face.javaType());
-				}
-			}
-			case ENUM -> problem(field, face.named() + " is an enum; a field of it takes no binding");
-			case SET -> problem(field, face.named() + " is a set; a field of it takes no binding");
+	private void binding(Object node, Annotated.Binding binding, Face face) {
+		if (face.kind() == Kind.PRIMITIVE
+				? boundName(binding.wire()).equals(face.javaType())
+				: fits(binding.wire(), face)) {
+			return;
 		}
+		String implement = face.kind() == Kind.PRIMITIVE
+				? "TypeBinding.Of" + (face.javaType().equals("int") ? "Int" : box(face.javaType()))
+				: "TypeBinding over " + face.javaType();
+		problem(
+				node,
+				simpleName(binding.qualifiedName()) + " binds the wire as " + boundName(binding.wire())
+						+ ", but the face of " + face.named() + " is " + face.javaType() + "; implement " + implement
+		);
 	}
 
 	// ---- absence
@@ -278,9 +276,6 @@ final class FaceRules {
 		}
 		String plain = primitive.kind().name().toLowerCase(Locale.ROOT);
 		String box = box(plain);
-		if (box.equals(plain)) {
-			return; // char and boolean map to no SBE type; reported already
-		}
 		if (canBeAbsent && !primitive.boxed()) {
 			problem(node, plain + " cannot hold null, but the " + what + " can be absent; use " + box);
 		}
@@ -352,8 +347,14 @@ final class FaceRules {
 			case "long" -> "Long";
 			case "float" -> "Float";
 			case "double" -> "Double";
+			case "char" -> "Character";
+			case "boolean" -> "Boolean";
 			default -> primitive;
 		};
+	}
+
+	private static String simpleName(String qualifiedName) {
+		return qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1);
 	}
 
 	private static String declarationName(Annotated.Declaration declaration) {

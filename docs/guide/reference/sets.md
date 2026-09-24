@@ -119,3 +119,7 @@ SBE generates a decoder and an encoder for the set itself in the schema’s `.sb
 The record codec writes through that pair, clearing it and setting one bit per choice, and reads back into an `EnumSet`. It accepts any `Set` implementation when encoding.
 
 A choice’s methods are named from its wire name with the first character lowercased, so a choice left at a constant name like `ALL_OR_NONE` becomes `aLL_OR_NONE()`. The wire names given above keep them readable as `allOrNone()`.
+
+## Bindings
+
+A field of a set may hold another type through a [binding](bindings.md) over its `Set<E>`, a record of flags or a bitmask. A bit no choice names is refused before the binding is called.
