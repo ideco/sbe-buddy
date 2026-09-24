@@ -3,16 +3,13 @@ package com.example.trading;
 import net.concini.sbebuddy.SbeEnum;
 import net.concini.sbebuddy.SbeEnumValue;
 
-/** Which side of the market an order takes. */
+/** What names the instrument. */
 @SbeEnum(encodingType = CharEnum.class)
-public enum Side {
+public enum SecurityIdSource {
 
-	@SbeEnumValue("1")
-	BUY,
+	@SbeEnumValue("4")
+	ISIN,
 
-	@SbeEnumValue("2")
-	SELL,
-
-	@SbeEnumValue("5")
-	SELL_SHORT
+	@SbeEnumValue("8")
+	EXCHANGE_SYMBOL
 }

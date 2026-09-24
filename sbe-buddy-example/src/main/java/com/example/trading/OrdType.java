@@ -3,16 +3,19 @@ package com.example.trading;
 import net.concini.sbebuddy.SbeEnum;
 import net.concini.sbebuddy.SbeEnumValue;
 
-/** Which side of the market an order takes. */
+/** How an order is priced. */
 @SbeEnum(encodingType = CharEnum.class)
-public enum Side {
+public enum OrdType {
 
 	@SbeEnumValue("1")
-	BUY,
+	MARKET,
 
 	@SbeEnumValue("2")
-	SELL,
+	LIMIT,
 
-	@SbeEnumValue("5")
-	SELL_SHORT
+	@SbeEnumValue("3")
+	STOP,
+
+	@SbeEnumValue("4")
+	STOP_LIMIT
 }

@@ -40,9 +40,10 @@
 
   <build>
     <plugins>
-      <!-- sbe-tool's own flyweights from the quotes oracle and its frozen
-           versions, test code only: the tests encode with our codec and decode
-           with these, and the reverse, across versions. -->
+      <!-- sbe-tool's own flyweights from the trading oracle, and from the
+           quotes oracle and its frozen versions, test code only: the tests
+           encode with our codecs and decode with these, and the reverse,
+           across versions. -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
@@ -73,6 +74,24 @@
           </systemProperties>
         </configuration>
         <executions>
+          <execution>
+            <id>trading-reference</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <systemProperties combine.children="append">
+                <systemProperty>
+                  <key>sbe.target.namespace</key>
+                  <value>com.example.trading.xmlref</value>
+                </systemProperty>
+              </systemProperties>
+              <arguments>
+                <argument>${project.basedir}/src/main/sbe/trading.xml</argument>
+              </arguments>
+            </configuration>
+          </execution>
           <execution>
             <id>quotes-reference</id>
             <phase>generate-test-sources</phase>

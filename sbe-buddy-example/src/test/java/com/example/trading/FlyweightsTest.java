@@ -5,46 +5,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
-import com.example.trading.sbe.MessageHeaderDecoder;
-import com.example.trading.sbe.MessageHeaderEncoder;
-import com.example.trading.sbe.NewOrderDecoder;
-import com.example.trading.sbe.NewOrderEncoder;
+import com.example.trading.sbe.CancelOrderDecoder;
+import com.example.trading.sbe.CancelOrderEncoder;
+import com.example.trading.sbe.SessionHeaderDecoder;
+import com.example.trading.sbe.SessionHeaderEncoder;
 
 /**
  * The product seen working once: the flyweights the processor generated into
- * the {@code sbe} package encode an order and read it back. What they encode is
+ * the {@code sbe} package encode a cancel and read it back. What they encode is
  * sbe-tool's business; that they exist, compile and run is ours.
  */
 final class FlyweightsTest {
 
 	@Test
-	void anOrderRoundTripsThroughTheGeneratedFlyweights() {
-		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
-		NewOrderEncoder encoder = new NewOrderEncoder();
-		encoder.wrapAndApplyHeader(buffer, 0, new MessageHeaderEncoder())
-				.orderId(42)
+	void aCancelRoundTripsThroughTheGeneratedFlyweights() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		new CancelOrderEncoder().wrapAndApplyHeader(buffer, 0, new SessionHeaderEncoder())
+				.origClOrdId(Samples.REPLACEMENT)
+				.clOrdId(Samples.CANCEL)
 				.symbol("ACME")
-				.quantity(7);
-		// The enum's simple name is also this package's record, so it is reached
-		// through the decoder rather than imported.
-		encoder.side(com.example.trading.sbe.Side.BUY);
-		encoder.price().mantissa(12345).exponent((byte) -2);
-		encoder.legsCount(1).next().instrumentId(9).ratio(1);
-		encoder.note("hi");
+				.side(com.example.trading.sbe.Side.BUY) // the flyweight's enum, beside this package's own
+				.transactTime(1_000L);
 
-		NewOrderDecoder decoder = new NewOrderDecoder();
-		decoder.wrapAndApplyHeader(buffer, 0, new MessageHeaderDecoder());
+		CancelOrderDecoder decoder = new CancelOrderDecoder().wrapAndApplyHeader(buffer, 0, new SessionHeaderDecoder());
 
-		assertThat(decoder.orderId()).isEqualTo(42);
+		assertThat(decoder.clOrdId()).isEqualTo(Samples.CANCEL);
 		assertThat(decoder.symbol()).isEqualTo("ACME");
-		assertThat(decoder.side().name()).isEqualTo("BUY");
-		assertThat(decoder.price().mantissa()).isEqualTo(12345);
-		assertThat(decoder.price().exponent()).isEqualTo((byte) -2);
-		assertThat(decoder.quantity()).isEqualTo(7);
-		NewOrderDecoder.LegsDecoder legs = decoder.legs();
-		assertThat(legs.count()).isEqualTo(1);
-		assertThat(legs.next().instrumentId()).isEqualTo(9);
-		assertThat(decoder.note()).isEqualTo("hi");
-		assertThat(encoder.encodedLength()).isEqualTo(decoder.encodedLength());
+		assertThat(decoder.side()).isEqualTo(com.example.trading.sbe.Side.BUY);
+		assertThat(decoder.transactTime()).isEqualTo(1_000L);
 	}
 }
