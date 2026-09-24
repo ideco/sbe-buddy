@@ -20,12 +20,14 @@ record CodecModel(
 		String message,
 		int baseline,
 		List<Binding> bindings,
+		List<Context> contexts,
 		Body body,
 		List<Helper> helpers
 ) {
 
 	CodecModel {
 		bindings = List.copyOf(bindings);
+		contexts = List.copyOf(contexts);
 		helpers = List.copyOf(helpers);
 	}
 
@@ -49,6 +51,21 @@ record CodecModel(
 	}
 
 	/**
+	 * The {@code BindingContext} of one bound component, a constant of the codec
+	 * named {@code name}; the rest are its arguments as Java expressions, the text
+	 * quoted, {@code null} where absent.
+	 */
+	record Context(
+			String name,
+			String component,
+			String primitiveType,
+			String characterEncoding,
+			String epoch,
+			String timeUnit
+	) {
+	}
+
+	/**
 	 * A message's, a composite's or a group entry's members over its flyweights: in
 	 * the order the wire takes them, and in the order the record's constructor
 	 * takes its components, which leaves out what no component carries.
@@ -65,11 +82,17 @@ record CodecModel(
 
 		/**
 		 * A record component on a field or a composite member; {@code binding} is the
-		 * codec's field for the binding in front of it, or null.
+		 * codec's field for the binding in front of it and {@code context} the constant
+		 * it is handed, both or neither null.
 		 */
-		record Field(String component, String property, Shape shape, Absence absence, @Nullable String binding)
-				implements
-					Member {
+		record Field(
+				String component,
+				String property,
+				Shape shape,
+				Absence absence,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Member {
 		}
 
 		/**
@@ -82,7 +105,8 @@ record CodecModel(
 		/**
 		 * A repeating group read into a local of its component's name before the
 		 * constructor; {@code addedSince} is the flyweight's since-version method when
-		 * the group was appended above the baseline, or null.
+		 * the group was appended above the baseline, or null; {@code binding} and
+		 * {@code context} as on a field, the binding over the list.
 		 */
 		record Group(
 				String component,
@@ -90,18 +114,27 @@ record CodecModel(
 				String path,
 				String record,
 				Body entry,
-				@Nullable String addedSince
+				@Nullable String addedSince,
+				@Nullable String binding,
+				@Nullable String context
 		) implements Member {
 		}
 
 		/**
 		 * Var-data, read into a local of its component's name before the constructor;
 		 * {@code addedSince} is the flyweight's since-version method when the data was
-		 * appended above the baseline, or null.
+		 * appended above the baseline, or null; {@code binding} and {@code context} as
+		 * on a field.
 		 */
-		record Data(String component, String property, String path, Content content, @Nullable String addedSince)
-				implements
-					Member {
+		record Data(
+				String component,
+				String property,
+				String path,
+				Content content,
+				@Nullable String addedSince,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Member {
 		}
 	}
 
@@ -258,8 +291,11 @@ record CodecModel(
 		record CompositePair(String compositeClass, String record, Body body) implements Helper {
 		}
 
-		/** A group's write, read and length methods, over its entry's body. */
-		record GroupMethods(Member.Group group) implements Helper {
+		/**
+		 * A group's write, read and length methods, over its entry's body;
+		 * {@code parent} is the encoder of the body the group is in, which sizes it.
+		 */
+		record GroupMethods(Member.Group group, String parent) implements Helper {
 		}
 
 		/**

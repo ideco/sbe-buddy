@@ -105,7 +105,8 @@ public record Annotated(
 
 	/**
 	 * {@code @SbeType}; {@code javaType} is the component's when the type is a
-	 * composite's member, and null for a declaration on a class.
+	 * composite's member, and null for a declaration on a class, which has no
+	 * {@code binding} either.
 	 */
 	public record Type(
 			String javaName,
@@ -124,7 +125,8 @@ public record Annotated(
 			String semanticType,
 			String description,
 			int sinceVersion,
-			int deprecated
+			int deprecated,
+			@Nullable Binding binding
 	) implements Declaration, Member {
 	}
 
@@ -164,7 +166,8 @@ public record Annotated(
 			String name,
 			int offset,
 			int sinceVersion,
-			int deprecated
+			int deprecated,
+			@Nullable Binding binding
 	) implements Member {
 	}
 
@@ -301,16 +304,17 @@ public record Annotated(
 	}
 
 	/**
-	 * A field's {@code binding}: the class code names, and its {@code W}, the Java
-	 * type it hands the flyweight, which the face rule compares. Its {@code J} is
-	 * the component's type, which only javac can check.
+	 * A component's {@code binding}: the class code names, and its {@code W}, the
+	 * Java type it hands the flyweight, which the face rule compares. Its {@code J}
+	 * is the component's type, which only javac can check.
 	 */
 	public record Binding(String qualifiedName, JavaType wire) {
 	}
 
 	/**
-	 * {@code @SbeGroup}, with the components of the list's record; {@code unmapped}
-	 * and {@code layout} as on a message.
+	 * {@code @SbeGroup}, with the components of the list's record, the component's
+	 * own or, with a {@code binding}, the one it binds; {@code unmapped} and
+	 * {@code layout} as on a message.
 	 */
 	public record Group(
 			String javaName,
@@ -325,7 +329,8 @@ public record Annotated(
 			String semanticType,
 			String description,
 			int sinceVersion,
-			int deprecated
+			int deprecated,
+			@Nullable Binding binding
 	) implements Component {
 
 		public Group {
@@ -346,7 +351,8 @@ public record Annotated(
 			String semanticType,
 			String description,
 			int sinceVersion,
-			int deprecated
+			int deprecated,
+			@Nullable Binding binding
 	) implements Component {
 	}
 }

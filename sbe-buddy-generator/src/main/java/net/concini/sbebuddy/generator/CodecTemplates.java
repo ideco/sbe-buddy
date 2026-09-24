@@ -18,6 +18,7 @@ final class CodecTemplates {
 					@javax.annotation.processing.Generated("net.concini.sbebuddy")
 					public final class {codec} implements net.concini.sbebuddy.Codec<{record}, {headerRecord}> {
 
+						{contexts}
 						private final {flyweights}.{headerClass}Encoder headerEncoder = new {flyweights}.{headerClass}Encoder();
 						private final {flyweights}.{headerClass}Decoder headerDecoder = new {flyweights}.{headerClass}Decoder();
 						private final {flyweights}.{message}Encoder encoder = new {flyweights}.{message}Encoder();
@@ -275,7 +276,7 @@ final class CodecTemplates {
 	static final Template WRITE_HEADER_CALL = Template.of("writeHeader(header, headerEncoder);");
 
 	static final Template READ_HEADER = Template.of("""
-			private static {record} readHeader({decoder} decoder) {
+			private {record} readHeader({decoder} decoder) {
 				return new {record}(
 						{members}
 				);
@@ -286,7 +287,7 @@ final class CodecTemplates {
 	 * member as it is.
 	 */
 	static final Template WRITE_HEADER = Template.of("""
-			private static void writeHeader({record} value, {encoder} encoder) {
+			private void writeHeader({record} value, {encoder} encoder) {
 				{members}
 			}""");
 
@@ -314,11 +315,10 @@ final class CodecTemplates {
 
 	// ---- a field of an enum
 
-	static final Template ENCODE_ENUM_FIELD = Template
-			.of("encoder.{property}(encode{enumClass}(value.{component}()));");
+	static final Template ENCODE_ENUM_FIELD = Template.of("encoder.{property}(encode{enumClass}({source}));");
 
 	static final Template ENCODE_OPTIONAL_ENUM_FIELD = Template.of(
-			"encoder.{property}(value.{component}() == null ? {flyweights}.{enumClass}.NULL_VAL : encode{enumClass}(value.{component}()));"
+			"encoder.{property}(value.{component}() == null ? {flyweights}.{enumClass}.NULL_VAL : encode{enumClass}({source}));"
 	);
 
 	static final Template DECODE_ENUM_FIELD = Template.of("decode{enumClass}(decoder.{property}Raw())");
@@ -329,8 +329,7 @@ final class CodecTemplates {
 
 	// ---- a field of a set
 
-	static final Template ENCODE_SET_FIELD = Template
-			.of("encode{setClass}(value.{component}(), encoder.{property}());");
+	static final Template ENCODE_SET_FIELD = Template.of("encode{setClass}({source}, encoder.{property}());");
 
 	static final Template DECODE_SET_FIELD = Template.of("decode{setClass}(decoder.{property}())");
 
@@ -432,20 +431,43 @@ final class CodecTemplates {
 			}""");
 
 	static final Template CHECK_CONSTANT_ENUM_FIELD = Template.of("""
-			if (value.{component}() != {javaEnum}.{constant}) {
+			if ({source} != {javaEnum}.{constant}) {
 				throw new IllegalArgumentException("{component} is the constant {constant}");
 			}""");
 
-	// ---- a binding: the component mapped before the flyweight and after it
+	// ---- a binding: the component mapped before the flyweight and after it,
+	// handed the component's context
 
 	static final Template BINDING_FIELD = Template.of("private final {type} {name} = new {type}();");
+
+	static final Template CONTEXT_FIELD = Template.of(
+			"private static final net.concini.sbebuddy.BindingContext {name} = new net.concini.sbebuddy.BindingContext({component}, {primitiveType}, {characterEncoding}, {epoch}, {timeUnit});"
+	);
 
 	/** What the flyweight is handed: the component, or the binding's view of it. */
 	static final Template SOURCE = Template.of("value.{component}()");
 
-	static final Template BOUND_SOURCE = Template.of("{binding}.toWire(value.{component}())");
+	static final Template BOUND_SOURCE = Template.of("{binding}.toWire(value.{component}(), {context})");
 
-	static final Template BOUND_READ = Template.of("{binding}.fromWire({read})");
+	/**
+	 * A group's or var-data's view, whose null the method it goes to refuses: the
+	 * binding is never handed null.
+	 */
+	static final Template NULLABLE_BOUND_SOURCE = Template.of(
+			"value.{component}() == null ? null : {binding}.toWire(value.{component}(), {context})"
+	);
+
+	static final Template BOUND_READ = Template.of("{binding}.fromWire({read}, {context})");
+
+	/** A group or var-data read into its local, handed to the record as it is. */
+	static final Template LOCAL = Template.of("{component}");
+
+	/** A group or var-data read into its local, bound on its way to the record. */
+	static final Template BOUND_LOCAL = Template.of("{binding}.fromWire({component}, {context})");
+
+	/** Absent from an older message, it stays null past the binding. */
+	static final Template BOUND_ADDED_LOCAL = Template
+			.of("{component} == null ? null : {binding}.fromWire({component}, {context})");
 
 	// ---- a composite: a pair per composite type, over its own flyweights
 
@@ -459,12 +481,12 @@ final class CodecTemplates {
 	 * member as it is.
 	 */
 	static final Template WRITE_COMPOSITE = Template.of("""
-			private static void write{compositeClass}({record} value, {encoder} encoder) {
+			private void write{compositeClass}({record} value, {encoder} encoder) {
 				{members}
 			}""");
 
 	static final Template READ_COMPOSITE = Template.of("""
-			private static {record} read{compositeClass}({decoder} decoder) {
+			private {record} read{compositeClass}({decoder} decoder) {
 				return new {record}(
 						{members}
 				);
@@ -473,8 +495,7 @@ final class CodecTemplates {
 	// ---- a group: three methods per group, keyed by its path, over its own
 	// classes
 
-	static final Template ENCODE_GROUP_FIELD = Template
-			.of("write{path}({source}, encoder.{property}Count({source}.size()));");
+	static final Template ENCODE_GROUP_FIELD = Template.of("write{path}({source}, encoder);");
 
 	static final Template DECODE_GROUP = Template
 			.of("java.util.List<{record}> {component} = read{path}(decoder.{property}());");
@@ -490,11 +511,13 @@ final class CodecTemplates {
 
 	/**
 	 * The entry's shapes are the message's, over the group's classes: the loop's
-	 * variable and parameter bear the names the field templates use, and the
-	 * methods are the codec's own, since a bound field reaches its binding.
+	 * variable and local bear the names the field templates use, and the methods
+	 * are the codec's own, since a bound field reaches its binding. The body the
+	 * group is in sizes it.
 	 */
 	static final Template WRITE_GROUP = Template.of("""
-			private void write{path}(java.util.List<{record}> entries, {encoder} encoder) {
+			private void write{path}(java.util.List<{record}> entries, {parent} parent) {
+				{encoder} encoder = parent.{property}Count(entries.size());
 				for ({record} value : entries) {
 					encoder.next();
 					{body}
@@ -516,7 +539,7 @@ final class CodecTemplates {
 
 	/** The dimensions and the entries, without encoding; null has no wire form. */
 	static final Template GROUP_LENGTH = Template.of("""
-			private static int {length}(java.util.List<{record}> entries) {
+			private int {length}(java.util.List<{record}> entries) {
 				if (entries == null) {
 					throw new IllegalArgumentException("{component} is required");
 				}
@@ -524,7 +547,7 @@ final class CodecTemplates {
 			}""");
 
 	static final Template NESTED_GROUP_LENGTH = Template.of("""
-			private static int {length}(java.util.List<{record}> entries) {
+			private int {length}(java.util.List<{record}> entries) {
 				if (entries == null) {
 					throw new IllegalArgumentException("{component} is required");
 				}
@@ -538,7 +561,7 @@ final class CodecTemplates {
 	// ---- var-data: methods per data member, keyed by its path, over its body's
 	// classes; its bytes counted without encoding
 
-	static final Template ENCODE_DATA_FIELD = Template.of("write{path}(value.{component}(), encoder);");
+	static final Template ENCODE_DATA_FIELD = Template.of("write{path}({source}, encoder);");
 
 	static final Template DECODE_DATA = Template.of("{face} {component} = {read};");
 
@@ -636,10 +659,10 @@ final class CodecTemplates {
 	// ---- the shapes over them
 
 	/** A group's or a data member's share of the length, at the message. */
-	static final Template LENGTH_TERM = Template.of(" + {length}(value.{component}())");
+	static final Template LENGTH_TERM = Template.of(" + {length}({source})");
 
 	/** A group's or a data member's share of the length, in an entry. */
-	static final Template NESTED_LENGTH_TERM = Template.of("length += {length}(value.{component}());");
+	static final Template NESTED_LENGTH_TERM = Template.of("length += {length}({source});");
 
 	/** A component that may be null on a required field: null has no wire form. */
 	static final Template ENCODE_CHECKED_FIELD = Template.of("""

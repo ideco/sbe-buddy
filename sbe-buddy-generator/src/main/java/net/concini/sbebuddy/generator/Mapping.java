@@ -251,8 +251,14 @@ public final class Mapping {
 	 * it nothing below the group's own version is ever read.
 	 */
 	private Schema.Group group(Annotated.Group group, int baseline) {
-		if (!(group.javaType() instanceof Annotated.ListOfRecord)) {
-			problem(group, "a group must be a List of a record");
+		Annotated.Binding binding = group.binding();
+		Annotated.JavaType face = binding == null ? group.javaType() : binding.wire();
+		if (!(face instanceof Annotated.ListOfRecord)) {
+			problem(
+					group, binding == null
+							? "a group must be a List of a record"
+							: "a group's binding must bind a List of a record"
+			);
 		}
 		String dimensionType = declare(group.dimensionType());
 		Body body = body(
