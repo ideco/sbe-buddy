@@ -75,7 +75,7 @@ Reordering Java constants does not change their bits.
 
 A field is absent when it is optional and holds the null value, or when it was introduced above the schema’s `baselineVersion` and the message being decoded predates it. Absence decodes to `null`.
 
-A set has no null value, so the first cause does not apply: every bit pattern is a set, and none is spare to mean absent. `presence = OPTIONAL` on a set field is a compilation error. A set with no bits is the empty set, not absence.
+A set has no null value, so the first cause does not apply: every bit pattern is a set, and none is spare to mean absent. A set field may still be `presence = OPTIONAL`, as SBE allows; a [binding](bindings.md) then decides what represents null, no bit set, say, and without one the codec refuses a `null` component. To the codec a set with no bits is the empty set, not absence.
 
 The second cause applies as it does to any field: a set field introduced above the baseline decodes to `null` from a message that predates it, although the field is required.
 

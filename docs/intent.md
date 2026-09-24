@@ -33,7 +33,8 @@ byte order, custom header types. Plus unions of messages as sealed interfaces
 with a dispatching codec, the one Java-side feature. Then what makes the
 codec worth using: a binding on any component, told what the schema says
 about it, so a record holds its own types over any wire the schema declares,
-and a real FIX order-entry schema as the proof that the whole thing holds.
+and a realistic FIX-like order-entry schema as the proof that the whole
+thing holds.
 sbe-buddy stays agnostic of FIX: `sbe.xsd` and sbe-tool are the contract,
 and FIX's datatypes are a user's schema like any other. The target Java representation of all of it is
 `type-mappings.md`.
@@ -138,7 +139,7 @@ user's binding's to decide. No built-in bindings.
 
 **A real schema.**
 
-* [ ] 21. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` in a union, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
+* [x] 21. A FIX-like order-entry schema, the example's `trading` grown into the showcase: FIX tags as ids and FIX's shapes without being FIX, every construct where such a schema uses it and the bindings beside it, unions per direction and over both, byte-compatible with sbe-tool's flyweights from its hand-written oracle in both directions; an optional composite, set or array field, its null a binding's
 
 **The API pass.**
 

@@ -72,7 +72,7 @@ public final class Depth {}
 
 The array is exactly `length` long: the codec refuses any other length with `IllegalArgumentException`, and decoding allocates a fresh array of that length. A Java record compares an array component by identity, so a record with an array is equal only to itself unless it overrides `equals`; a test compares such records field by field.
 
-A field of a type with a length cannot be `presence = OPTIONAL`: SBE gives an array no null value, and the compiler rejects it. A field added in a later version is still absent, and `null`, when an older message is decoded, which is why `bidDepth` above is nullable.
+A field of a type with a length may be `presence = OPTIONAL`, as SBE allows, but an array has no null value the codec knows: a [binding](bindings.md) chooses what represents null, zeros, say, and reads it back as `null`; without one the codec refuses a `null` component. A field added in a later version is still absent, and `null`, when an older message is decoded, which is why `bidDepth` above is nullable.
 
 ## Constants
 
