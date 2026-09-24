@@ -55,14 +55,12 @@ final class CodecWalk {
 	private final Map<String, CodecModel.Context> contexts = new LinkedHashMap<>();
 	private final List<Problem> problems = new ArrayList<>();
 	private final FaceRules faces = new FaceRules(problems);
-	private final StatedRules stated;
 
 	private CodecWalk(Ir ir, Annotated annotated, Annotated.Message message) {
 		this.ir = ir;
 		this.annotated = annotated;
 		this.message = message;
 		this.flyweights = ir.applicableNamespace();
-		this.stated = new StatedRules(problems, ir);
 	}
 
 	/**
@@ -131,7 +129,6 @@ final class CodecWalk {
 							+ "\", not \"" + wireName + "\""
 			);
 		}
-		stated.message(message, tokens.get(0));
 		CodecModel.Header header = header();
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		Owner owner = new Owner(
@@ -180,9 +177,7 @@ final class CodecWalk {
 					nulls.add(unmapped);
 				}
 				case Member.Group group -> throw new IllegalStateException("a header holds no group");
-				case Member.UnmappedGroup group -> throw new IllegalStateException("a header holds no group");
 				case Member.Data data -> throw new IllegalStateException("a header holds no var-data");
-				case Member.UnmappedData data -> throw new IllegalStateException("a header holds no var-data");
 			}
 		}
 		return new CodecModel.Header(
@@ -214,9 +209,8 @@ final class CodecWalk {
 
 	/**
 	 * The fields, then the groups, recursing into each, then the var-data, each met
-	 * with its component by wire name; a group or var-data no component carries is
-	 * written empty and passed over, and a component the schema's {@code block}
-	 * lacks is a problem.
+	 * with its component by wire name, a field with none with its {@code unmapped}
+	 * entry; a component the schema's {@code block} lacks is a problem.
 	 */
 	private Body body(
 			List<Token> tokens, int index, List<Annotated.Component> components, List<Annotated.Field> unmapped,
@@ -254,14 +248,7 @@ final class CodecWalk {
 			Token token = groupTokens.get(0);
 			Annotated.Group group = group(components, token);
 			if (group == null) {
-				String groupClass = JavaUtil.formatClassName(token.name());
-				wireOrder.add(
-						new Member.UnmappedGroup(
-								JavaUtil.formatPropertyName(token.name()),
-								owner.decoder() + "." + groupClass + "Decoder"
-						)
-				);
-				continue;
+				throw new IllegalStateException("the schema's " + block + " has a group no component carries");
 			}
 			matched.add(group);
 			Member.Group member = group(groupTokens, group, owner, block + "." + token.name());
@@ -275,10 +262,7 @@ final class CodecWalk {
 			Token token = dataTokens.get(0);
 			Annotated.Data data = data(components, token);
 			if (data == null) {
-				String property = JavaUtil.formatPropertyName(token.name());
-				helpers.putIfAbsent(new Key(Helper.NoBytes.class, ""), new Helper.NoBytes());
-				wireOrder.add(new Member.UnmappedData(property, Generators.toUpperFirstChar(property)));
-				continue;
+				throw new IllegalStateException("the schema's " + block + " has var-data no component carries");
 			}
 			matched.add(data);
 			Member.Data member = data(dataTokens, data, owner);
@@ -324,7 +308,6 @@ final class CodecWalk {
 		if (!faces.field(component, typeTokens.get(0), canBeAbsent(field, owner))) {
 			return null;
 		}
-		stated.field(component, field, typeTokens.get(0));
 		String name = component.javaName();
 		String property = JavaUtil.formatPropertyName(field.name());
 		Bound bound = null;
@@ -349,67 +332,34 @@ final class CodecWalk {
 	}
 
 	/**
-	 * A field no component carries, declared under {@code unmapped} or, over a
-	 * schema read from a resource, not at all: a constant needs nothing, anything
-	 * else its null value.
+	 * A field no component carries, declared under {@code unmapped}: a constant
+	 * needs nothing, anything else its null value.
 	 */
 	private @Nullable Member unmapped(
 			Token field, List<Token> typeTokens, List<Annotated.Field> unmapped, Owner owner
 	) {
 		Token type = typeTokens.get(0);
-		Annotated.Field declared = unmappedField(unmapped, field);
-		if (declared != null) {
-			stated.field(declared, field, type);
+		if (type.signal() == Signal.BEGIN_COMPOSITE) {
+			codecProblem(lacking("an unmapped field of a composite"));
+			return null;
 		}
 		if (constant(field)) {
 			return null;
 		}
+		Annotated.Field declared = unmappedField(unmapped, field);
+		if (declared == null) {
+			throw new IllegalStateException(field.name() + " is a field no component or unmapped entry carries");
+		}
 		String property = JavaUtil.formatPropertyName(field.name());
 		Shape shape = switch (type.signal()) {
-			case BEGIN_COMPOSITE -> compositeNulls(typeTokens);
 			case ENCODING -> unmappedEncoding(type, owner, property);
 			case BEGIN_ENUM -> new Shape.Enum(
-					JavaUtil.formatClassName(type.applicableTypeName()),
-					declared == null ? "" : javaName(declared.type())
+					JavaUtil.formatClassName(type.applicableTypeName()), javaName(declared.type())
 			);
 			case BEGIN_SET -> new Shape.Set(JavaUtil.formatClassName(type.applicableTypeName()));
 			default -> throw new IllegalStateException(field.name() + " is a field of " + type.signal());
 		};
 		return new Member.Unmapped(property, shape);
-	}
-
-	/**
-	 * A composite no component carries: every member its null value, a constant
-	 * nothing, through a method of the composite's own registered once, a nested
-	 * composite through its own.
-	 */
-	private Shape.Composite compositeNulls(List<Token> tokens) {
-		String compositeClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
-		Key key = new Key(Helper.CompositeNulls.class, tokens.get(0).applicableTypeName());
-		if (!helpers.containsKey(key)) {
-			String encoder = flyweights + "." + compositeClass + "Encoder";
-			Owner owner = new Owner(
-					encoder, flyweights + "." + compositeClass + "Decoder", compositeClass, Owner.Kind.COMPOSITE, 0
-			);
-			List<Member.Unmapped> members = new ArrayList<>();
-			for (int i = 1; i < tokens.size() - 1; i += tokens.get(i).componentTokenCount()) {
-				Token token = tokens.get(i);
-				if (constant(token)) {
-					continue;
-				}
-				String property = JavaUtil.formatPropertyName(token.name());
-				Shape shape = switch (token.signal()) {
-					case ENCODING -> unmappedEncoding(token, owner, property);
-					case BEGIN_ENUM -> new Shape.Enum(JavaUtil.formatClassName(token.applicableTypeName()), "");
-					case BEGIN_SET -> new Shape.Set(JavaUtil.formatClassName(token.applicableTypeName()));
-					case BEGIN_COMPOSITE -> compositeNulls(tokens.subList(i, i + token.componentTokenCount()));
-					default -> throw new IllegalStateException("a composite member of " + token.signal());
-				};
-				members.add(new Member.Unmapped(property, shape));
-			}
-			helpers.put(key, new Helper.CompositeNulls(compositeClass, encoder, members));
-		}
-		return new Shape.Composite(compositeClass);
 	}
 
 	/** A primitive takes its null value in one call, an array in every element. */
@@ -424,7 +374,6 @@ final class CodecWalk {
 			return null;
 		}
 		Token token = tokens.get(0);
-		stated.group(group, token, tokens.get(1));
 		String property = JavaUtil.formatPropertyName(token.name());
 		String path = owner.prefix() + Generators.toUpperFirstChar(property);
 		Bound bound = null;
@@ -464,7 +413,6 @@ final class CodecWalk {
 			return null;
 		}
 		Token token = tokens.get(0);
-		stated.data(data, token, tokens.get(1));
 		String property = JavaUtil.formatPropertyName(token.name());
 		boolean added = token.version() > owner.baseline();
 		Content content = content(tokens.get(3), data);
@@ -679,7 +627,6 @@ final class CodecWalk {
 		String enumClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
 		PrimitiveType primitive = tokens.get(0).encoding().primitiveType();
 		helpers.computeIfAbsent(new Key(Helper.EnumPair.class, tokens.get(0).applicableTypeName()), key -> {
-			stated.enumeration(enumeration, tokens.get(0));
 			List<Helper.EnumValue> values = new ArrayList<>();
 			Set<String> wireValues = new HashSet<>();
 			for (Token value : tokens) {
@@ -693,7 +640,6 @@ final class CodecWalk {
 						);
 						continue;
 					}
-					stated.validValue(constant, value);
 					values.add(
 							new Helper.EnumValue(
 									constant.javaName(), JavaUtil.formatForJavaKeyword(value.name()),
@@ -722,7 +668,6 @@ final class CodecWalk {
 	private Shape.Set set(List<Token> tokens, Annotated.Set set) {
 		String setClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
 		helpers.computeIfAbsent(new Key(Helper.SetPair.class, tokens.get(0).applicableTypeName()), key -> {
-			stated.set(set, tokens.get(0));
 			List<Helper.Choice> choices = new ArrayList<>();
 			Set<String> wireChoices = new HashSet<>();
 			for (Token choice : tokens) {
@@ -736,7 +681,6 @@ final class CodecWalk {
 						);
 						continue;
 					}
-					stated.choice(constant, choice);
 					choices.add(
 							new Helper.Choice(
 									JavaUtil.formatPropertyName(choice.name()), constant.javaName(),
@@ -767,7 +711,6 @@ final class CodecWalk {
 		String compositeClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
 		Key key = new Key(Helper.CompositePair.class, tokens.get(0).applicableTypeName());
 		if (!helpers.containsKey(key)) {
-			stated.composite(composite, tokens.get(0));
 			Body body = compositeBody(tokens, composite, compositeClass);
 			helpers.put(key, new Helper.CompositePair(compositeClass, composite.qualifiedName(), body));
 		}
@@ -808,16 +751,6 @@ final class CodecWalk {
 			};
 			if (!fits) {
 				continue;
-			}
-			switch (member) {
-				case Annotated.Type type -> stated.member(type, token);
-				case Annotated.Ref ref -> stated.ref(ref, token);
-				case Annotated.Enum enumeration -> {
-				}
-				case Annotated.Set set -> {
-				}
-				case Annotated.Composite nested -> {
-				}
 			}
 			String name = javaName(member);
 			Bound bound = null;

@@ -7,7 +7,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 ## Reference
 
 * [Schemas](reference/schemas.md) — `@SbeSchema`, its attributes and byte order
-* [Schema-first](reference/schema-first.md) — mapping a schema that exists already: `resource`, partial mapping, what is checked, the build
+* [Schema-first](reference/schema-first.md) — freezing a schema and reading it back: `resource`, what is checked, the build
 * [Headers](reference/headers.md) — the message header, a header of your own, reading it first and passing a message on
 * [Primitives](reference/primitives.md) — scalar primitive fields, their Java types and absence
 * [Named types](reference/named-types.md) — `@SbeType`, fixed-length strings and arrays, constants

@@ -215,7 +215,9 @@ final class GeneratorTest {
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
 		List<Problem> problems = Generator
-				.generate(Files.readString(resource), resource.toUri().toString(), annotated, output);
+				.generate(
+						schemaOf(annotated), Files.readString(resource), resource.toUri().toString(), annotated, output
+				);
 
 		assertThat(problems).isEmpty();
 		assertThat(output.getSources().keySet()).contains("p.MCodec", "p.sbe.MEncoder", "p.sbe.MessageHeaderEncoder");
@@ -226,13 +228,14 @@ final class GeneratorTest {
 		Path resource = directory.resolve("schema.xml");
 		Files.writeString(resource, INCLUDING_SCHEMA);
 		Annotated annotated = annotated(0, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
+		Schema schema = schemaOf(annotated);
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
 		List<Problem> problems = Generator
-				.generate(Files.readString(resource), resource.toUri().toString(), annotated, output);
+				.generate(schema, Files.readString(resource), resource.toUri().toString(), annotated, output);
 
 		assertThat(problems).hasSize(1);
-		assertThat(problems.get(0).node()).isSameAs(annotated);
+		assertThat(problems.get(0).node()).isSameAs(schema);
 		assertThat(problems.get(0).message()).contains("common/types.xml");
 		assertThat(output.getSources()).isEmpty();
 	}
@@ -241,15 +244,15 @@ final class GeneratorTest {
 	void aResourceDisagreeingWithTheAnnotationsIsAProblemNamingWhatDisagrees() {
 		String document = INCLUDING_SCHEMA.replace("<xi:include href=\"common/types.xml\"/>", INCLUDED_TYPES)
 				.replace("id=\"1\" version=\"0\"", "id=\"2\" version=\"0\"");
-		Annotated.Field qty = annotatedField("qty", 3, primitive(INT));
-		Annotated annotated = annotated(0, annotatedMessage("M", 1, qty));
+		Annotated annotated = annotated(0, annotatedMessage("M", 1, annotatedField("qty", 3, primitive(INT))));
+		Schema schema = schemaOf(annotated);
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
-		List<Problem> problems = Generator.generate(document, "memory:schema.xml", annotated, output);
+		List<Problem> problems = Generator.generate(schema, document, "memory:schema.xml", annotated, output);
 
 		assertThat(problems).containsExactlyInAnyOrder(
-				new Problem(annotated, "the schema has id=\"2\", not \"1\""),
-				new Problem(qty, "the schema has id=\"1\", not \"3\"")
+				new Problem(schema, "the schema has id=\"2\", not \"1\""),
+				new Problem(schema.messages().get(0).fields().get(0), "the schema has id=\"1\", not \"3\"")
 		);
 		assertThat(output.getSources()).isEmpty();
 	}
@@ -291,9 +294,13 @@ final class GeneratorTest {
 	 * the input here, not the expectation, so these tests describe each case once.
 	 */
 	private static List<Problem> generate(Annotated annotated, StringWriterOutputManager output) {
+		return Generator.generate(schemaOf(annotated), annotated, output);
+	}
+
+	private static Schema schemaOf(Annotated annotated) {
 		Mapping.Mapped mapped = Mapping.map(annotated);
 		assertThat(mapped.problems()).as("the mapping of the annotations").isEmpty();
-		return Generator.generate(mapped.schema(), annotated, output);
+		return mapped.schema();
 	}
 
 	private static Annotated.Composite varStringEncoding() {

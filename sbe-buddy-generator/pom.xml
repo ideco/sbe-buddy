@@ -21,12 +21,6 @@
       <artifactId>sbe-tool</artifactId>
       <version>${sbe-tool.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.xmlunit</groupId>
-      <artifactId>xmlunit-assertj3</artifactId>
-      <version>${xmlunit.version}</version>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 
   <properties>

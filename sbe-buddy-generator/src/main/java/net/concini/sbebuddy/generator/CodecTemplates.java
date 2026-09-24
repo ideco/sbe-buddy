@@ -708,42 +708,6 @@ final class CodecTemplates {
 					}"""
 	);
 
-	/** A composite no component carries: every member its null value. */
-	static final Template ENCODE_UNMAPPED_COMPOSITE_FIELD = Template
-			.of("writeNull{compositeClass}(encoder.{property}());");
-
-	static final Template WRITE_NULL_COMPOSITE = Template.of("""
-			private static void writeNull{compositeClass}({encoder} encoder) {
-				{members}
-			}""");
-
-	// ---- a group or var-data no component carries: written empty, passed over on
-	// the way in
-
-	static final Template ENCODE_UNMAPPED_GROUP = Template.of("encoder.{property}Count(0);");
-
-	/** Each entry is passed over whole, its nested groups and var-data included. */
-	static final Template DECODE_UNMAPPED_GROUP = Template.of("""
-			{decoder} {property} = decoder.{property}();
-			while ({property}.hasNext()) {
-				{property}.next().sbeSkip();
-			}""");
-
-	static final Template UNMAPPED_GROUP_LENGTH_TERM = Template.of(" + {decoder}.sbeHeaderSize()");
-
-	static final Template NESTED_UNMAPPED_GROUP_LENGTH_TERM = Template.of("length += {decoder}.sbeHeaderSize();");
-
-	static final Template NO_BYTES = Template.of("private static final byte[] NO_BYTES = new byte[0];");
-
-	static final Template ENCODE_UNMAPPED_DATA = Template.of("encoder.put{bulk}(NO_BYTES, 0, 0);");
-
-	static final Template DECODE_UNMAPPED_DATA = Template.of("decoder.skip{bulk}();");
-
-	static final Template UNMAPPED_DATA_LENGTH_TERM = Template.of(" + {encoder}.{property}HeaderLength()");
-
-	static final Template NESTED_UNMAPPED_DATA_LENGTH_TERM = Template
-			.of("length += {encoder}.{property}HeaderLength();");
-
 	// ---- the shapes over them
 
 	/** A group's or a data member's share of the length, at the message. */

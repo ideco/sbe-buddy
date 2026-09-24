@@ -1,37 +1,26 @@
 # Schema-first
 
-Sometimes the schema comes first. A venue publishes its SBE XML and every client speaks it; or a schema sbe-buddy wrote has shipped, is checked in, and should now be the thing the records follow rather than the thing they produce. `@SbeSchema(resource = …)` points the package at that XML. sbe-tool generates the flyweights of every message in it, the records map the messages they choose to, and every member an annotation states is checked against the document. Nothing is written: the resource is the schema.
+A schema that has shipped is frozen: the XML is what every other reader has, and the records must keep saying exactly that. `@SbeSchema(resource = …)` points the package at its XML on the class path. The compiler then proves that the annotations and the document are one schema, and generates the flyweights and codecs from the document; nothing is written. Develop code-first, check the written `schema.xml` in as the resource and name it, and the switch changes nothing else. To grow the schema later, drop `resource` and the package writes it again, and what it writes is the document it just read.
 
 ## Declaration
 
 ```java
-@SbeSchema(id = 91, version = 0, headerType = SessionHeader.class, resource = "/trading.xml")
-package com.example.client;
+@SbeSchema(id = 91, version = 0, semanticVersion = "1.0", description = "Order entry in FIX's shapes", headerType = SessionHeader.class, resource = "trading.xml")
+package com.example.trading;
 ```
 
-`resource` is a class path name, as `Class.getResource` reads one: relative to the package, `"schema.xml"` for `com/example/client/schema.xml`, or absolute with a leading slash. `id` and `version` stay required and are checked against the document, as is `headerType` where the document frames its messages in a header of its own. `codecs` and `baselineVersion` mean what they always mean. XIncludes in the document resolve relative to it, in a directory or inside a jar.
+`resource` is a class path name, as `Class.getResource` reads one: relative to the package, `"trading.xml"` for `com/example/trading/trading.xml`, or absolute with a leading slash. Every other member of `@SbeSchema` means what it means code-first. XIncludes in the document resolve relative to it, in a directory or inside a jar.
 
-## The records
+## The check
 
-The annotations are the ones code-first uses, and they mean the same. A record maps the message whose `id` it names; a component maps the field, group or var-data of its wire name, the Java name unless `name` says otherwise; an enum's constants and a set's choices map the values and choices of their names.
+The annotations are the ones that wrote the document, complete: every message has its record, every field, group and var-data of a message is a component or an `unmapped` entry, and every type of the document has its declaration. The compiler renders the schema from them as code-first would and holds it against the resource, with the XSD's defaults filled on both sides so an absent attribute equals its default, declarations and messages matched by name regardless of order and everything else in sequence. Each difference is an error on the node it is on, naming both sides:
 
-```java
-@SbeMessage(id = 1)
-public record NewOrder(
-        @SbeField(id = 11) String clOrdId,
-        @SbeField(id = 55) String symbol,
-        @SbeField(id = 54) Side side,
-        @SbeField(id = 38, binding = QtyBinding.class) long orderQty,
-        @SbeField(id = 44, binding = PriceBinding.class) @Nullable BigDecimal price) {}
-```
+* on the package, for what the document has and no annotation maps: `the schema has a message "Reject" (id 6) and no record maps it`, `the schema has an enum "ExecType" and no declaration maps it`;
+* on the record, for a member it does not carry: `the schema's NewOrder has a field "locateReqd" no component carries; add it, or declare it unmapped`, `the schema's ExecutionReport has a group "fills" no component carries`;
+* on the annotation, for what the document lacks: `the schema has no message named "Order"`, `the schema's Order has no field named "nowhere"`, `the schema's Side has no value named "SHORT"`;
+* on the annotation, for an attribute or a value that differs: `the schema has presence="optional", not "required"`, `the schema has the value "F", not "E"`.
 
-What is left unwritten, the document decides: `clOrdId` is a `char` array of twenty in the venue's schema, so its face is a `String`, with no `@SbeType` declared anywhere. What is written is checked: the `id`s here, and any `presence`, `sinceVersion`, `offset`, `type`, `semanticType` and the rest, wherever sbe-tool's IR carries the attribute. A disagreement is a compile error naming both sides, `the schema has id="2", not "3"`. That is what makes the switch safe: a schema sbe-buddy wrote agrees with its annotations as it is, so checking the written `schema.xml` in as the package's resource and adding `resource = "schema.xml"` changes nothing else, and generates the same code.
-
-An enum, a set or a composite the record reaches, as a component's type or as a binding's wire type, needs its Java declaration, matched to the document's by wire name, since the codec maps constants and builds records. Declarations may live in any package: `Side`, `QtyBinding` and `PriceBinding` above are the venue package's own. The face rules apply as always, from the document's side: `long symbol` against a `char` array is `long is not the face of Symbol, which is String`, and a plain `int` on an optional field is refused as it is code-first.
-
-## Mapping part of a schema
-
-A message with no record gets its flyweights and no codec, and a union covers the mapped messages. Within a mapped message, a field no component carries is written as its null value, a composite as its members' null values, a group with no entries and var-data with zero length, and on the way in each is passed over whatever a fuller writer put there, the codec's `decodedLength` agreeing with the bytes. A component the document lacks is an error, `the schema's Order has no field named "nowhere"`.
+Nothing is left for the document to decide. `@SbeField(id = 11) String clOrdId` names no type and is refused as it is code-first; `type = ClOrdId.class` says which. That is what makes the trip back safe: a package that compiles against its resource writes that resource again.
 
 ## The build
 
@@ -50,6 +39,6 @@ tasks.named('compileJava') {
 
 **A schema in a jar.** A dependency's jar is on the compile class path in either build. Name the resource absolutely, `resource = "/com/venue/schema.xml"`, and it is read from the jar.
 
-## What is and is not checked
+## What it is not
 
-Compared where the IR carries them: `id`, `version`, `semanticVersion`, `description` and `byteOrder` on the schema; `id`, `name`, `type` and `primitiveType`, `presence`, `sinceVersion`, `deprecated`, `offset`, `blockLength`, `length`, `characterEncoding`, `semanticType`, `description`, `epoch`, `timeUnit`, a constant's `value` and an enum value's and a choice's `value` on the nodes. Three things sbe-tool's IR blurs: a node's `sinceVersion` in the IR is the later of its own and its type's, so only a value written above it is a disagreement; a field's `semanticType` gives way to its type's, so it is compared only where the type has none; a group's `semanticType` is not read at all. `nullValue`, `minValue`, `maxValue` and `valueRef` are not compared.
+Mapping part of a schema someone else owns, a venue's published XML from which a client reads the fields it needs, is a different thing: the records would not be able to write the schema back. That is a view, decode-only, and not built yet.

@@ -345,46 +345,32 @@ sealed interface without it is no union.
 
 ## Schema-first
 
-`@SbeSchema(resource = …)` names an SBE schema that exists already, on the
-class path: relative to the package (`"schema.xml"`) or absolute with a
-leading slash (`"/com/venue/schema.xml"`), as `Class.getResource` reads a
-name. XIncludes resolve relative to the resource. Then:
+`@SbeSchema(resource = …)` names the schema's XML on the class path, frozen:
+relative to the package (`"schema.xml"`) or absolute with a leading slash
+(`"/com/venue/schema.xml"`), as `Class.getResource` reads a name. XIncludes
+resolve relative to the resource. Then:
 
-* The document is the schema. sbe-tool generates the flyweights of every
-  message in it, and nothing is written: no `schema.xml`, since the resource
-  ships from where it is.
-* The annotations mean what they mean code-first. A record maps the message
-  its `id` names, a component the field, group or data of its wire name,
-  and an enum's constants and a set's choices the values and choices of
-  their names. A member left unwritten lets the document decide; a member
-  written is compared with the document where sbe-tool's IR carries it, and
-  a disagreement is an error naming both: `id`, `version`, `semanticVersion`,
-  `description` and `byteOrder` on the schema, and per node `id`, `name`,
-  `type` and `primitiveType`, `presence`, `sinceVersion`, `deprecated`,
-  `offset`, `blockLength`, `length`, `characterEncoding`, `semanticType`,
-  `description`, `epoch`, `timeUnit`, a constant's `value`, an enum value's
-  and a choice's `value`. The IR carries a since-version as the later of a
-  node's and its type's, so only one written above it disagrees; a field's
-  `semanticType` is compared only where its type has none, and a group's
-  not at all. `nullValue`, `minValue`, `maxValue` and `valueRef` are not
-  compared. `baselineVersion` is at most the document's version.
-* A message no record maps gets flyweights and no codec, and a union covers
-  the mapped messages. A field, group or var-data no component carries is
-  written as `unmapped` writes it, a composite as its members' null values,
-  a group with no entries, var-data with zero length, and is passed over on
-  the way in, whatever a fuller writer put there. A component the document
-  lacks is an error.
-* The face comes from the document. A component of a `char` array is a
-  `String`, of an `int8` array a `byte[]`, of a `uint16` an `int`, with no
-  Java declaration of the type; an enum, set or composite the record
-  reaches, through a component or a binding's wire type, needs its Java
-  declaration, matched by wire name, so the codec knows the constants and
-  the record. The header must be declared where the document's is not the
-  standard `messageHeader`. Declarations may live in any package.
-* A schema sbe-buddy wrote passes every comparison as it is: checking the
-  written `schema.xml` in as the package's resource and adding `resource =
+* The annotations describe the whole document, as code-first: every
+  message has its record, every field, group and var-data of a message is a
+  component or an `unmapped` entry, every type of the document has its
+  declaration, and every member means what it means code-first. Nothing is
+  left for the document to decide.
+* The document rendered from the annotations must be one schema with the
+  resource, by the equivalence the oracles' tests apply: `sbe.xsd`'s
+  defaults filled on both sides, so an absent attribute equals its default;
+  declarations and messages matched by name regardless of order;
+  everything else in sequence. Each difference is an error on the node it
+  is on: a message, type, field, group or var-data one side has and the
+  other lacks, on the annotation or the package; an attribute or a value
+  that differs, on the annotation that states it.
+* With no difference, the resource is the document sbe-tool parses, and the
+  flyweights and codecs follow from it as code-first. Nothing is written:
+  no `schema.xml`, since the resource ships from where it is.
+* A schema sbe-buddy wrote passes as it is: checking the written
+  `schema.xml` in as the package's resource and adding `resource =
   "schema.xml"` switches the package from code-first to schema-first with no
-  other change and the same generated code.
+  other change and the same generated code, and dropping the member
+  switches it back, writing the document it read.
 
 ## Running example, complete
 

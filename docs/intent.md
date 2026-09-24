@@ -43,7 +43,11 @@ and FIX's datatypes are a user's schema like any other. The target Java represen
 
 RPC (`rpc.md`), Aeron transport, typed flyweights, tooling over sbe-tool's
 schema corpus. Merging schemas: a package's schema is written from its
-annotations or read from a resource, never assembled from both. sbe-tool's own `JavaDtoGenerator` is the nearest prior art
+annotations or read from a resource, never assembled from both. Views:
+records over part of a schema someone else owns, decode-only, which is
+what mapping a venue's published schema would need; schema-first maps the
+whole schema or nothing, so that a package can go back to writing it.
+sbe-tool's own `JavaDtoGenerator` is the nearest prior art
 to the codec: it generates its own DTO classes from the IR, where sbe-buddy
 maps to the user's records, with bindings, `null` for absence and
 unions. None of these appears in code until
@@ -145,7 +149,8 @@ user's binding's to decide. No built-in bindings.
 **Schema-first.**
 
 * [x] 22. Schema-first mapping: `@SbeSchema` names an XML resource on the class path, sbe-tool generates every message's flyweights from it, and the records map the messages they choose to with the same annotations, each written member checked against the XML; nothing is written. First the join: the face rules run over the IR where each token meets its annotation, so the pipeline is one flow from the document down
+* [x] 23. Schema-first without drift: the annotations describe the whole document, every message, member and type, and the compiler proves the document rendered from them and the resource are one schema, each difference an error on the node it is on; partial mapping goes, and views are parked. A package goes code-first, freezes its schema, reads it, and back, losing nothing either way; the showcase is frozen
 
 **The API pass.**
 
-* [ ] 23. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
+* [ ] 24. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim

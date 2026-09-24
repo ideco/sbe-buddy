@@ -46,7 +46,7 @@ final class CodecWriter {
 		}
 		List<String> variableLengths = new ArrayList<>();
 		for (Member member : variable(body)) {
-			variableLengths.add(lengthTerm(body, member, false));
+			variableLengths.add(lengthTerm(LENGTH_TERM, member));
 		}
 		List<String> helpers = new ArrayList<>();
 		for (Helper helper : model.helpers()) {
@@ -108,8 +108,6 @@ final class CodecWriter {
 			writes.add(switch (member) {
 				case Member.Field field -> write(body, field);
 				case Member.Unmapped unmapped -> writeNull(body.encoder(), unmapped);
-				case Member.UnmappedGroup group -> ENCODE_UNMAPPED_GROUP.fill(group);
-				case Member.UnmappedData data -> ENCODE_UNMAPPED_DATA.fill(data);
 				case Member.Group group -> ENCODE_CHECKED_FIELD.fill(
 						group, "call",
 						ENCODE_GROUP_FIELD.fill(
@@ -193,8 +191,7 @@ final class CodecWriter {
 			case Shape.Set set -> ENCODE_UNMAPPED_SET_FIELD.fill(unmapped);
 			case Shape.Text text -> throw noNullValue(unmapped.property());
 			case Shape.Array array -> ENCODE_UNMAPPED_ARRAY_FIELD.fill(unmapped, "encoder", encoder);
-			case Shape.Composite composite -> ENCODE_UNMAPPED_COMPOSITE_FIELD
-					.fill(unmapped, "compositeClass", composite.compositeClass());
+			case Shape.Composite composite -> throw noNullValue(unmapped.property());
 			case Shape.Constant constant -> throw noNullValue(unmapped.property());
 		};
 	}
@@ -210,8 +207,6 @@ final class CodecWriter {
 				case Member.Group group -> boundLocal(group, group.binding(), group.addedSince());
 				case Member.Data data -> boundLocal(data, data.binding(), data.addedSince());
 				case Member.Unmapped unmapped -> throw notRead(unmapped.property());
-				case Member.UnmappedGroup group -> throw notRead(group.property());
-				case Member.UnmappedData data -> throw notRead(data.property());
 			});
 		}
 		return String.join(",\n", arguments);
@@ -267,8 +262,7 @@ final class CodecWriter {
 
 	/**
 	 * The body's groups and var-data read into locals, in wire order, before the
-	 * constructor, and the ones no component carries passed over in their place:
-	 * the flyweight reads them one after another.
+	 * constructor: the flyweight reads them one after another.
 	 */
 	private String variableReads(Body body) {
 		List<String> reads = new ArrayList<>();
@@ -283,8 +277,6 @@ final class CodecWriter {
 							? DECODE_DATA.fill(data, "face", face(data), "read", read)
 							: DECODE_ADDED_DATA.fill(data, "face", face(data), "decoder", body.decoder(), "read", read);
 				}
-				case Member.UnmappedGroup group -> DECODE_UNMAPPED_GROUP.fill(group);
-				case Member.UnmappedData data -> DECODE_UNMAPPED_DATA.fill(data);
 				case Member.Field field -> throw notVariable(field.component());
 				case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 			});
@@ -317,14 +309,6 @@ final class CodecWriter {
 			case Helper.Encoded encoded -> ENCODED.fill();
 			case Helper.CharsetConstant charset -> CHARSET_CONSTANT.fill(charset);
 			case Helper.Bytes bytes -> BYTES.fill();
-			case Helper.NoBytes noBytes -> NO_BYTES.fill();
-			case Helper.CompositeNulls nulls -> {
-				List<String> members = new ArrayList<>();
-				for (Member.Unmapped member : nulls.members()) {
-					members.add(writeNull(nulls.encoder(), member));
-				}
-				yield WRITE_NULL_COMPOSITE.fill(nulls, "members", String.join("\n", members));
-			}
 		};
 	}
 
@@ -383,7 +367,7 @@ final class CodecWriter {
 		Body entry = group.entry();
 		List<String> terms = new ArrayList<>();
 		for (Member member : variable(entry)) {
-			terms.add(lengthTerm(entry, member, true));
+			terms.add(lengthTerm(NESTED_LENGTH_TERM, member));
 		}
 		String length = terms.isEmpty()
 				? GROUP_LENGTH.fill(group, "length", lengthOf(group.path()), "encoder", entry.encoder())
@@ -441,16 +425,11 @@ final class CodecWriter {
 		);
 	}
 
-	/**
-	 * The members that follow the block, groups and var-data, carried or not, in
-	 * wire order.
-	 */
+	/** The members that follow the block, groups and var-data, in wire order. */
 	private static List<Member> variable(Body body) {
 		List<Member> variable = new ArrayList<>();
 		for (Member member : body.wireOrder()) {
-			if (member instanceof Member.Group || member instanceof Member.Data
-					|| member instanceof Member.UnmappedGroup
-					|| member instanceof Member.UnmappedData) {
+			if (member instanceof Member.Group || member instanceof Member.Data) {
 				variable.add(member);
 			}
 		}
@@ -458,20 +437,15 @@ final class CodecWriter {
 	}
 
 	/**
-	 * A group's or a data member's share of the length, through its method, or for
-	 * one no component carries the dimension's or the length's own size; as a term
-	 * of the message's sum, or a statement in an entry's.
+	 * A group's or a data member's share of the length, through its method, as a
+	 * term of the message's sum, or a statement in an entry's.
 	 */
-	private static String lengthTerm(Body body, Member member, boolean nested) {
+	private static String lengthTerm(Template term, Member member) {
 		return switch (member) {
-			case Member.Group group -> (nested ? NESTED_LENGTH_TERM : LENGTH_TERM)
+			case Member.Group group -> term
 					.fill(group, "length", lengthOf(group.path()), "source", nullableSource(group, group.binding()));
-			case Member.Data data -> (nested ? NESTED_LENGTH_TERM : LENGTH_TERM)
+			case Member.Data data -> term
 					.fill(data, "length", lengthOf(data.path()), "source", nullableSource(data, data.binding()));
-			case Member.UnmappedGroup group -> (nested ? NESTED_UNMAPPED_GROUP_LENGTH_TERM : UNMAPPED_GROUP_LENGTH_TERM)
-					.fill(group);
-			case Member.UnmappedData data -> (nested ? NESTED_UNMAPPED_DATA_LENGTH_TERM : UNMAPPED_DATA_LENGTH_TERM)
-					.fill(data, "encoder", body.encoder());
 			case Member.Field field -> throw notVariable(field.component());
 			case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 		};

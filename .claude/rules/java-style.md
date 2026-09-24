@@ -76,7 +76,7 @@ Apply these rules to the code being changed. Do not perform unrelated cleanup or
 - `IllegalStateException` for cannot-happen, `IllegalArgumentException`
   for a caller's mistake. Checked exceptions do not leak out of the
   generator, except `IOException` from a method that takes a `Writer`.
-- Tests: JUnit, AssertJ and XMLUnit. Every assertion is AssertJ's,
+- Tests: JUnit and AssertJ. Every assertion is AssertJ's,
   exceptions included (`assertThatThrownBy`). Test classes and methods
   are package-private; method names are sentences in camelCase.
 - Not used anywhere: Lombok, `Utils` classes, an interface with one

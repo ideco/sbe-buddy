@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The oracle for com.example.trading: the schema the annotated records must
-     produce, written by hand as a person would write it. SbeTool reads it from
-     here. It follows FIX's shapes, tag numbers as ids and FIX's message types
-     and values, without being FIX. -->
+<!-- The schema of com.example.trading, frozen: the package reads it from the
+     class path, and the compiler checks the annotated records against it.
+     SbeTool reads it from here too. It follows FIX's shapes, tag numbers as
+     ids and FIX's message types and values, without being FIX. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="com.example.trading"
                    id="91"
