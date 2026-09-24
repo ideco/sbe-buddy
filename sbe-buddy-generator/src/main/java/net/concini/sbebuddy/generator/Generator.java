@@ -69,16 +69,18 @@ public final class Generator {
 	/**
 	 * Steps 3 to 7 of the pipeline: the document, validated against sbe.xsd and
 	 * parsed by sbe-tool, then the IR under the schema package's {@code .sbe}
-	 * namespace and the flyweights with SbeTool's defaults, then, unless the schema
-	 * turned them off, the codecs under the schema package. Generation is all or
-	 * nothing: every source is built in memory first and reaches the output only
-	 * when there is no problem. Whatever sbe-tool reports, warning or error, is a
-	 * problem naming the schema with sbe-tool's text verbatim; a construct the
-	 * codec lacks is a problem naming its message. An output that fails to write is
-	 * an {@link UncheckedIOException}.
+	 * namespace and the flyweights with SbeTool's defaults, then the join of the IR
+	 * with the annotations, which applies the face rules and, unless the schema
+	 * turned them off, writes the codecs under the schema package. Generation is
+	 * all or nothing: every source is built in memory first and reaches the output
+	 * only when there is no error; warnings come back with everything written.
+	 * Whatever sbe-tool reports, warning or error, is a problem naming the schema
+	 * with sbe-tool's text verbatim; a rule the join finds broken is a problem
+	 * naming its node. An output that fails to write is an
+	 * {@link UncheckedIOException}.
 	 */
 	public static List<Problem> generate(Schema schema, Annotated annotated, DynamicPackageOutputManager output) {
-		Parsed parsed = parse(schema);
+		Parsed parsed = parse(document(schema), schema, schema.packageName());
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			return parsed.problems();
@@ -95,11 +97,9 @@ public final class Generator {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-		if (annotated.codecs()) {
-			List<Problem> problems = CodecEmitter.emit(ir, annotated, staged);
-			if (!problems.isEmpty()) {
-				return problems;
-			}
+		List<Problem> problems = CodecEmitter.emit(ir, annotated, staged);
+		if (problems.stream().anyMatch(Problem::isError)) {
+			return problems;
 		}
 		for (Map.Entry<String, CharSequence> source : staged.getSources().entrySet()) {
 			// Keyed by qualified class name; the header flyweight, which sbe-tool opens
@@ -112,7 +112,7 @@ public final class Generator {
 				throw new UncheckedIOException(e);
 			}
 		}
-		return List.of();
+		return problems;
 	}
 
 	/**
@@ -120,7 +120,7 @@ public final class Generator {
 	 * directly; one it rejects is an {@link IllegalArgumentException}.
 	 */
 	public static Ir ir(Schema schema) {
-		Parsed parsed = parse(schema);
+		Parsed parsed = parse(document(schema), schema, schema.packageName());
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			throw new IllegalArgumentException("sbe-tool rejects the schema: " + parsed.problems());
@@ -132,12 +132,15 @@ public final class Generator {
 	private record Parsed(@Nullable Ir ir, List<Problem> problems) {
 	}
 
-	private static Parsed parse(Schema schema) {
-		String document = document(schema);
+	/**
+	 * Steps 4 and 5 over a document: sbe-tool's problems name {@code node}, and the
+	 * IR's namespace is the schema package's {@code .sbe}.
+	 */
+	private static Parsed parse(String document, Object node, String packageName) {
 		try {
 			XSD.newValidator().validate(new StreamSource(new StringReader(document)));
 		} catch (SAXException e) {
-			return new Parsed(null, List.of(new Problem(schema, "sbe.xsd: " + e.getMessage())));
+			return new Parsed(null, List.of(new Problem(node, "sbe.xsd: " + e.getMessage())));
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
@@ -158,14 +161,14 @@ public final class Generator {
 			List<Problem> problems = new ArrayList<>();
 			for (String line : reported.toString(StandardCharsets.UTF_8).split("\\R")) {
 				if (!line.isBlank()) {
-					problems.add(new Problem(schema, line));
+					problems.add(new Problem(node, line));
 				}
 			}
 			return new Parsed(
-					null, problems.isEmpty() ? List.of(new Problem(schema, String.valueOf(e.getMessage()))) : problems
+					null, problems.isEmpty() ? List.of(new Problem(node, String.valueOf(e.getMessage()))) : problems
 			);
 		}
-		return new Parsed(new IrGenerator().generate(parsed, schema.packageName() + ".sbe"), List.of());
+		return new Parsed(new IrGenerator().generate(parsed, packageName + ".sbe"), List.of());
 	}
 
 	private static String document(Schema schema) {

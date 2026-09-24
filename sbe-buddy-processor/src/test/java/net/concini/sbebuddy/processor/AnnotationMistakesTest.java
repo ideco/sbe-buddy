@@ -16,8 +16,9 @@ import org.junit.jupiter.api.Test;
  * would be typed, compiled through the processor, asserting every diagnostic
  * with the line it lands on and that nothing was written; and where a rule
  * allows something, that it compiles clean. The schemas set {@code codecs =
- * false}, so what is tested is the mapping and not the codec emitter, except
- * for the unions, which need codecs.
+ * false}, so what is tested is the mapping and the face rules, which apply
+ * whether or not codecs are wanted, and not the codec emitter, except for the
+ * unions, which need codecs.
  */
 final class AnnotationMistakesTest {
 
@@ -537,12 +538,26 @@ final class AnnotationMistakesTest {
 								@SbeComposite
 								record Price(
 										@SbeType(primitiveType = INT64) int mantissa,
-										@SbeType(primitiveType = UINT8, presence = OPTIONAL) short scale,
-										@SbeType(primitiveType = CHAR, presence = CONSTANT) byte unit
+										@SbeType(primitiveType = UINT8, presence = OPTIONAL) short scale
 								) {}"""
 				),
 				error("int mantissa", "int is not the face of mantissa, which is long"),
-				error("short scale", "short cannot hold null, but the member can be absent; use Short"),
+				error("short scale", "short cannot hold null, but the member can be absent; use Short")
+		);
+	}
+
+	@Test
+	void aConstantMemberNeedsAValueOrAValueRef() {
+		assertErrors(
+				inMessage(
+						"@SbeField(id = 1) Price price",
+						"""
+								@SbeComposite
+								record Price(
+										@SbeType(primitiveType = INT64) long mantissa,
+										@SbeType(primitiveType = CHAR, presence = CONSTANT) byte unit
+								) {}"""
+				),
 				error("byte unit", "a constant member needs a value or a valueRef")
 		);
 	}

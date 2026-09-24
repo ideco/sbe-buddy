@@ -6,7 +6,7 @@ out. No javac here; the processor is the only front-end.
 ```
 Annotated        the api's annotations as data, plus what javac knows
 Mapping          Annotated to Schema, and the rules one node decides
-FaceRules        a component's Java type against the type the wire hands it
+FaceRules        a component's Java type against the face its token hands it, applied by the walk
 Schema           sbe.xsd as records
 SchemaXml        Schema to XML, exactly what the model holds
 Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
@@ -44,9 +44,13 @@ Problem          a mistake on a node of either model
 
 - Only javac can see it: `Discovery`, in the processor.
 - One node decides it: `Mapping`.
-- It ties a component's Java type to its face: `FaceRules`, which runs on
-  every field, var-data, composite member and ref.
 - It compares nodes (duplicates, versions, append-only): `Generator.validate`.
+- It ties a component's Java type to its face: `FaceRules`, which the walk
+  applies to every token it meets with an annotation, fields, groups,
+  var-data, composite members and refs, reading the face from the token so
+  the rule and the codec never disagree. It runs with `codecs = false` too.
+  A rule sbe-tool crashes on rather than reports, a constant without a
+  value, stays in `Mapping`, before the document.
 - Everything else is sbe-tool's, reported verbatim on the package. Our
   documents raise nothing there, so anything it reports is our mistake.
 
@@ -63,7 +67,9 @@ Problem          a mistake on a node of either model
   `wrapAndApplyHeader` writes them. Its own members are written from a
   header or as their null value.
 - A construct the codec does not cover yet is a `Problem` on the message,
-  collected once, and the message gets no model. Nothing is skipped silently.
+  reported only when codecs are wanted, and the message gets no model.
+  Nothing is skipped silently. A composite is walked by every message that
+  uses it; `CodecEmitter` reports each of its problems once.
 - A new construct is a node in `CodecModel`, a case in the writer's switches
   and its templates in `CodecTemplates`.
 - Templates hold no conditionals and no loops. What varies is decided in Java

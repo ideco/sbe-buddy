@@ -35,13 +35,15 @@ One compilation of an `@SbeSchema` package runs:
 4  schema.xml ──► MessageSchema       sbe-tool  XmlSchemaParser
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
-7  Ir + Annotated ──► codec sources   ours      CodecWalk, CodecModel, CodecWriter, UnionWriter
+7  Ir ⋈ Annotated ──► codec sources   ours      the join: CodecWalk with FaceRules, CodecModel, CodecWriter, UnionWriter
 8  schema.xml ──► a resource          ours      the schema ships in the jar
 ```
 
 sbe-buddy writes the XML that goes in and consumes the IR that comes out;
-nothing with wire semantics is computed here. `@SbeSchema(codecs = false)`
-skips step 7. The unit of work is the package: every annotated element
+nothing with wire semantics is computed here. Step 7 joins each token of the
+IR with its annotation by wire name; the face rules run there whether or not
+the schema wants codecs, and `@SbeSchema(codecs = false)` skips only the
+writing. The unit of work is the package: every annotated element
 brings its package, which is generated once, in the first round that shows
 it. Discovery orders the top level by id and qualified name, never by
 javac's order, so the same sources give the same output however they were
@@ -75,9 +77,10 @@ Three layers, in the order a mistake meets them.
 * **The type system.** Annotation members are typed as the XSD types them,
   so most of sbe-tool's name-resolution rules cannot fire.
 * **Ours, positioned on the element.** Discovery holds what only javac can
-  see; Mapping what one node decides; FaceRules what ties a component's
-  Java type to the type the wire hands it; `Generator.validate` what
-  compares nodes.
+  see; Mapping what one node decides; `Generator.validate` what compares
+  nodes; FaceRules, in the join with the IR, what ties a component's Java
+  type to the face sbe-tool's flyweight hands it, read from the token as
+  the codec reads it.
 * **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
   and parsed with warnings fatal; anything reported lands on the package
   with sbe-tool's text. A rule that matters to users graduates to ours.

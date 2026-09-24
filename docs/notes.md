@@ -517,6 +517,24 @@ alternatives considered.
   sets `--processor-path` and is unaffected.
   (`maven-compiler-plugin:4.0.0-beta-5` plugin descriptor, `proc` and
   `annotationProcessorPaths`, read 2026-09-20.)
+* `Filer.getResource(CLASS_PATH, "", "com/example/schema.xml")`, an empty
+  package and a slash-separated name, finds a file in a directory or a jar
+  on the compile classpath; the `FileObject`'s URI is `file:` for the one
+  and `jar:file:…!/com/example/schema.xml` for the other. On `CLASS_PATH`
+  and `SOURCE_PATH` a missing file is a `FileNotFoundException` from
+  `getResource`; on `CLASS_OUTPUT` and `SOURCE_OUTPUT` `getResource`
+  returns a `FileObject` for any name and the read fails with
+  `NoSuchFileException`. (Spike processor, javac 21, under Maven 4.0.0-rc-6
+  and Gradle 8.14.3, 2026-09-24.)
+* `Filer.createResource(CLASS_OUTPUT, …)` over a file that another tool
+  put there before javac ran, a copied resource, overwrites it without a
+  `FilerException`; the check is against files the `Filer` itself created
+  in this compilation. (Spike processor under Maven, 2026-09-24.)
+* An `InputSource` with no system id makes the XInclude-aware parser
+  resolve `href` against the working directory; with `setSystemId` from
+  `FileObject.toUri()` it resolves a relative `href` next to the document,
+  in a directory and inside a jar alike. (Spike against
+  `XmlSchemaParser.parse(InputSource, ParserOptions)`, 2026-09-24.)
 
 ## JDK 25
 
@@ -554,6 +572,16 @@ alternatives considered.
 
 ## Maven 4.0.0-rc-6
 
+* `src/main/resources` is copied to `target/classes` before javac runs,
+  and `target/classes` is on the compile classpath, so a resource of the
+  module is visible to a processor on `CLASS_OUTPUT` and on `CLASS_PATH`;
+  `-sourcepath` is passed, so a file beside the sources in `src/main/java`
+  is visible on `SOURCE_PATH`. A change to a resource alone copies the
+  resource and compiles nothing, "Nothing to compile - all classes are up
+  to date"; `fileExtensions` with `xml` changes nothing, because it watches
+  dependencies, not the module's own output. (Spike processor,
+  `maven-compiler-plugin` 3.14.0, 2026-09-24.)
+
 * `.mvn/jvm.config` is parsed by `bin/JvmConfigParser.java`, which strips
   everything from a `#` to the end of the line and expands
   `${MAVEN_PROJECTBASEDIR}`. The `only-script` wrapper execs
@@ -566,6 +594,26 @@ alternatives considered.
   set, breaks the launcher before Maven starts. CI and a plain workstation
   are unaffected; a container that sets it must pass those flags in
   `MAVEN_OPTS` instead. (Spike experiment, 2026-09-20.)
+
+## Gradle 8.14.3
+
+* A module's own resources are visible to a processor on no location:
+  `processResources` writes to `build/resources/main`, which is neither the
+  class output nor on `compileJava`'s classpath, and `compileJava` passes
+  an empty `-sourcepath`. `compileJava { classpath +=
+  files(sourceSets.main.resources.srcDirs) }` puts the source directory on
+  `CLASS_PATH`, where the resource is then found; a dependency's jar is on
+  `CLASS_PATH` as it is. (Spike processor, 2026-09-24.)
+* Compile-classpath normalization ignores anything but class files, so a
+  resource on the classpath is not an input of `compileJava`: a change to
+  it alone leaves the task `UP-TO-DATE`. `compileJava {
+  inputs.files(fileTree('src/main/resources') { include '**/*.xml' }) }`
+  makes it one, and the task re-runs on the change and is `UP-TO-DATE`
+  otherwise. (Spike processor, 2026-09-24.)
+* A resource the processor writes into the class output at a path the
+  module's resources also hold fails `jar`: "Entry com/example/schema.xml
+  is a duplicate but no duplicate handling strategy has been set". (Spike
+  processor, 2026-09-24.)
 
 ## exec-maven-plugin 3.6.4 and build-helper-maven-plugin 3.6.2
 

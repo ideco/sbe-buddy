@@ -42,7 +42,8 @@ and FIX's datatypes are a user's schema like any other. The target Java represen
 ## Out of scope
 
 RPC (`rpc.md`), Aeron transport, typed flyweights, tooling over sbe-tool's
-schema corpus. sbe-tool's own `JavaDtoGenerator` is the nearest prior art
+schema corpus. Merging schemas: a package's schema is written from its
+annotations or read from a resource, never assembled from both. sbe-tool's own `JavaDtoGenerator` is the nearest prior art
 to the codec: it generates its own DTO classes from the IR, where sbe-buddy
 maps to the user's records, with bindings, `null` for absence and
 unions. None of these appears in code until
@@ -141,6 +142,10 @@ user's binding's to decide. No built-in bindings.
 
 * [x] 21. A FIX-like order-entry schema, the example's `trading` grown into the showcase: FIX tags as ids and FIX's shapes without being FIX, every construct where such a schema uses it and the bindings beside it, unions per direction and over both, byte-compatible with sbe-tool's flyweights from its hand-written oracle in both directions; an optional composite, set or array field, its null a binding's
 
+**Schema-first.**
+
+* [ ] 22. Schema-first mapping: `@SbeSchema` names an XML resource on the class path, sbe-tool generates every message's flyweights from it, and the records map the messages they choose to with the same annotations, each written member checked against the XML; nothing is written. First the join: the face rules run over the IR where each token meets its annotation, so the pipeline is one flow from the document down
+
 **The API pass.**
 
-* [ ] 22. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
+* [ ] 23. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim

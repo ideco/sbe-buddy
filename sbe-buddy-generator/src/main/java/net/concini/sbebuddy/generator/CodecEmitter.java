@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.agrona.generation.DynamicPackageOutputManager;
 import org.jspecify.annotations.Nullable;
@@ -15,12 +17,15 @@ import org.jspecify.annotations.Nullable;
 import uk.co.real_logic.sbe.ir.Ir;
 
 /**
- * Step 7 of the pipeline: one {@code <Msg>Codec} per message, each walked into
- * a {@link CodecModel} by {@link CodecWalk} and written by {@link CodecWriter},
- * then one {@code <Union>Codec} per union, composed from its members' codecs
- * and written by {@link UnionWriter}. A construct the codec does not cover yet
- * is a problem naming the message; nothing is skipped silently, and nothing is
- * written while any problem stands.
+ * Step 7 of the pipeline, the join of the IR with the annotations: every
+ * message walked by {@link CodecWalk}, which applies the face rules to each
+ * token it meets, into a {@link CodecModel} written by {@link CodecWriter} as
+ * {@code <Msg>Codec}, then one {@code <Union>Codec} per union, composed from
+ * its members' codecs and written by {@link UnionWriter}. The walk runs whether
+ * or not the schema wants codecs, for the rules; the codecs are written only
+ * when it does. A construct the codec does not cover yet is a problem naming
+ * the message; nothing is skipped silently, and nothing is written while an
+ * error stands.
  */
 public final class CodecEmitter {
 
@@ -28,30 +33,39 @@ public final class CodecEmitter {
 	}
 
 	/**
-	 * Writes each message's codec through the output under the schema package, or
-	 * writes nothing and returns the problems: a construct the codec lacks in any
-	 * message is collected, never a partial write. An output that fails to write is
-	 * an {@link UncheckedIOException}.
+	 * Walks every message and, when the schema wants codecs, writes each message's
+	 * and union's codec through the output under the schema package; or writes
+	 * nothing and returns the problems: every rule broken in any message is
+	 * collected, never a partial write. Warnings come back with everything written.
+	 * An output that fails to write is an {@link UncheckedIOException}.
 	 */
 	public static List<Problem> emit(Ir ir, Annotated annotated, DynamicPackageOutputManager output) {
-		List<Problem> problems = new ArrayList<>(duplicateCodecs(annotated));
+		Problems problems = new Problems();
 		Map<String, String> sources = new LinkedHashMap<>();
 		Map<Annotated.Message, CodecModel> models = new IdentityHashMap<>();
 		for (Annotated.Message message : annotated.messages()) {
-			CodecModel model = CodecWalk.walk(ir, annotated, message, problems);
+			List<Problem> walked = new ArrayList<>();
+			CodecModel model = CodecWalk.walk(ir, annotated, message, walked);
+			problems.addAll(walked);
 			if (model != null) {
 				models.put(message, model);
 				sources.put(model.codec(), CodecWriter.write(model));
 			}
 		}
+		if (!annotated.codecs()) {
+			return problems.list();
+		}
+		problems.addAll(duplicateCodecs(annotated));
 		for (Annotated.Union union : annotated.unions()) {
-			UnionModel model = union(annotated, union, models, problems);
+			List<Problem> unionProblems = new ArrayList<>();
+			UnionModel model = union(annotated, union, models, unionProblems);
+			problems.addAll(unionProblems);
 			if (model != null) {
 				sources.put(model.codec(), UnionWriter.write(model));
 			}
 		}
-		if (!problems.isEmpty()) {
-			return List.copyOf(problems);
+		if (problems.list().stream().anyMatch(Problem::isError)) {
+			return problems.list();
 		}
 		for (Map.Entry<String, String> source : sources.entrySet()) {
 			// Before every file: Agrona's manager falls back to the first package it
@@ -63,7 +77,32 @@ public final class CodecEmitter {
 				throw new UncheckedIOException(e);
 			}
 		}
-		return List.of();
+		return problems.list();
+	}
+
+	/**
+	 * The problems of every message, each once: a composite, the header included,
+	 * is walked by every message that uses it, and a rule its member breaks would
+	 * otherwise be reported once per message. Nodes are told apart by identity,
+	 * since two messages may hold fields of equal content.
+	 */
+	private static final class Problems {
+
+		private final List<Problem> list = new ArrayList<>();
+		private final Map<Object, Set<String>> seen = new IdentityHashMap<>();
+
+		void addAll(List<Problem> problems) {
+			for (Problem problem : problems) {
+				if (seen.computeIfAbsent(problem.node(), node -> new HashSet<>())
+						.add(problem.severity() + " " + problem.message())) {
+					list.add(problem);
+				}
+			}
+		}
+
+		List<Problem> list() {
+			return List.copyOf(list);
+		}
 	}
 
 	/**

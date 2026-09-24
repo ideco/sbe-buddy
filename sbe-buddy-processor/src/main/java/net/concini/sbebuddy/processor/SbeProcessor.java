@@ -104,8 +104,8 @@ public final class SbeProcessor extends AbstractProcessor {
 			return;
 		}
 		List<Problem> generation = generate(schemaPackage, mapped.schema(), discovered.annotated());
-		if (!generation.isEmpty()) {
-			report(generation, discovered, mapped, schemaPackage);
+		report(generation, discovered, mapped, schemaPackage);
+		if (generation.stream().anyMatch(Problem::isError)) {
 			return;
 		}
 		write(schemaPackage, mapped.schema());

@@ -4,7 +4,6 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,8 +32,10 @@ import net.concini.sbebuddy.generator.CodecModel.Shape;
  * reads it and from {@link Annotated} for the Java side. Every flyweight member
  * the model names comes from {@link JavaUtil}, so the codec calls what was
  * generated. Each token meets its annotation once, by wire name, and each
- * helper is registered once, after the helpers it uses. A construct the codec
- * does not cover yet is a problem on the message, and the message gets no
+ * helper is registered once, after the helpers it uses. Where a token meets its
+ * annotation the {@link FaceRules} apply, each problem on its node, whether or
+ * not the schema wants codecs; a construct the codec does not cover yet is a
+ * problem on the message only when it does. A message with an error gets no
  * model.
  */
 final class CodecWalk {
@@ -45,28 +46,44 @@ final class CodecWalk {
 
 	private final Ir ir;
 	private final Annotated annotated;
+	private final Annotated.Message message;
 	private final String flyweights;
 	private final Map<Object, Helper> helpers = new LinkedHashMap<>();
 	private final Map<String, String> bindings = new LinkedHashMap<>();
 	private final Map<String, CodecModel.Context> contexts = new LinkedHashMap<>();
-	private final Set<String> problems = new LinkedHashSet<>();
+	private final List<Problem> problems = new ArrayList<>();
+	private final FaceRules faces = new FaceRules(problems);
 
-	private CodecWalk(Ir ir, Annotated annotated) {
+	private CodecWalk(Ir ir, Annotated annotated, Annotated.Message message) {
 		this.ir = ir;
 		this.annotated = annotated;
+		this.message = message;
 		this.flyweights = ir.applicableNamespace();
 	}
 
 	/**
-	 * The message's model, or null with its problems added to {@code problems}.
+	 * The message's model, or null with an error among the problems added to
+	 * {@code problems}; a warning is added and stops nothing.
 	 */
 	static @Nullable CodecModel walk(Ir ir, Annotated annotated, Annotated.Message message, List<Problem> problems) {
-		CodecWalk walk = new CodecWalk(ir, annotated);
+		CodecWalk walk = new CodecWalk(ir, annotated, message);
 		CodecModel model = walk.model(message);
-		for (String problem : walk.problems) {
+		problems.addAll(walk.problems);
+		return walk.failed() ? null : model;
+	}
+
+	private boolean failed() {
+		return problems.stream().anyMatch(Problem::isError);
+	}
+
+	/**
+	 * A problem of the codec's, on the message: what it lacks, or cannot name.
+	 * Reported only when the schema wants codecs, since each says to turn them off.
+	 */
+	private void codecProblem(String problem) {
+		if (annotated.codecs()) {
 			problems.add(new Problem(message, problem));
 		}
-		return walk.problems.isEmpty() ? model : null;
 	}
 
 	/**
@@ -164,7 +181,7 @@ final class CodecWalk {
 			case Shape.Set set -> set;
 			case Shape.Constant constant -> null;
 			case Shape.Composite composite -> {
-				problems.add(lacking("a composite in a header"));
+				codecProblem(lacking("a composite in a header"));
 				yield null;
 			}
 		};
@@ -231,7 +248,7 @@ final class CodecWalk {
 			Member member = byComponent.get(component);
 			if (member != null) {
 				order.add(member);
-			} else if (problems.isEmpty()) {
+			} else if (!failed()) {
 				throw new IllegalStateException("a component with no member on the wire");
 			}
 		}
@@ -243,6 +260,9 @@ final class CodecWalk {
 	 * time unit beside what its type says.
 	 */
 	private @Nullable Member field(Token field, List<Token> typeTokens, Annotated.Field component, Owner owner) {
+		if (!faces.field(component, typeTokens.get(0), canBeAbsent(field, owner))) {
+			return null;
+		}
 		String name = component.javaName();
 		String property = JavaUtil.formatPropertyName(field.name());
 		Bound bound = null;
@@ -275,7 +295,7 @@ final class CodecWalk {
 	) {
 		Token type = typeTokens.get(0);
 		if (type.signal() == Signal.BEGIN_COMPOSITE) {
-			problems.add(lacking("an unmapped field of a composite"));
+			codecProblem(lacking("an unmapped field of a composite"));
 			return null;
 		}
 		if (constant(field)) {
@@ -302,6 +322,9 @@ final class CodecWalk {
 	}
 
 	private Member.@Nullable Group group(List<Token> tokens, Annotated.Group group, Owner owner) {
+		if (!faces.group(group)) {
+			return null;
+		}
 		Token token = tokens.get(0);
 		String property = JavaUtil.formatPropertyName(token.name());
 		String path = owner.prefix() + Generators.toUpperFirstChar(property);
@@ -335,6 +358,9 @@ final class CodecWalk {
 	 * text needs.
 	 */
 	private Member.@Nullable Data data(List<Token> tokens, Annotated.Data data, Owner owner) {
+		if (!faces.data(data, tokens.get(1), tokens.get(3))) {
+			return null;
+		}
 		Token token = tokens.get(0);
 		String property = JavaUtil.formatPropertyName(token.name());
 		boolean added = token.version() > owner.baseline();
@@ -417,15 +443,15 @@ final class CodecWalk {
 			charset = Charset.forName(encoding);
 		} catch (IllegalArgumentException e) {
 			// Charset's own exceptions for a name it does not know, or cannot read.
-			problems.add(noCodec("text in " + encoding + ": the JDK knows no such encoding"));
+			codecProblem(noCodec("text in " + encoding + ": the JDK knows no such encoding"));
 			return null;
 		}
 		if (!charset.canEncode()) {
-			problems.add(noCodec("text in " + encoding + ": the JDK can read it but not write it"));
+			codecProblem(noCodec("text in " + encoding + ": the JDK can read it but not write it"));
 			return null;
 		}
 		if (charArray && containsZero("A".getBytes(charset))) {
-			problems.add(
+			codecProblem(
 					noCodec(
 							"a char array in " + encoding
 									+ ": it writes zero bytes inside a character, and sbe-tool's flyweight ends a char array at its first zero byte"
@@ -470,16 +496,24 @@ final class CodecWalk {
 	 */
 	private Absence absence(Token field, Annotated.JavaType javaType, Owner owner) {
 		boolean primitive = javaType instanceof Annotated.Primitive plain && !plain.boxed();
-		if (constant(field)) {
+		if (!canBeAbsent(field, owner)) {
 			return primitive ? Absence.NONE : Absence.REQUIRED;
 		}
-		if (field.encoding().presence() == Encoding.Presence.OPTIONAL) {
-			return Absence.OPTIONAL;
+		return field.encoding().presence() == Encoding.Presence.OPTIONAL ? Absence.OPTIONAL : Absence.ADDED;
+	}
+
+	/**
+	 * Whether the wire can leave a field or member absent: optional, or added above
+	 * the body's baseline, which a composite's member never is, since a composite
+	 * cannot be extended; a constant carries no bytes and is never absent.
+	 */
+	private static boolean canBeAbsent(Token field, Owner owner) {
+		Encoding.Presence presence = field.encoding().presence();
+		if (presence == Encoding.Presence.CONSTANT) {
+			return false;
 		}
-		if (owner.kind() != Owner.Kind.COMPOSITE && field.version() > owner.baseline()) {
-			return Absence.ADDED;
-		}
-		return primitive ? Absence.NONE : Absence.REQUIRED;
+		return presence == Encoding.Presence.OPTIONAL
+				|| owner.kind() != Owner.Kind.COMPOSITE && field.version() > owner.baseline();
 	}
 
 	private @Nullable Shape shape(
@@ -617,6 +651,17 @@ final class CodecWalk {
 				}
 				continue;
 			}
+			// An inline declaration is its own component's type, so it always fits.
+			boolean fits = switch (member) {
+				case Annotated.Type type -> faces.member(type, token, canBeAbsent(token, owner));
+				case Annotated.Ref ref -> faces.ref(ref, token);
+				case Annotated.Enum enumeration -> true;
+				case Annotated.Set set -> true;
+				case Annotated.Composite nested -> true;
+			};
+			if (!fits) {
+				continue;
+			}
 			String name = javaName(member);
 			Bound bound = null;
 			Annotated.Binding binding = bindingOf(member);
@@ -692,7 +737,7 @@ final class CodecWalk {
 		}
 		String declared = bindings.putIfAbsent(name, binding.qualifiedName());
 		if (declared != null && !declared.equals(binding.qualifiedName())) {
-			problems.add(
+			codecProblem(
 					"two bindings share the simple name " + simpleName + " in one codec; the second is "
 							+ binding.qualifiedName()
 			);

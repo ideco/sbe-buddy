@@ -33,7 +33,10 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
   options of its own.
 - `AnnotationMistakesTest` holds one test per rule, written as the source a
   user types around a shared package, imports and enclosing record, with
-  `codecs = false`, except the unions, which need codecs. It asserts every
+  `codecs = false`, which the face rules ignore, except the unions, which
+  need codecs. A snippet breaks rules of one layer only: a mapping error
+  stops the pipeline before the join, so a face rule beside it would go
+  unreported. It asserts every
   diagnostic, the text of the line it lands on, and that nothing was written.
   Where a rule allows something, a test asserts it compiles clean.
 - `PlacementTest` proves placement and all-or-nothing once per rule layer.
