@@ -36,7 +36,7 @@ Each component carries `@SbeType`, an inline `type` element with every attribute
 @SbeField(id = 15, sinceVersion = 6, description = "The last trade of the instrument") @Nullable Trade lastTrade
 ```
 
-The component's own type names the composite; `type = Trade.class` is needed only where the component is something else, as with a binding below. The codec reads the members into a new `Trade` and writes a `Trade`'s members out, through the composite's own flyweight. A field of a composite cannot be `presence = OPTIONAL`: a composite has no null value. It is still absent, and `null`, when a message predates it, which is why `lastTrade` above is nullable.
+The component's own type names the composite; `type = Trade.class` is needed only where the component is something else, as with a binding below. The codec reads the members into a new `Trade` and writes a `Trade`'s members out, through the composite's own flyweight. A field of a composite may be `presence = OPTIONAL`, but the composite has no null value the codec knows: SBE says an optional composite is null when its first element is, a convention a [binding](bindings.md) applies. With a binding the codec hands it a `null` component and returns what it reads back; without one, it writes and reads the record, and refuses a `null` one, `lastTrade has no null value on the wire; a binding may write one`. A composite field is still absent, and `null`, when a message predates it, which is why `lastTrade` above is nullable.
 
 ## Members
 

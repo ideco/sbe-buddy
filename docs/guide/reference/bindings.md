@@ -5,13 +5,13 @@ A binding lets a record hold a component as a type of its own rather than as the
 ## The interfaces
 
 ```java
-public interface TypeBinding<J, W> {
+public interface TypeBinding<J extends @Nullable Object, W> {
 
     W toWire(J value, BindingContext context);
 
     J fromWire(W wire, BindingContext context);
 
-    interface OfLong<J> {
+    interface OfLong<J extends @Nullable Object> {
 
         long toWire(J value, BindingContext context);
 
@@ -36,13 +36,15 @@ public record BindingContext(
         @Nullable PrimitiveType primitiveType,
         @Nullable String characterEncoding,
         @Nullable String epoch,
-        @Nullable String timeUnit) {}
+        @Nullable String timeUnit,
+        @Nullable Presence presence) {}
 ```
 
 * `name`: the component's name, as the codec's own messages give it, so a binding's exception says which field it refused.
 * `primitiveType`: the wire primitive after a named type is resolved; an array's or a string's element, an enum's or a set's encoding; `null` for a composite and a group. A `long` face is an `int64`, a `uint64` or a `uint32`, and this tells which.
 * `characterEncoding`: the type's, for a `char` array and text var-data; `null` otherwise.
 * `epoch` and `timeUnit`: the field's attributes as the schema writes them, `null` where the field leaves them out, and always `null` on a composite's member, where the schema has neither.
+* `presence`: the field's or the member's, a field left at the default taking its named type's; `null` for a group and var-data, which have none. A binding over a face without a null value of its own reads it to tell an optional field from a required one.
 
 sbe-buddy interprets none of it. `sbe.xsd` types `epoch` and `timeUnit` as free text: `unix`, the XSD's default for `epoch`, conventionally means a count from midnight, 1 January 1970, UTC, and `second`, `millisecond`, `microsecond` and `nanosecond` are the units sbe-tool documents, but any text is valid SBE, and a field without them has none. What `null` means is the binding's decision, and so is refusing a value it cannot interpret.
 
@@ -227,7 +229,28 @@ Sixteen `uint8` in RFC 9562's octet order is another, which a reader in any lang
 
 ## Absence, checks and exceptions
 
-Absence passes through as `null` without calling the binding. An optional component, or one added above the baseline, is `null` in the record when the wire holds the null value or the message predates it, and `null` in the record writes the null value; `toWire` and `fromWire` see only values. A required group or var-data that is `null` is refused before its binding is called.
+Where the wire has a null of its own, absence passes through as `null` without calling the binding. An optional scalar or enum, or a component added above the baseline, is `null` in the record when the wire holds the null value or the message predates it, and `null` in the record writes the null value; `toWire` and `fromWire` see only values. A required component that is `null` is refused before its binding is called.
+
+An optional field of a composite, a set, or a type with a length has no null value on the wire: SBE allows `presence="optional"` there and leaves what null looks like to the schema. The codec hands such a field to `toWire` as it is, `null` included, and calls `fromWire` on whatever it reads; the binding writes its chosen representation of null and returns `null` when it reads it back. The trading example's prices are `null` when the mantissa is its null value, as SBE suggests for a composite whose first element is optional:
+
+```java
+public PriceEncoding toWire(@Nullable BigDecimal value, BindingContext context) {
+    if (value == null) {
+        if (context.presence() != Presence.OPTIONAL) {
+            throw new IllegalArgumentException(context.name() + " is required");
+        }
+        return new PriceEncoding(null, PriceEncoding.EXPONENT);
+    }
+    // the mantissa at the exponent's scale, or an exception naming the field
+}
+
+public @Nullable BigDecimal fromWire(PriceEncoding wire, BindingContext context) {
+    Long mantissa = wire.mantissa();
+    return mantissa == null ? null : BigDecimal.valueOf(mantissa, -wire.exponent());
+}
+```
+
+Without a binding, such a field is its face in the record and is never `null` after a decode; a `null` on the way out is refused although the field is optional, `price has no null value on the wire; a binding may write one`.
 
 The checks the codec makes on the wire's face still apply to what the binding hands it: a string longer than its field, an array of the wrong length, a constant other than the schema's, compared on its wire side, is refused after `toWire`. A binding's own exception passes through the codec unwrapped.
 

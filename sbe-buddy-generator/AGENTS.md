@@ -71,7 +71,10 @@ Problem          a mistake on a node of either model
 - A binding stands in front of any member's write and behind its read, and
   is handed its component's `BindingContext`, one `static final` constant per
   bound component built from the IR's tokens. Absence and unknown values are
-  settled before it is called; it is never handed `null`.
+  settled before it is called, and it is never handed `null`, except on an
+  optional field whose face has no null value: a composite, a set, an array
+  or a string. There the binding chooses null's wire form, and without one
+  the codec refuses `null`.
 - Text goes through the flyweight's `String` form in ASCII, is counted
   without encoding in UTF-8 var-data, and in any other encoding goes through
   a reporting `CharsetEncoder`, never `String.getBytes`, which would write an

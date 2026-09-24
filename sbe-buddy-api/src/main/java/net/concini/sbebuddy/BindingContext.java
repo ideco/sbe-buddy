@@ -23,12 +23,17 @@ import org.jspecify.annotations.Nullable;
  * @param timeUnit
  *            the field's {@code timeUnit} as the schema writes it; null where
  *            it is absent or the schema has none
+ * @param presence
+ *            the field's or member's presence, a field left at the default
+ *            taking its named type's; null for a group and var-data, which have
+ *            none
  */
 public record BindingContext(
 		String name,
 		@Nullable PrimitiveType primitiveType,
 		@Nullable String characterEncoding,
 		@Nullable String epoch,
-		@Nullable String timeUnit
+		@Nullable String timeUnit,
+		@Nullable Presence presence
 ) {
 }

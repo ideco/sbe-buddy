@@ -1,59 +1,94 @@
 package com.example.trading;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.List;
+import java.math.BigDecimal;
+import java.time.Instant;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
-import com.example.trading.sbe.MessageHeaderDecoder;
-import com.example.trading.sbe.NewOrderDecoder;
+import net.concini.sbebuddy.Codec;
 
 /**
- * The codecs over the flyweights: an order with its legs and its note goes onto
- * the wire through its codec, reads back through the flyweights as written, and
- * decodes equal, every length agreeing; a cancel, a block alone, the same.
+ * Every message through its own codec, the whole contract: the length it
+ * announces is what it writes, and it decodes equal. The header's sequence
+ * number goes out from a header and as its null value without one, and comes
+ * back whole; what the bindings refuse names the field.
  */
 final class CodecsTest {
 
 	private static final int OFFSET = 16;
 
 	@Test
-	void anOrderRoundTripsAndTheFlyweightsReadWhatItsCodecWrites() {
-		NewOrder order = new NewOrder(
-				42, "ACME", Side.BUY, new Price(12_345, (byte) -2), 4_000_000_000L,
-				List.of(new NewOrder.Leg(9, 1), new NewOrder.Leg(10, -1)), "Good for the day — then cancel"
-		);
-		NewOrderCodec codec = new NewOrderCodec();
-		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
-
-		int written = codec.encode(order, buffer, OFFSET);
-
-		assertThat(written).isEqualTo(codec.encodedLength(order));
-		NewOrderDecoder decoder = new NewOrderDecoder().wrapAndApplyHeader(buffer, OFFSET, new MessageHeaderDecoder());
-		assertThat(decoder.symbol()).isEqualTo("ACME");
-		NewOrderDecoder.LegsDecoder legs = decoder.legs();
-		assertThat(legs.count()).isEqualTo(2);
-		assertThat(legs.next().instrumentId()).isEqualTo(9);
-		assertThat(legs.next().ratio()).isEqualTo(-1);
-		assertThat(decoder.note()).isEqualTo("Good for the day — then cancel");
-		assertThat(MessageHeaderDecoder.ENCODED_LENGTH + decoder.encodedLength()).isEqualTo(written);
-		assertThat(codec.decodedLength(buffer, OFFSET)).isEqualTo(written);
-		assertThat(codec.decode(buffer, OFFSET)).isEqualTo(order);
-		assertThat(codec.lastDecodedLength()).isEqualTo(written);
+	void everyMessageRoundTripsThroughItsCodec() {
+		roundTrip(new NewOrderCodec(), Samples.LIMIT_ORDER);
+		roundTrip(new NewOrderCodec(), Samples.MARKET_ORDER);
+		roundTrip(new ReplaceOrderCodec(), Samples.REPLACE);
+		roundTrip(new CancelOrderCodec(), Samples.CANCEL_ORDER);
+		roundTrip(new ExecutionReportCodec(), Samples.FILL);
+		roundTrip(new ExecutionReportCodec(), Samples.ACKNOWLEDGEMENT);
+		roundTrip(new CancelRejectCodec(), Samples.CANCEL_REJECT);
+		roundTrip(new RejectCodec(), Samples.REJECT);
 	}
 
 	@Test
-	void aCancelRoundTrips() {
-		CancelOrder cancel = new CancelOrder(42, "ACME");
-		CancelOrderCodec codec = new CancelOrderCodec();
-		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+	void theSequenceNumberTravelsInTheHeader() {
+		NewOrderCodec codec = new NewOrderCodec();
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
 
-		int written = codec.encode(cancel, buffer, OFFSET);
+		codec.encode(Samples.LIMIT_ORDER, new SessionHeader(0, 0, 0, 0, 4711), buffer, OFFSET);
+		assertThat(codec.decodeHeader(buffer, OFFSET).sequenceNumber()).isEqualTo(4711);
 
-		assertThat(written).isEqualTo(codec.encodedLength(cancel));
-		assertThat(codec.decode(buffer, OFFSET)).isEqualTo(cancel);
-		assertThat(codec.lastDecodedLength()).isEqualTo(written);
+		codec.encode(Samples.LIMIT_ORDER, buffer, OFFSET);
+		assertThat(codec.decodeHeader(buffer, OFFSET).sequenceNumber()).isEqualTo(0xFFFF_FFFFL);
+	}
+
+	@Test
+	void aRequiredPriceIsRefusedByItsBindingNamingTheField() {
+		ExecutionReport report = new ExecutionReport(
+				"VENUE-0000000042", Samples.ORDER, "EXEC-00000000007", ExecType.TRADE, OrdStatus.FILLED, "ACME",
+				Side.BUY, 0, 700, 700, null, null, Samples.FILL.tradeDate(), Samples.FILL.maturity(), Samples.TIME,
+				Samples.fills(new ExecutionReport.Fill("EXEC-00000000005", new BigDecimal("99.61005"), 700))
+		);
+
+		assertThatThrownBy(() -> new ExecutionReportCodec().encode(report, new UnsafeBuffer(new byte[256]), OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("fillPx has no wire form with 4 decimals: 99.61005");
+	}
+
+	@Test
+	void aTimeBefore1970IsRefusedByItsBinding() {
+		CancelOrder early = new CancelOrder(
+				Samples.REPLACEMENT, Samples.CANCEL, "ACME", Side.BUY, Instant.parse("1969-12-31T23:59:59Z")
+		);
+
+		assertThatThrownBy(() -> new CancelOrderCodec().encode(early, new UnsafeBuffer(new byte[128]), OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("transactTime is before 1970: 1969-12-31T23:59:59Z");
+	}
+
+	@Test
+	void aCharacterIso88591CannotHoldIsRefused() {
+		CancelReject reject = new CancelReject(
+				"VENUE-0000000042", Samples.CANCEL, Samples.REPLACEMENT, OrdStatus.FILLED, CxlRejReason.OTHER, "€ 5"
+		);
+
+		assertThatThrownBy(() -> new CancelRejectCodec().encode(reject, new UnsafeBuffer(new byte[128]), OFFSET))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("text cannot be written in ISO-8859-1: € 5");
+	}
+
+	private static <T> void roundTrip(Codec<T, SessionHeader> codec, T value) {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[512]);
+
+		int written = codec.encode(value, buffer, OFFSET);
+
+		assertThat(written).as("encodedLength").isEqualTo(codec.encodedLength(value));
+		assertThat(codec.canDecode(buffer, OFFSET)).as("canDecode").isTrue();
+		assertThat(codec.decodedLength(buffer, OFFSET)).as("decodedLength").isEqualTo(written);
+		assertThat(codec.decode(buffer, OFFSET)).isEqualTo(value);
+		assertThat(codec.lastDecodedLength()).as("lastDecodedLength").isEqualTo(written);
 	}
 }

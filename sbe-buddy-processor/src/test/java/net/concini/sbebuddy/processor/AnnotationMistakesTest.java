@@ -179,10 +179,18 @@ final class AnnotationMistakesTest {
 	}
 
 	@Test
-	void aSetFieldCannotBeOptional() {
-		assertErrors(
-				inMessage("@SbeField(id = 1, presence = OPTIONAL) Set<Flags> flags", FLAGS),
-				error("Set<Flags> flags", "a set has no null value; a set field cannot be optional")
+	void aFieldOfAFaceWithoutANullValueMayBeOptional() {
+		// SBE allows it and sbe-tool accepts it; null is a binding's to represent.
+		assertClean(
+				inMessage(
+						"""
+								@SbeField(id = 1, presence = OPTIONAL) Set<Flags> flags,
+								@SbeField(id = 2, type = Symbol.class, presence = OPTIONAL) String symbol,
+								@SbeField(id = 3, type = Samples.class) int[] samples,
+								@SbeField(id = 4, presence = OPTIONAL) Decimal price""",
+						FLAGS, SYMBOL, DECIMAL,
+						"@SbeType(primitiveType = INT32, length = 4, presence = OPTIONAL) final class Samples {}"
+				)
 		);
 	}
 
@@ -296,19 +304,6 @@ final class AnnotationMistakesTest {
 						"@SbeType(primitiveType = CHAR, presence = CONSTANT, value = \"USD\") final class Currency {}"
 				),
 				error("byte currency", "byte is not the face of Currency, which is String")
-		);
-	}
-
-	@Test
-	void aFieldOfATypeWithALengthCannotBeOptional() {
-		assertErrors(
-				inMessage(
-						"@SbeField(id = 1, type = Symbol.class, presence = OPTIONAL) String symbol,\n@SbeField(id = 2, type = Samples.class) int[] samples",
-						SYMBOL,
-						"@SbeType(primitiveType = INT32, length = 4, presence = OPTIONAL) final class Samples {}"
-				),
-				error("String symbol", "Symbol has a length; a field of it cannot be optional"),
-				error("int[] samples", "Samples has a length; a field of it cannot be optional")
 		);
 	}
 
@@ -564,17 +559,15 @@ final class AnnotationMistakesTest {
 	}
 
 	@Test
-	void aCompositeFieldsComponentIsTheRecordAndNeverOptional() {
+	void aCompositeFieldsComponentIsTheRecord() {
 		assertErrors(
 				inMessage(
 						"""
 								@SbeField(id = 1, type = Decimal.class) long plain,
-								@SbeField(id = 2, presence = OPTIONAL) Decimal optional,
-								@SbeField(id = 3, type = Decimal.class, binding = CentsBinding.class) BigDecimal bound""",
+								@SbeField(id = 2, type = Decimal.class, binding = CentsBinding.class) BigDecimal bound""",
 						DECIMAL, CENTS_BINDING
 				),
 				error("long plain", "Decimal is a composite; use Decimal"),
-				error("Decimal optional", "Decimal is a composite; a field of it cannot be optional"),
 				error(
 						"BigDecimal bound",
 						"CentsBinding binds the wire as long, but the face of Decimal is Decimal; implement TypeBinding over Decimal"

@@ -1,19 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The oracle for com.example.trading: the schema the annotated records must
      produce, written by hand as a person would write it. SbeTool reads it from
-     here. -->
+     here. It follows FIX's shapes, tag numbers as ids and FIX's message types
+     and values, without being FIX. -->
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="com.example.trading"
                    id="91"
                    version="0"
-                   semanticVersion="FIX.5.0SP2"
-                   description="A small trading schema">
+                   semanticVersion="1.0"
+                   description="Order entry in FIX's shapes"
+                   headerType="SessionHeader">
     <types>
-        <composite name="messageHeader">
+        <composite name="SessionHeader" description="The standard four and the session's sequence number">
             <type name="blockLength" primitiveType="uint16"/>
             <type name="templateId" primitiveType="uint16"/>
             <type name="schemaId" primitiveType="uint16"/>
             <type name="version" primitiveType="uint16"/>
+            <type name="sequenceNumber" primitiveType="uint32"/>
         </composite>
         <composite name="groupSizeEncoding">
             <type name="blockLength" primitiveType="uint16"/>
@@ -23,30 +26,166 @@
             <type name="length" primitiveType="uint16"/>
             <type name="varData" primitiveType="char" length="0" characterEncoding="UTF-8"/>
         </composite>
-        <type name="Symbol" primitiveType="char" length="8" characterEncoding="US-ASCII" semanticType="String"/>
-        <composite name="Price" semanticType="Price" description="A decimal price as mantissa and exponent">
-            <type name="mantissa" primitiveType="int64"/>
-            <type name="exponent" primitiveType="int8"/>
+        <composite name="VarLatin1Encoding">
+            <type name="length" primitiveType="uint16"/>
+            <type name="varData" primitiveType="char" length="0" characterEncoding="ISO-8859-1"/>
         </composite>
-        <enum name="Side" encodingType="char">
-            <validValue name="BUY">B</validValue>
-            <validValue name="SELL">S</validValue>
+        <type name="CharEnum" primitiveType="char"/>
+        <type name="ClOrdId" primitiveType="char" length="20" semanticType="String"/>
+        <type name="Account" primitiveType="char" length="12" semanticType="String"/>
+        <type name="Symbol" primitiveType="char" length="8" semanticType="String"/>
+        <type name="OrderId" primitiveType="char" length="16" semanticType="String"/>
+        <type name="ExecId" primitiveType="char" length="16" semanticType="String"/>
+        <type name="PartyId" primitiveType="char" length="12" semanticType="String"/>
+        <type name="UtcTimestamp" primitiveType="uint64" semanticType="UTCTimestamp"/>
+        <type name="LocalMktDate" primitiveType="uint16" semanticType="LocalMktDate"/>
+        <composite name="PriceEncoding" semanticType="Price" description="A price in ten-thousandths, null when the mantissa is">
+            <type name="mantissa" primitiveType="int64" presence="optional"/>
+            <type name="exponent" primitiveType="int8" presence="constant">-4</type>
+        </composite>
+        <composite name="QtyEncoding" semanticType="Qty" description="A quantity in whole units">
+            <type name="mantissa" primitiveType="int32"/>
+            <type name="exponent" primitiveType="int8" presence="constant">0</type>
+        </composite>
+        <composite name="MonthYear" semanticType="MonthYear">
+            <type name="year" primitiveType="uint16" presence="optional"/>
+            <type name="month" primitiveType="uint8"/>
+            <type name="day" primitiveType="uint8" presence="optional"/>
+            <type name="week" primitiveType="uint8" presence="optional"/>
+        </composite>
+        <enum name="Side" encodingType="CharEnum">
+            <validValue name="BUY">1</validValue>
+            <validValue name="SELL">2</validValue>
+            <validValue name="SELL_SHORT">5</validValue>
         </enum>
+        <enum name="OrdType" encodingType="CharEnum">
+            <validValue name="MARKET">1</validValue>
+            <validValue name="LIMIT">2</validValue>
+            <validValue name="STOP">3</validValue>
+            <validValue name="STOP_LIMIT">4</validValue>
+        </enum>
+        <enum name="TimeInForce" encodingType="CharEnum">
+            <validValue name="DAY">0</validValue>
+            <validValue name="GOOD_TILL_CANCEL">1</validValue>
+            <validValue name="IMMEDIATE_OR_CANCEL">3</validValue>
+            <validValue name="FILL_OR_KILL">4</validValue>
+        </enum>
+        <enum name="SecurityIdSource" encodingType="CharEnum">
+            <validValue name="ISIN">4</validValue>
+            <validValue name="EXCHANGE_SYMBOL">8</validValue>
+        </enum>
+        <enum name="ExecType" encodingType="CharEnum">
+            <validValue name="NEW">0</validValue>
+            <validValue name="CANCELED">4</validValue>
+            <validValue name="REPLACED">5</validValue>
+            <validValue name="REJECTED">8</validValue>
+            <validValue name="TRADE">F</validValue>
+        </enum>
+        <enum name="OrdStatus" encodingType="CharEnum">
+            <validValue name="NEW">0</validValue>
+            <validValue name="PARTIALLY_FILLED">1</validValue>
+            <validValue name="FILLED">2</validValue>
+            <validValue name="CANCELED">4</validValue>
+            <validValue name="REJECTED">8</validValue>
+        </enum>
+        <enum name="PartyRole" encodingType="uint8">
+            <validValue name="EXECUTING_FIRM">1</validValue>
+            <validValue name="CLIENT_ID">3</validValue>
+            <validValue name="ENTERING_TRADER">11</validValue>
+        </enum>
+        <enum name="LastLiquidity" encodingType="uint8">
+            <validValue name="ADDED">1</validValue>
+            <validValue name="REMOVED">2</validValue>
+        </enum>
+        <enum name="CxlRejReason" encodingType="uint8">
+            <validValue name="TOO_LATE">0</validValue>
+            <validValue name="UNKNOWN_ORDER">1</validValue>
+            <validValue name="OTHER">99</validValue>
+        </enum>
+        <enum name="BusinessRejectReason" encodingType="uint8">
+            <validValue name="OTHER">0</validValue>
+            <validValue name="UNKNOWN_ID">1</validValue>
+            <validValue name="NOT_AUTHORIZED">6</validValue>
+        </enum>
+        <set name="ExecInst" encodingType="uint8">
+            <choice name="postOnly">0</choice>
+            <choice name="reduceOnly">1</choice>
+            <choice name="allOrNone">2</choice>
+        </set>
     </types>
-    <sbe:message name="NewOrder" id="1" semanticType="D" description="A new single order">
-        <field name="orderId" id="1" type="int64"/>
-        <field name="symbol" id="2" type="Symbol"/>
-        <field name="side" id="3" type="Side"/>
-        <field name="price" id="4" type="Price"/>
-        <field name="quantity" id="5" type="uint32"/>
-        <group name="legs" id="6" description="The legs of a multi-leg order">
-            <field name="instrumentId" id="1" type="int64"/>
-            <field name="ratio" id="2" type="int32"/>
+    <sbe:message name="NewOrder" id="1" blockLength="80" semanticType="D" description="A new single order">
+        <field name="clOrdId" id="11" type="ClOrdId"/>
+        <field name="account" id="1" type="Account"/>
+        <field name="symbol" id="55" type="Symbol"/>
+        <field name="side" id="54" type="Side"/>
+        <field name="ordType" id="40" type="OrdType"/>
+        <field name="timeInForce" id="59" type="TimeInForce"/>
+        <field name="execInst" id="18" type="ExecInst"/>
+        <field name="securityIdSource" id="22" type="SecurityIdSource" presence="constant" valueRef="SecurityIdSource.EXCHANGE_SYMBOL"/>
+        <field name="transactTime" id="60" type="UtcTimestamp" offset="48"/>
+        <field name="orderQty" id="38" type="QtyEncoding"/>
+        <field name="price" id="44" type="PriceEncoding" offset="64" presence="optional"/>
+        <field name="stopPx" id="99" type="PriceEncoding" presence="optional"/>
+        <group name="parties" id="453">
+            <field name="partyId" id="448" type="PartyId"/>
+            <field name="partyRole" id="452" type="PartyRole"/>
+            <group name="partySubIds" id="802">
+                <field name="partySubId" id="523" type="PartyId"/>
+                <field name="partySubIdType" id="803" type="uint8"/>
+            </group>
         </group>
-        <data name="note" id="7" type="varStringEncoding"/>
     </sbe:message>
-    <sbe:message name="CancelOrder" id="2" semanticType="F" description="Cancel an order already sent">
-        <field name="orderId" id="1" type="int64"/>
-        <field name="symbol" id="2" type="Symbol"/>
+    <sbe:message name="ReplaceOrder" id="2" semanticType="G" description="Replace an order already sent">
+        <field name="origClOrdId" id="41" type="ClOrdId"/>
+        <field name="clOrdId" id="11" type="ClOrdId"/>
+        <field name="symbol" id="55" type="Symbol"/>
+        <field name="side" id="54" type="Side"/>
+        <field name="ordType" id="40" type="OrdType"/>
+        <field name="locateReqd" id="114" type="uint8" description="Kept by the venue, no longer carried by the record"/>
+        <field name="orderQty" id="38" type="QtyEncoding"/>
+        <field name="price" id="44" type="PriceEncoding" presence="optional"/>
+        <field name="transactTime" id="60" type="UtcTimestamp"/>
+    </sbe:message>
+    <sbe:message name="CancelOrder" id="3" semanticType="F" description="Cancel an order already sent">
+        <field name="origClOrdId" id="41" type="ClOrdId"/>
+        <field name="clOrdId" id="11" type="ClOrdId"/>
+        <field name="symbol" id="55" type="Symbol"/>
+        <field name="side" id="54" type="Side"/>
+        <field name="transactTime" id="60" type="UtcTimestamp"/>
+    </sbe:message>
+    <sbe:message name="ExecutionReport" id="4" semanticType="8" description="What happened to an order">
+        <field name="orderId" id="37" type="OrderId"/>
+        <field name="clOrdId" id="11" type="ClOrdId"/>
+        <field name="execId" id="17" type="ExecId"/>
+        <field name="execType" id="150" type="ExecType"/>
+        <field name="ordStatus" id="39" type="OrdStatus"/>
+        <field name="symbol" id="55" type="Symbol"/>
+        <field name="side" id="54" type="Side"/>
+        <field name="leavesQty" id="151" type="QtyEncoding"/>
+        <field name="cumQty" id="14" type="QtyEncoding"/>
+        <field name="lastQty" id="32" type="QtyEncoding"/>
+        <field name="lastPx" id="31" type="PriceEncoding" presence="optional"/>
+        <field name="lastLiquidity" id="851" type="LastLiquidity" presence="optional"/>
+        <field name="tradeDate" id="75" type="LocalMktDate"/>
+        <field name="maturity" id="200" type="MonthYear"/>
+        <field name="transactTime" id="60" type="UtcTimestamp"/>
+        <group name="fills" id="1362">
+            <field name="fillExecId" id="1363" type="ExecId"/>
+            <field name="fillPx" id="1364" type="PriceEncoding"/>
+            <field name="fillQty" id="1365" type="QtyEncoding"/>
+        </group>
+    </sbe:message>
+    <sbe:message name="CancelReject" id="5" semanticType="9" description="A cancel the venue refused">
+        <field name="orderId" id="37" type="OrderId"/>
+        <field name="clOrdId" id="11" type="ClOrdId"/>
+        <field name="origClOrdId" id="41" type="ClOrdId"/>
+        <field name="ordStatus" id="39" type="OrdStatus"/>
+        <field name="cxlRejReason" id="102" type="CxlRejReason"/>
+        <data name="text" id="58" type="VarLatin1Encoding"/>
+    </sbe:message>
+    <sbe:message name="Reject" id="6" semanticType="j" description="A message the venue could not take">
+        <field name="refSeqNum" id="45" type="uint32"/>
+        <field name="businessRejectReason" id="380" type="BusinessRejectReason"/>
+        <data name="text" id="58" type="varStringEncoding"/>
     </sbe:message>
 </sbe:messageSchema>

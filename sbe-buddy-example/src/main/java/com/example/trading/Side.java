@@ -1,17 +1,18 @@
 package com.example.trading;
 
-import static net.concini.sbebuddy.PrimitiveType.CHAR;
-
 import net.concini.sbebuddy.SbeEnum;
 import net.concini.sbebuddy.SbeEnumValue;
 
 /** Which side of the market an order takes. */
-@SbeEnum(primitiveType = CHAR)
+@SbeEnum(encodingType = CharEnum.class)
 public enum Side {
 
-	@SbeEnumValue("B")
+	@SbeEnumValue("1")
 	BUY,
 
-	@SbeEnumValue("S")
-	SELL
+	@SbeEnumValue("2")
+	SELL,
+
+	@SbeEnumValue("5")
+	SELL_SHORT
 }

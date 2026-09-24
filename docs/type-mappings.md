@@ -130,12 +130,17 @@ null value is the type's `nullValue` or the primitive's default, exactly as
 sbe-tool applies it. A field left at the default presence takes its named
 type's, as sbe-tool reads the document.
 
-A set field cannot be optional: a set has no null value, and an empty set is
-a value; the compiler rejects `presence = OPTIONAL` on one. Nor can a field
-of a type with a `length`, a string or an array: SBE gives an array no null
-value and sbe-tool's flyweight reads none. Nor can a field of a composite,
-which has no null value either; a composite's inline `type` member may be,
-with a `nullValue`, and decodes to `null` as a field's would, while a
+A field of a set, of a type with a `length` (a string or an array) or of a
+composite may be `presence = OPTIONAL`, as SBE and sbe-tool allow, though
+its face has no null value of its own: an empty set, an empty string or a
+composite with a null first member is a value to the codec. What represents
+null there is a binding's choice, SBE's being a composite whose first
+element is null: the codec hands a `null` component to `toWire` as it is and
+returns whatever `fromWire` makes of what it reads. Without a binding such a
+field is written and read as its face, and a `null` component is refused,
+`price has no null value on the wire; a binding may write one`. A
+composite's inline `type` member may be optional, with a `nullValue`, and
+decodes to `null` as a field's would, while a
 member's `sinceVersion` describes the schema and never makes the member
 absent, since sbe-tool's composite flyweights carry no version guard. A
 field of an enum, a set, a string, an array or a composite is absent below
@@ -233,10 +238,14 @@ a composite and a group), the type's `characterEncoding` for `char` arrays
 and text var-data, and the field's `epoch` and `timeUnit` as the schema
 writes them, `null` where absent, never a default filled in. sbe-buddy
 interprets none of it; a binding reads what it needs and never supplies
-anything to the schema. The codec holds one `static final` context per
+anything to the schema. The context also carries the field's or member's
+`presence`, a field left at the default taking its named type's, and `null`
+for a group and var-data. The codec holds one `static final` context per
 bound component and one instance of each binding class it uses. Absence
-passes through as `null` without calling the binding, and so does an enum's
-unknown value, which the unknown-value contract settles first; whatever a
+the wire expresses passes through as `null` without calling the binding, and
+so does an enum's unknown value, which the unknown-value contract settles
+first; only on an optional field whose face has no null value of its own is
+the binding handed `null`, as above; whatever a
 binding throws passes through unwrapped. A constant with a binding is
 checked on its wire side, `toWire(value)` against the constant.
 

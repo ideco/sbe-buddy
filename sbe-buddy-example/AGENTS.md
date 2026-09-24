@@ -9,6 +9,11 @@ interop with sbe-tool; coverage belongs in sbe-buddy-tests.
 - An oracle grows only with the change that needs it. Never edit it to make a
   failing test pass; a mismatch means the model, the writer or the records
   are wrong.
+- `trading` is the showcase: order entry in FIX's shapes, without being
+  FIX or taken from its standard. It stays at version 0; every construct a
+  user would reach for appears where such a schema would use it, beside the
+  bindings a user would write. Its schema is written fresh, and sbe-tool's
+  flyweights are the only byte reference.
 - `quotes` grows a construct per increment and bumps its schema version. The
   previous oracle is then frozen as `quotes-vN.xml`, with only its leading
   comment saying so, and never edited again.

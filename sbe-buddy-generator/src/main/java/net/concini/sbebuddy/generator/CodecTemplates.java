@@ -480,7 +480,7 @@ final class CodecTemplates {
 	static final Template BINDING_FIELD = Template.of("private final {type} {name} = new {type}();");
 
 	static final Template CONTEXT_FIELD = Template.of(
-			"private static final net.concini.sbebuddy.BindingContext {name} = new net.concini.sbebuddy.BindingContext({component}, {primitiveType}, {characterEncoding}, {epoch}, {timeUnit});"
+			"private static final net.concini.sbebuddy.BindingContext {name} = new net.concini.sbebuddy.BindingContext({component}, {primitiveType}, {characterEncoding}, {epoch}, {timeUnit}, {presence});"
 	);
 
 	/** What the flyweight is handed: the component, or the binding's view of it. */
@@ -722,6 +722,18 @@ final class CodecTemplates {
 				throw new IllegalArgumentException("{component} is required");
 			}
 			{call}""");
+
+	/**
+	 * An optional field on a face with no null value, without a binding to write
+	 * one.
+	 */
+	static final Template ENCODE_NO_NULL_VALUE_FIELD = Template.of(
+			"""
+					if (value.{component}() == null) {
+						throw new IllegalArgumentException("{component} has no null value on the wire; a binding may write one");
+					}
+					{call}"""
+	);
 
 	static final Template DECODE_OPTIONAL_FIELD = Template.of("{isNull} ? null : {read}");
 
