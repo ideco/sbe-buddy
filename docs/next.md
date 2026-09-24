@@ -114,8 +114,12 @@ their binding.
   - Text in any encoding the JDK supports, for `char` arrays and var-data,
     through a reporting `CharsetEncoder`; an unmappable character is an
     `IllegalArgumentException` naming the field, as `symbol is not ASCII`
-    is today. The processor refuses an encoding the JDK does not know.
-    Both "no codec for … yet" problems for text go.
+    is today. The codec refuses, naming the message, an encoding the JDK
+    does not know, and for a `char` array one that writes a zero byte inside
+    a character, UTF-16 or UTF-32, since the flyweight reads a `char` array
+    up to its first zero byte; `codecs = false` keeps the flyweights, as
+    the schema is valid SBE. Both "no codec for … yet" problems for text
+    go.
 - **The corpus.**
   - `bindings` grows: a binding over an enum (the Boolean case, a `boolean`
     over a `false`/`true` enum), over a set, over var-data, over a group,

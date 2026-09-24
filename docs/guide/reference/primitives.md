@@ -104,7 +104,7 @@ Fields appear in record component order, unless the message states a `layout`; s
 
 SBE calculates the layout, with explicit `offset` and message `blockLength` available where needed. Byte order belongs to the schema.
 
-Attributes such as `semanticType`, `epoch` and `timeUnit` describe the field in the schema. They do not change its Java representation or perform conversions.
+Attributes such as `semanticType`, `epoch` and `timeUnit` describe the field in the schema. They do not change its Java representation or perform conversions; a [binding](bindings.md) reads `epoch` and `timeUnit` from its context and interprets them as it will. `timeUnit` is deprecated, as `sbe.xsd` deprecates it.
 
 ## Coverage
 

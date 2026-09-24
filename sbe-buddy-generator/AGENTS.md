@@ -68,6 +68,14 @@ Problem          a mistake on a node of either model
   and its templates in `CodecTemplates`.
 - Templates hold no conditionals and no loops. What varies is decided in Java
   and filled in; no code is assembled by concatenation.
+- A binding stands in front of any member's write and behind its read, and
+  is handed its component's `BindingContext`, one `static final` constant per
+  bound component built from the IR's tokens. Absence and unknown values are
+  settled before it is called; it is never handed `null`.
+- Text goes through the flyweight's `String` form in ASCII, is counted
+  without encoding in UTF-8 var-data, and in any other encoding goes through
+  a reporting `CharsetEncoder`, never `String.getBytes`, which would write an
+  unmappable character as `?`.
 - A union's codec composes its members' codecs and writes no wire code of its
   own. It switches on the record's type to encode and on the flyweights'
   `TEMPLATE_ID` constants to decode, once over every message beneath it.

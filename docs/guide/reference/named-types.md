@@ -57,7 +57,7 @@ A `char` type with a `length` is a fixed-length string, and a field of it is a `
 codec.encode(quoteWithSymbol("LONGNAME1"), buffer, 0); // symbol is longer than 8: LONGNAME1
 ```
 
-The character encoding is `US-ASCII` unless the type says otherwise. A `char` type without a `length` is a single byte, and its field is a `byte`. A string in an encoding other than ASCII is a construct the codec does not cover yet; the compiler names it, and `codecs = false` on `@SbeSchema` keeps the flyweights.
+The character encoding is `US-ASCII` unless the type says otherwise. A `char` type without a `length` is a single byte, and its field is a `byte`. Any other encoding the JDK knows works as well: the codec encodes the string itself, where the flyweight would write a character the encoding cannot hold as `?`, and refuses it with an `IllegalArgumentException`, `name cannot be written in ISO-8859-1: €`; the length is then counted in bytes, `name is longer than 8 bytes in UTF-8: 9`. Two kinds of encoding have no codec, named on the message, and `codecs = false` on `@SbeSchema` keeps the flyweights: one the JDK does not know, and one that writes a zero byte inside a character, UTF-16 or UTF-32, since the flyweight reads a `char` array up to its first zero byte, the padding.
 
 ## Arrays
 

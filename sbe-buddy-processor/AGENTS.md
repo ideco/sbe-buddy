@@ -28,7 +28,9 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
 ## Tests
 
 - `Javac` compiles in memory with `-proc:only`, so generated code is not
-  compiled here. sbe-buddy-tests is where it meets javac.
+  compiled here. sbe-buddy-tests is where it meets javac. A test that needs
+  what javac reports only when it compiles, a deprecated member's use, passes
+  options of its own.
 - `AnnotationMistakesTest` holds one test per rule, written as the source a
   user types around a shared package, imports and enclosing record, with
   `codecs = false`, except the unions, which need codecs. It asserts every

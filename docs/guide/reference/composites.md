@@ -78,11 +78,11 @@ A field that wants the composite as a type of its own names a [binding](bindings
 ```java
 final class DecimalBinding implements TypeBinding<BigDecimal, Decimal> {
 
-    public Decimal toWire(BigDecimal value) {
+    public Decimal toWire(BigDecimal value, BindingContext context) {
         return new Decimal(value.unscaledValue().longValueExact(), (byte) -value.scale());
     }
 
-    public BigDecimal fromWire(Decimal wire) {
+    public BigDecimal fromWire(Decimal wire, BindingContext context) {
         return BigDecimal.valueOf(wire.mantissa(), -wire.exponent());
     }
 }
@@ -110,4 +110,4 @@ A composite does not evolve. SBE has no way to grow one in place, since its size
 
 ## Coverage
 
-This page covers composites as fields of a message. The message header is a composite the schema names on `@SbeSchema`, and has [its own page](headers.md); a group's dimension type is one `@SbeGroup` names; the built-in `UuidWire` and the time encodings, with their bindings, have their own page.
+This page covers composites as fields of a message. The message header is a composite the schema names on `@SbeSchema`, and has [its own page](headers.md); a group's dimension type is one `@SbeGroup` names. A composite's inline member and ref take a [binding](bindings.md) of their own, as a field does.
