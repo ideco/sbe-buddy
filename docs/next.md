@@ -1,165 +1,122 @@
-# Increment 20: Bindings everywhere, with their context
+# Increment 21: A FIX-like order-entry showcase
 
 ## Goal
 
-A binding may stand in for any component that carries a value: fields of
-every kind, enums and sets included, var-data, groups and the members of
-composites. Every binding call receives a `BindingContext` describing its
-place in the schema, so one binding class serves every field it fits: it
-reads the field's wire primitive, character encoding, epoch and time unit
-instead of hard-coding them. Text in any character encoding the JDK knows gets
-a codec. sbe-buddy ships no bindings of its own and no wire types beyond SBE's
-framing: what a value means is the schema maintainer's decision, written in
-their binding.
+The example's `com.example.trading` grows from a toy into a realistic
+order-entry schema in FIX's shapes, without being FIX or claiming to be:
+FIX tag numbers as ids, FIX's message types as `semanticType`, char enums
+with FIX's values, decimals with constant exponents, timestamps and dates
+as counts. It is the showcase: every sbe-buddy feature appears where such a
+schema would naturally use it, the bindings a user writes beside it, and
+sbe-tool's flyweights generated from its hand-written oracle read what our
+codecs write and the reverse. On the way, a composite, a set and an array
+field may be optional, as SBE allows, and a binding decides what null is on
+the wire.
 
 ## Settled before it started
 
-- **sbe-buddy stays agnostic of FIX.** `sbe.xsd` and sbe-tool's behaviour are
-  the contract. The FIX datatypes (`UTCTimestamp`, `LocalMktDate`,
-  `TZTimestamp`, `MonthYear`, the Boolean enum) are one convention on top
-  of SBE, and nothing in the api, the codec or the docs assumes them. The
-  FIX order-entry schema of increment 21 stays: it is a user's schema, the
-  proof, not something the api knows.
-- **No built-in bindings.** No time bindings, no decimal binding, no
-  `UUID`. Whatever sbe-buddy picked, a user would want another encoding,
-  unit, epoch or rounding. `UuidWire` leaves the api: SBE has no UUID
-  layout, and two `int64` in the schema's byte order is one opinion among
-  several. It becomes the guide's example of a binding over a composite.
-  The api keeps SBE's framing, the header, the group dimension and the
-  var-data encodings, which every schema needs in some form.
-- **The context is an argument, not a constructor.** Every method of
-  `TypeBinding` and its six specializations takes a `BindingContext` after
-  the value: `long toWire(J value, BindingContext context)`,
-  `J fromWire(long wire, BindingContext context)`. A binding stays
-  stateless with a no-arg constructor, one instance per class in a codec.
-  Each field with a binding gets one `static final` context in the codec,
-  passed on every call, so nothing is allocated. There are no context-free
-  overloads: a binding that does not need the context ignores it.
-- **The context carries what changes how a value converts:**
-  - `name`: the component's name, as the codec's own messages use it, so a
-    binding's exception names the field.
-  - `primitiveType`: the wire primitive after a named type is resolved, the
-    element's for an array or a string, the encoding type for an enum or a
-    set; `null` for a composite and a group. A `long` is `int64`, `uint64`
-    or `uint32`; the binding can tell which.
-  - `characterEncoding`: the type's, for `char` arrays and text var-data;
-    otherwise `null`.
-  - `epoch` and `timeUnit`: the field's attributes as written, `null` where
-    absent or where the XSD has none. sbe-buddy fills in no default and
-    interprets neither: `sbe.xsd` types both as free strings, and sbe-tool
-    reads an absent one as `null` and checks no value.
-  - Not `sinceVersion` or `deprecated`: whether a value is there is decided
-    by the codec before the binding is called. Not the acting version: it
-    differs per message, and SBE evolution never changes an existing field's
-    meaning. Only generated code constructs a context, so a component added
-    later breaks no binding.
-- **`timeUnit` is deprecated on `@SbeField`,** as `sbe.xsd` deprecates it on
-  `field` ("only for back compatibility with RC2"). It keeps working; javac
-  warns whoever writes it. `epoch` is not deprecated, as in the XSD. The
-  Javadoc of both stops promising "SBE's default applies": nothing applies
-  one.
-- **A binding goes wherever a component carries a value**, because it is
-  optional and nothing is gained by refusing it. The refusals left are the
-  ones where a binding cannot mean anything:
-  - an `unmapped` field, which has no component;
-  - a declaration itself, an `@SbeType` class, `@SbeEnum`, `@SbeSet` or an
-    `@SbeComposite` as a type: a binding belongs to a use of a type, and a
-    declaration is never a binding;
-  - the members SBE's framing owns, a group dimension's, var-data's length
-    and bytes, the header's standard four, which the codec computes; no
-    record component carries them, and `MessageHeader`'s accessors pin the
-    header's.
-- **Enums and sets bind over their faces,** the user's enum and `Set<E>`.
-  Unknown values are settled before the binding runs, as the unknown-value
-  contract says; the binding sees only a constant or a set of them. The
-  Boolean enum is the motivating case: a schema declaring `false` = 0,
-  `true` = 1 over `uint8`, a record holding a `boolean`.
-- **A group binds over its `List<E>`,** so a record may hold a map, an
-  immutable collection or an array of entries. `encodedLength` walks the
-  entries, so `toWire` runs there and again in `encode`; the guide says so.
-- **Text in any encoding.** sbe-tool's flyweights already read and write
-  text in any `characterEncoding`; the codec refused because the JDK
-  writes an unmappable character as `?` silently and a byte limit needs the
-  bytes counted. The codec encodes through a `CharsetEncoder` that reports
-  instead of replacing, checks the length in bytes, and keeps the
-  allocation-free counting for ASCII and UTF-8. Another encoding encodes
-  once to learn its length, so its `encodedLength` allocates; the guide says
-  so. Text stays the codec's, not a binding: a binding over bytes would
-  cost an allocation on every ASCII write and an encode in `encodedLength`
-  for UTF-8, for no gain.
+- **Not called FIX.** The package stays `com.example.trading`; the schema
+  follows FIX's shapes and says so in its description, nothing more.
+  `intent.md`'s increment 21 becomes "a FIX-like order-entry schema".
+- **Not copied from the FIX standard.** Its example schemas are licensed CC
+  BY-ND 4.0, and their wire dumps disagree with their own schemas (the
+  order schema's id against its header, the execution report's table
+  against its dump). The schema is written fresh, and sbe-tool's flyweights
+  are the only byte reference.
+- **An optional field whose face has no null value of its own.** SBE puts
+  `presence="optional"` on any field, and sbe-tool accepts it on a
+  composite, a set and an array; sbe-buddy refuses it today
+  (`Price is a composite; a field of it cannot be optional`, and the same
+  for a set and a type with a length). It stops refusing, and the codec
+  reads and writes such a field as its face, which has no null to write:
+  - With a binding, the component goes to `toWire` as it is, `null`
+    included, and `fromWire` is called on whatever is read. The binding
+    chooses the null's representation, a null mantissa, a zeroed composite,
+    an empty set, and returns `null` when it reads it back.
+  - Without one, a `null` component is refused although the field is
+    optional, `price has no null value on the wire; a binding may write
+    one`, and a decoded component is never `null`.
+  - Where the wire has a null of its own, a scalar's or an enum's null
+    value, or a field added above the message's version, nothing changes:
+    the codec settles absence and the binding never sees `null`. A required
+    field still refuses `null`.
+  - The composites guide stops saying a composite has no null value: SBE
+    says an optional composite is null when its first element is. That
+    convention is the binding's to apply, not the codec's.
+- **`BindingContext` gains `presence`**, the field's or member's as the
+  schema has it, a field left at the default taking its named type's, so a
+  binding tells an optional field from a required one.
+- **Unions of unions.** `OrderEntry` over what a client sends, `OrderEvent`
+  over what the venue sends back, and `TradingMessage` over both, for a
+  journal or a gateway that carries either direction.
+- **Version 0.** `quotes` covers evolution; the showcase reads better
+  without frozen versions. `trading.xml` is rewritten, not frozen.
 
 ## What gets built
 
-- **The api.**
-  - `BindingContext(String name, @Nullable PrimitiveType primitiveType,
-    @Nullable String characterEncoding, @Nullable String epoch,
-    @Nullable String timeUnit)`.
-  - `TypeBinding` and its specializations take the context on both methods.
-  - `binding` on `@SbeData`, `@SbeGroup`, `@SbeRef`, and on `@SbeType` where
-    it annotates a component; on an `@SbeType` class it is refused.
-  - `@Deprecated` on `@SbeField.timeUnit`, and the Javadoc of `epoch` and
-    `timeUnit` corrected.
-  - `UuidWire` removed.
-- **`Annotated`.** A binding on every component kind: data, group, inline
-  member and ref beside field.
-- **`FaceRules`.** One rule for every kind: a binding's `W` is the face, its
-  `J` the component's type, a primitive face through its specialization.
-  The enum and set refusals go; the declaration and `unmapped` refusals stay.
-- **The codec.**
-  - One `static final BindingContext` per bound component, built from the
-    IR's token for it, passed on every call.
-  - The bound read and write for enums, sets, var-data, groups and composite
-    members, beside the fields that have them today. A constant with a
-    binding compares `toWire(value)` with the constant.
-  - Text in any encoding the JDK supports, for `char` arrays and var-data,
-    through a reporting `CharsetEncoder`; an unmappable character is an
-    `IllegalArgumentException` naming the field, as `symbol is not ASCII`
-    is today. The codec refuses, naming the message, an encoding the JDK
-    does not know, and for a `char` array one that writes a zero byte inside
-    a character, UTF-16 or UTF-32, since the flyweight reads a `char` array
-    up to its first zero byte; `codecs = false` keeps the flyweights, as
-    the schema is valid SBE. Both "no codec for … yet" problems for text
-    go.
-- **The corpus.**
-  - `bindings` grows: a binding over an enum (the Boolean case, a `boolean`
-    over a `false`/`true` enum), over a set, over var-data, over a group,
-    over an inline member and a ref; one binding class on a signed and an
-    unsigned field, telling them apart by the context; a binding reading
-    `epoch` and `timeUnit` from its field, and one refusing with the name
-    from the context.
-  - A case with text in an encoding other than ASCII and UTF-8, fixed and
-    var-data, its unmappable character refused.
-  - Every existing binding takes the context.
-- **The example.** `Price` takes the context and names the field when it
-  refuses a price.
-- **The snippets.** A binding on an `unmapped` field and on a declaration
-  still refused; on every newly allowed kind, compiled clean; a face
-  mismatch per kind; `timeUnit`'s deprecation warning; an unknown
-  character encoding.
-- **The documents.**
-  - `intent.md`: the scope loses "built-in bindings for the JDK types";
-    increment 20 is this one.
-  - `type-mappings.md`: bindings on every component, the context, the
-    built-ins paragraph down to SBE's framing, the constant check through a
-    binding, text in any encoding, and the running example without
-    `UuidWire`.
-  - `architecture.md`: the codec contract's paragraph on bindings.
-  - The guide: the bindings page with the context, the new kinds and the
-    `UUID` example over a composite; the var-data and named-types pages for
-    text in any encoding; the enums and sets pages for their bindings; the
-    primitives page on `epoch` and `timeUnit`.
+- **The api.** `BindingContext` gains `@Nullable Presence presence`, null
+  for a group and var-data, which have none; `TypeBinding`'s contract says
+  when a binding is handed `null`.
+- **The rules.** `FaceRules` stops refusing an optional composite, set or
+  array field.
+- **The codec.** On an optional field whose face has no null value: no
+  null check and a straight read with a binding; without one, the refusal
+  above on the way out. The context carries the presence.
+- **The corpus.** A case with an optional composite, set and array field
+  each with a binding writing and reading its null, and each without one,
+  its `null` refused.
+- **The schema, `trading.xml` and its records:**
+
+  | Message | Direction | What it shows |
+  | --- | --- | --- |
+  | `NewOrder` (D) | entry | fixed ids and symbol as named `char` strings, `Side`, `OrdType`, `TimeInForce` as char enums over a named encoding type, `ExecInst` as a set, a constant `securityIdSource`, `price` and `stopPx` as optional decimals bound to `BigDecimal`, a quantity composite with exponent 0, `transactTime` as a `uint64` with no `timeUnit` bound to `Instant`, a `parties` group with nested `partySubIds`, explicit `offset`s and `blockLength` with alignment padding |
+  | `ReplaceOrder` (G) | entry | `layout` and `unmapped`: a field the venue's schema keeps and the record no longer carries |
+  | `CancelOrder` (F) | entry | the smallest message, sharing the named types |
+  | `ExecutionReport` (8) | event | `ExecType` and `OrdStatus` with `@UnknownValue`, `lastLiquidity` as an enum bound to a `boolean`, `tradeDate` as a `uint16` of days bound to `LocalDate`, `maturity` as a year-month composite with optional day and week bound to a record of its own, a `fills` group bound to a map keyed by fill id |
+  | `CancelReject` (9) | event | `CxlRejReason` as an enum, `text` as var-data in ISO-8859-1 |
+  | `Reject` (j) | event | `text` as var-data in UTF-8 |
+
+  - A header of its own, `sequenceNumber` (`uint32`) beside the standard
+    four, as order-entry sessions number their messages.
+  - The bindings the example writes beside the records: decimals reading
+    the exponent from the record's constant member and writing a null
+    price as a null mantissa; the timestamp reading `timeUnit` from its
+    context, whose absence this schema defines as nanoseconds; the date,
+    the year-month, the liquidity flag and the fills map.
+- **The proof.**
+  - `schema.xml` equals `trading.xml`.
+  - The pom runs `SbeTool` over `trading.xml` into `xmlref`, as for
+    `quotes`. Every message goes through our codecs into those flyweights
+    and back, the header's `sequenceNumber` included, with the edge
+    values: a market order's null prices, an empty `fills`, a party
+    without sub-ids, full-length ids, an unknown `ExecType` read as the
+    unknown constant, text at its maximum length, a character ISO-8859-1
+    cannot hold refused.
+  - Each union round-trips its messages and refuses the other direction's
+    through `canDecode`; a gateway test routes a mixed stream by
+    `canDecode` alone; a caller's `switch` over `TradingMessage` takes
+    `OrderEntry` and `OrderEvent` as one case each.
+  - The existing `CodecsTest`, `FlyweightsTest` and `SchemaResourceTest`
+    follow the new schema.
+- **The snippets.** An optional composite, set and array field compiled
+  clean.
+- **The documents.** `intent.md` rewords increment 21 and ticks it;
+  `type-mappings.md` on optional faces without a null value and the
+  context's presence; the guide's bindings and composites pages, and the
+  sets and named-types pages where they refuse an optional field today;
+  the example's `AGENTS.md`.
 
 ## Criteria
 
-- Every component kind that carries a value round-trips through a binding
-  in the corpus, and each binding sees the context of its field.
-- A schema with text in any encoding the JDK knows gets a codec.
-- Nothing in the api or the docs names a FIX datatype as sbe-buddy's own.
+- Every message of `trading.xml` crosses between our codecs and sbe-tool's
+  flyweights in both directions, the edge values included.
+- A schema with an optional composite, set or array field compiles, and a
+  binding carries `null` through it.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-Built-in bindings of any kind. Interpreting `epoch`, `timeUnit` or
-`semanticType`. The acting version in the context. A binding over a whole
-message or a union.
+The Simple Open Framing Header, which is framing, big-endian before a
+body of either order, and the transport's. A schema claiming to be FIX, or
+anything taken from the FIX standard's text. Evolution of `trading`.
