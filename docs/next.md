@@ -82,9 +82,9 @@ a composite cannot grow, and what a router dispatches on.
   package, so two sources of one codec name, a union and a message nested
   in different types or two such messages, are refused naming both.
 - **The union codec.** A model of its own beside `CodecModel`,
-  `UnionModel(packageName, codec, union, flyweights, header, cases)`, each
-  case a member's record, its codec and the flyweight whose `TEMPLATE_ID`
-  labels the case. The writer renders it through templates:
+  `UnionModel(packageName, codec, union, unionName, flyweights, header,
+  cases)`, each case a member's record, its codec and the flyweight whose
+  `TEMPLATE_ID` labels the case. The writer renders it through templates:
   - `encodedLength`, `encode` and `encode` with a header switch on the
     record's type, exhaustively, and delegate.
   - `decode`, `decodedLength` and `canDecode` read the header and switch on

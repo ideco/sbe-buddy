@@ -107,7 +107,7 @@ public final class Fixtures {
 	 */
 	public static Annotated annotated(int version, List<Annotated.Declaration> types, Annotated.Message... messages) {
 		return new Annotated(
-				"p", 1, version, MESSAGE_HEADER, types, List.of(messages), "", "",
+				"p", 1, version, MESSAGE_HEADER, types, List.of(messages), List.of(), "", "",
 				ByteOrder.LITTLE_ENDIAN, true, 0
 		);
 	}
@@ -117,7 +117,9 @@ public final class Fixtures {
 	}
 
 	public static Annotated.Message annotatedMessage(String javaName, int id, Annotated.Component... components) {
-		return new Annotated.Message(javaName, id, List.of(components), List.of(), List.of(), "", 0, "", "", 0, 0);
+		return new Annotated.Message(
+				javaName, "p." + javaName, id, List.of(components), List.of(), List.of(), "", 0, "", "", 0, 0
+		);
 	}
 
 	public static Annotated.Field annotatedField(String javaName, int id, Annotated.JavaType javaType) {

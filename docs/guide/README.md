@@ -16,6 +16,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 * [Composites](reference/composites.md) — `@SbeComposite`, members, refs, the record as the field
 * [Groups](reference/groups.md) — `@SbeGroup`, the entry record, nested groups, what a group costs
 * [Variable data](reference/var-data.md) — `@SbeData`, strings and byte arrays after the block
+* [Unions](reference/unions.md) — `@SbeUnion`, one codec over several messages, the exhaustive `switch`, replacing a message, routing with `canDecode`
 * Codecs — the `Codec` contract and its lifecycle
 
 ## How-to

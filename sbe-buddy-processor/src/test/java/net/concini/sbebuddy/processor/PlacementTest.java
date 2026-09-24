@@ -513,6 +513,30 @@ final class PlacementTest {
 		);
 	}
 
+	@Test
+	void aUnionOutsideASchemaPackageIsNamedWhereItStands() {
+		String source = """
+				package shared;
+
+				import net.concini.sbebuddy.SbeUnion;
+
+				@SbeUnion
+				sealed interface Orders permits Order {
+				}
+
+				record Order(long orderId) implements Orders {
+				}
+				""";
+
+		Javac.Result result = Javac
+				.compile(List.of(Javac.unit("shared/Orders.java", source)), new SbeProcessor());
+
+		assertOnlyError(
+				result, source, "@SbeUnion",
+				"@SbeUnion in package shared, whose package-info.java carries no @SbeSchema"
+		);
+	}
+
 	private static Javac.Result compile(String source) {
 		return Javac.compile(
 				List.of(

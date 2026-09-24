@@ -4,12 +4,14 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 
 /**
- * A record's way onto the wire and back, generated per message into the schema
- * package as {@code <Msg>Codec}; {@code H} is the schema's header. A codec is a
- * stateful instance, one per thread. The one exception of its own is
+ * A record's way onto the wire and back, generated into the schema package per
+ * message as {@code <Msg>Codec} and per {@link SbeUnion} as
+ * {@code <Union>Codec}; {@code H} is the schema's header. A codec is a stateful
+ * instance, one per thread. The one exception of its own is
  * {@link IllegalArgumentException}, for what it is handed and cannot represent:
- * a value with no wire form, or bytes that are not its message. Everything else
- * passes through unwrapped: a buffer too small is Agrona's
+ * {@code null}, a value with no wire form, or bytes that are not its message,
+ * which {@link #canDecode} tells without throwing. Everything else passes
+ * through unwrapped: a buffer too small is Agrona's
  * {@link IndexOutOfBoundsException}, a binding's exception is the binding's,
  * and a state generated code cannot reach is an {@link IllegalStateException}.
  * Implemented only by generated code.
@@ -18,7 +20,7 @@ public interface Codec<T, H extends MessageHeader> {
 
 	/**
 	 * The exact number of bytes {@link #encode} writes for the value, header
-	 * included.
+	 * included. A {@code null} value is an {@link IllegalArgumentException}.
 	 */
 	int encodedLength(T value);
 
@@ -26,10 +28,10 @@ public interface Codec<T, H extends MessageHeader> {
 	 * Writes the value at the offset, header first, and returns the bytes written,
 	 * which is {@link #encodedLength} of it. The header's block length, template
 	 * id, schema id and version are the message's, and any other member of the
-	 * header is its null value. A value the wire cannot carry, such as {@code null}
-	 * in a required field, an array of the wrong length or a string that does not
-	 * fit, is an {@link IllegalArgumentException}, thrown before or while writing;
-	 * the buffer's bounds are the buffer's to check.
+	 * header is its null value. A {@code null} value, or one the wire cannot carry,
+	 * such as {@code null} in a required field, an array of the wrong length or a
+	 * string that does not fit, is an {@link IllegalArgumentException}, thrown
+	 * before or while writing; the buffer's bounds are the buffer's to check.
 	 */
 	int encode(T value, MutableDirectBuffer buffer, int offset);
 
@@ -43,10 +45,20 @@ public interface Codec<T, H extends MessageHeader> {
 
 	/**
 	 * Reads the value at the offset, taking the acting version and block length
-	 * from the header. A header of another schema or template, or a wire value the
-	 * schema does not know, is an {@link IllegalArgumentException}.
+	 * from the header. A header of another schema or template, or of a version
+	 * below the baseline, or a wire value the schema does not know, is an
+	 * {@link IllegalArgumentException}.
 	 */
 	T decode(DirectBuffer buffer, int offset);
+
+	/**
+	 * Whether {@link #decode} takes the message at the offset by its header: this
+	 * schema, one of this codec's templates, and a version at or above the
+	 * baseline. It reads the header alone and throws nothing, so a router asks it
+	 * instead of catching {@code decode}'s exception. A message it says no to is
+	 * the caller's to skip: with groups or var-data its length is unknown here.
+	 */
+	boolean canDecode(DirectBuffer buffer, int offset);
 
 	/**
 	 * Reads the header at the offset, every member of it, and checks nothing: the

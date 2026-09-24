@@ -24,6 +24,7 @@ public record Annotated(
 		Composite headerType,
 		List<Declaration> types,
 		List<Message> messages,
+		List<Union> unions,
 		String semanticVersion,
 		String description,
 		ByteOrder byteOrder,
@@ -34,6 +35,7 @@ public record Annotated(
 	public Annotated {
 		types = List.copyOf(types);
 		messages = List.copyOf(messages);
+		unions = List.copyOf(unions);
 	}
 
 	/**
@@ -244,6 +246,7 @@ public record Annotated(
 	 */
 	public record Message(
 			String javaName,
+			String qualifiedName,
 			int id,
 			List<Component> components,
 			List<Field> unmapped,
@@ -260,6 +263,19 @@ public record Annotated(
 			components = List.copyOf(components);
 			unmapped = List.copyOf(unmapped);
 			layout = List.copyOf(layout);
+		}
+	}
+
+	/**
+	 * {@code @SbeUnion}: a sealed interface over messages of the schema.
+	 * {@code members} are messages of the schema by identity, the hierarchy beneath
+	 * the interface flattened, each once, in template id order; a nested union is a
+	 * union of its own over some of the same messages.
+	 */
+	public record Union(String javaName, String qualifiedName, List<Message> members) {
+
+		public Union {
+			members = List.copyOf(members);
 		}
 	}
 

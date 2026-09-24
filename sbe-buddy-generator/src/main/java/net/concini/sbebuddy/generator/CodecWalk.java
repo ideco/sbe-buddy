@@ -98,7 +98,7 @@ final class CodecWalk {
 		bindings.forEach((name, type) -> fields.add(new CodecModel.Binding(type, name)));
 		return new CodecModel(
 				annotated.packageName(), message.javaName() + "Codec",
-				annotated.packageName() + "." + message.javaName(),
+				message.qualifiedName(),
 				flyweights, header, messageClass, annotated.baselineVersion(), fields, body,
 				List.copyOf(helpers.values())
 		);

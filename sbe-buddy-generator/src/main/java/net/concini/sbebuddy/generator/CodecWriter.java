@@ -55,6 +55,9 @@ final class CodecWriter {
 				"writeNullHeader", header.nulls().isEmpty() ? "" : WRITE_NULL_HEADER_CALL.fill(),
 				"writeHeader", header.body().wireOrder().isEmpty() ? "" : WRITE_HEADER_CALL.fill(),
 				"encodeFields", writes(body),
+				"atBaseline", model.baseline() == 0
+						? ""
+						: AT_BASELINE.fill("baseline", String.valueOf(model.baseline())),
 				"refuseBelowBaseline", model.baseline() == 0
 						? ""
 						: REFUSE_BELOW_BASELINE.fill(model, "baseline", String.valueOf(model.baseline())),
