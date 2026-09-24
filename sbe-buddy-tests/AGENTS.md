@@ -20,6 +20,11 @@ against the flyweights and codecs the processor generated for it.
   beside the current `evolution`, each a case with its own records, codecs
   and oracle, so the versions cross through our codecs with no reference
   build.
+- A schema-first case keeps its XML at `src/main/resources/corpus/<name>/schema.xml`
+  and names it `resource = "schema.xml"`, so the check that the schema in
+  the jar is the oracle holds for it as for any case. `schemafirst` is
+  `bigendian`'s records over `bigendian`'s schema and asserts the generated
+  sources are the twin's; `partial` maps part of a schema of its own.
 
 ## The oracle
 

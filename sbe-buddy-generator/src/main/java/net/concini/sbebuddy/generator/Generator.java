@@ -17,13 +17,24 @@ import java.util.Set;
 import java.util.function.ToIntFunction;
 
 import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.SchemaFactory;
 
 import org.agrona.generation.DynamicPackageOutputManager;
 import org.agrona.generation.StringWriterOutputManager;
 import org.jspecify.annotations.Nullable;
+import org.w3c.dom.Document;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 import uk.co.real_logic.sbe.generation.java.JavaGenerator;
 import uk.co.real_logic.sbe.ir.Ir;
@@ -69,16 +80,86 @@ public final class Generator {
 	/**
 	 * Steps 3 to 7 of the pipeline: the document, validated against sbe.xsd and
 	 * parsed by sbe-tool, then the IR under the schema package's {@code .sbe}
-	 * namespace and the flyweights with SbeTool's defaults, then, unless the schema
-	 * turned them off, the codecs under the schema package. Generation is all or
-	 * nothing: every source is built in memory first and reaches the output only
-	 * when there is no problem. Whatever sbe-tool reports, warning or error, is a
-	 * problem naming the schema with sbe-tool's text verbatim; a construct the
-	 * codec lacks is a problem naming its message. An output that fails to write is
-	 * an {@link UncheckedIOException}.
+	 * namespace and the flyweights with SbeTool's defaults, then the join of the IR
+	 * with the annotations, which applies the face rules and, unless the schema
+	 * turned them off, writes the codecs under the schema package. Generation is
+	 * all or nothing: every source is built in memory first and reaches the output
+	 * only when there is no error; warnings come back with everything written.
+	 * Whatever sbe-tool reports, warning or error, is a problem naming the schema
+	 * with sbe-tool's text verbatim; a rule the join finds broken is a problem
+	 * naming its node. An output that fails to write is an
+	 * {@link UncheckedIOException}.
 	 */
 	public static List<Problem> generate(Schema schema, Annotated annotated, DynamicPackageOutputManager output) {
-		Parsed parsed = parse(schema);
+		return generate(parse(document(schema), schema, schema.packageName()), annotated, output);
+	}
+
+	/**
+	 * Steps 4 to 7 over a schema read from a resource, {@code systemId} its URI:
+	 * every XInclude resolved against it, then the included document as a written
+	 * one, validated, parsed, the flyweights and the join. A document sbe-tool or
+	 * the XML parser refuses is a problem naming the annotated package.
+	 */
+	public static List<Problem> generate(
+			String document, String systemId, Annotated annotated, DynamicPackageOutputManager output
+	) {
+		String included;
+		try {
+			included = include(document, systemId);
+		} catch (SAXException e) {
+			return List.of(new Problem(annotated, String.valueOf(e.getMessage())));
+		}
+		return generate(parse(included, annotated, annotated.packageName()), annotated, output);
+	}
+
+	/**
+	 * The document with its XIncludes resolved, as text again for the one path
+	 * every schema takes; the fixups off, as sbe-tool has them, so nothing is added
+	 * that sbe.xsd does not know.
+	 */
+	private static String include(String document, String systemId) throws SAXException {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setNamespaceAware(true);
+		factory.setXIncludeAware(true);
+		try {
+			factory.setFeature("http://apache.org/xml/features/xinclude/fixup-base-uris", false);
+			factory.setFeature("http://apache.org/xml/features/xinclude/fixup-language", false);
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			builder.setErrorHandler(new Refusing());
+			InputSource source = new InputSource(new StringReader(document));
+			source.setSystemId(systemId);
+			Document included = builder.parse(source);
+			StringWriter writer = new StringWriter();
+			TransformerFactory.newInstance().newTransformer()
+					.transform(new DOMSource(included), new StreamResult(writer));
+			return writer.toString();
+		} catch (ParserConfigurationException | TransformerException e) {
+			throw new IllegalStateException(e);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	/** Every report of the parser is a refusal; the default prints and goes on. */
+	private static final class Refusing implements ErrorHandler {
+
+		@Override
+		public void warning(SAXParseException e) throws SAXException {
+			throw e;
+		}
+
+		@Override
+		public void error(SAXParseException e) throws SAXException {
+			throw e;
+		}
+
+		@Override
+		public void fatalError(SAXParseException e) throws SAXException {
+			throw e;
+		}
+	}
+
+	private static List<Problem> generate(Parsed parsed, Annotated annotated, DynamicPackageOutputManager output) {
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			return parsed.problems();
@@ -95,11 +176,9 @@ public final class Generator {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-		if (annotated.codecs()) {
-			List<Problem> problems = CodecEmitter.emit(ir, annotated, staged);
-			if (!problems.isEmpty()) {
-				return problems;
-			}
+		List<Problem> problems = CodecEmitter.emit(ir, annotated, staged);
+		if (problems.stream().anyMatch(Problem::isError)) {
+			return problems;
 		}
 		for (Map.Entry<String, CharSequence> source : staged.getSources().entrySet()) {
 			// Keyed by qualified class name; the header flyweight, which sbe-tool opens
@@ -112,7 +191,7 @@ public final class Generator {
 				throw new UncheckedIOException(e);
 			}
 		}
-		return List.of();
+		return problems;
 	}
 
 	/**
@@ -120,7 +199,7 @@ public final class Generator {
 	 * directly; one it rejects is an {@link IllegalArgumentException}.
 	 */
 	public static Ir ir(Schema schema) {
-		Parsed parsed = parse(schema);
+		Parsed parsed = parse(document(schema), schema, schema.packageName());
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			throw new IllegalArgumentException("sbe-tool rejects the schema: " + parsed.problems());
@@ -132,12 +211,15 @@ public final class Generator {
 	private record Parsed(@Nullable Ir ir, List<Problem> problems) {
 	}
 
-	private static Parsed parse(Schema schema) {
-		String document = document(schema);
+	/**
+	 * Steps 4 and 5 over a document: sbe-tool's problems name {@code node}, and the
+	 * IR's namespace is the schema package's {@code .sbe}.
+	 */
+	private static Parsed parse(String document, Object node, String packageName) {
 		try {
 			XSD.newValidator().validate(new StreamSource(new StringReader(document)));
 		} catch (SAXException e) {
-			return new Parsed(null, List.of(new Problem(schema, "sbe.xsd: " + e.getMessage())));
+			return new Parsed(null, List.of(new Problem(node, "sbe.xsd: " + e.getMessage())));
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
@@ -158,14 +240,14 @@ public final class Generator {
 			List<Problem> problems = new ArrayList<>();
 			for (String line : reported.toString(StandardCharsets.UTF_8).split("\\R")) {
 				if (!line.isBlank()) {
-					problems.add(new Problem(schema, line));
+					problems.add(new Problem(node, line));
 				}
 			}
 			return new Parsed(
-					null, problems.isEmpty() ? List.of(new Problem(schema, String.valueOf(e.getMessage()))) : problems
+					null, problems.isEmpty() ? List.of(new Problem(node, String.valueOf(e.getMessage()))) : problems
 			);
 		}
-		return new Parsed(new IrGenerator().generate(parsed, schema.packageName() + ".sbe"), List.of());
+		return new Parsed(new IrGenerator().generate(parsed, packageName + ".sbe"), List.of());
 	}
 
 	private static String document(Schema schema) {

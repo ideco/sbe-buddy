@@ -30,18 +30,26 @@ One compilation of an `@SbeSchema` package runs:
 
 ```
 1  javac elements ──► Annotated       ours      Discovery, in the processor
-2  Annotated ──► Schema               ours      Mapping and FaceRules
-3  Schema ──► schema.xml              ours      SchemaXml
-4  schema.xml ──► MessageSchema       sbe-tool  XmlSchemaParser
+2  Annotated ──► Schema               ours      Mapping                                   code-first
+3  Schema ──► the document            ours      SchemaXml                                 code-first
+3' a resource ──► the document        ours      Filer.getResource, XIncludes resolved     schema-first
+4  the document ──► MessageSchema     sbe-tool  XmlSchemaParser, after sbe.xsd
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
-7  Ir + Annotated ──► codec sources   ours      CodecWalk, CodecModel, CodecWriter, UnionWriter
-8  schema.xml ──► a resource          ours      the schema ships in the jar
+7  Ir ⋈ Annotated ──► codec sources   ours      the join: CodecWalk with FaceRules and StatedRules, CodecModel, CodecWriter, UnionWriter
+8  the document ──► schema.xml        ours      the schema ships in the jar               code-first
 ```
 
-sbe-buddy writes the XML that goes in and consumes the IR that comes out;
-nothing with wire semantics is computed here. `@SbeSchema(codecs = false)`
-skips step 7. The unit of work is the package: every annotated element
+sbe-buddy writes the XML that goes in, or reads it from the resource
+`@SbeSchema` names, and consumes the IR that comes out; nothing with wire
+semantics is computed here. From the document down the two ways are one
+flow. Step 7 joins each token of the IR with its annotation by wire name;
+the face rules and the comparison of every stated member run there whether
+or not the schema wants codecs, and `@SbeSchema(codecs = false)` skips only
+the writing. Schema-first, a message no record maps gets flyweights alone,
+a member no component carries is written empty and passed over, and nothing
+is written to the class output: the resource is the schema and ships from
+where the user put it. The unit of work is the package: every annotated element
 brings its package, which is generated once, in the first round that shows
 it. Discovery orders the top level by id and qualified name, never by
 javac's order, so the same sources give the same output however they were
@@ -75,9 +83,12 @@ Three layers, in the order a mistake meets them.
 * **The type system.** Annotation members are typed as the XSD types them,
   so most of sbe-tool's name-resolution rules cannot fire.
 * **Ours, positioned on the element.** Discovery holds what only javac can
-  see; Mapping what one node decides; FaceRules what ties a component's
-  Java type to the type the wire hands it; `Generator.validate` what
-  compares nodes.
+  see; Mapping what one node decides; `Generator.validate` what compares
+  nodes; in the join with the IR, FaceRules what ties a component's Java
+  type to the face sbe-tool's flyweight hands it, read from the token as
+  the codec reads it, and StatedRules what an annotation states that the
+  document states too, which over a written schema holds by construction
+  and over a resource keeps the annotations honest.
 * **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
   and parsed with warnings fatal; anything reported lands on the package
   with sbe-tool's text. A rule that matters to users graduates to ours.
@@ -128,7 +139,8 @@ Each layer is tested where it lives; the module's own `AGENTS.md` says how.
 * **sbe-buddy-tests** holds the corpus: one schema package per case, its
   oracle and its round trips, run against the generated code.
 * **The processor** tests every rule a user can break as the source they
-  write.
+  write, and takes every schema of the corpus and the example round,
+  code-first to schema-first, expecting the same generated sources.
 * **The generator** tests what no source can reach: the rules that compare
   nodes, the all-or-nothing pipeline, `Template` and `SchemaXmlAssert`.
 * **The example** proves the wiring on realistic schemas and interop with

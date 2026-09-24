@@ -15,9 +15,10 @@ import net.concini.sbebuddy.generator.SchemaXmlAssert;
  * Where a rule reaches the user. One snippet per layer, discovery, {@code
  * Mapping}, {@code Generator.validate}, sbe-tool as the backstop and the codec
  * emitter, asserting that the error lands on the element carrying the mistake
- * and that nothing was written, and one warning, placed the same way with
- * everything written; the rules themselves are tested in the generator. Beside
- * them, a declared type resolved across a package boundary.
+ * and that nothing was written, and one warning, a face rule's from the join
+ * with the IR, placed the same way with everything written; the rules
+ * themselves are tested in the generator. Beside them, a declared type resolved
+ * across a package boundary.
  */
 final class PlacementTest {
 
@@ -286,9 +287,9 @@ final class PlacementTest {
 	}
 
 	@Test
-	void mappingWarnsOnTheBoxedComponentAndWritesEverything() {
+	void theJoinWarnsOnTheBoxedComponentAndWritesEverything() {
 		// The mirror of the error snippets: a warning is placed the same way and
-		// stops nothing.
+		// stops nothing, the codecs and the schema included.
 		String source = """
 				package placement;
 

@@ -49,7 +49,6 @@ public final class Mapping {
 	private final Map<Object, Object> origins = new IdentityHashMap<>();
 	private final List<Schema.Declaration> types = new ArrayList<>();
 	private final Map<Annotated.Declaration, String> wireNames = new IdentityHashMap<>();
-	private final FaceRules faces = new FaceRules(problems);
 	private final int baselineVersion;
 	private final Annotated.Composite header;
 
@@ -227,7 +226,12 @@ public final class Mapping {
 			problem(field, "an unmapped field needs a name");
 		}
 		String type = componentType(field, field.type(), field.primitiveType(), field.javaType());
-		faces.field(field, baseline);
+		Annotated.Declaration declaration = field.type() != null ? field.type() : declarationOf(field.javaType());
+		boolean constantType = declaration instanceof Annotated.Type named && named.presence() == Presence.CONSTANT;
+		if (field.presence() == Presence.CONSTANT && field.valueRef().isEmpty() && !constantType) {
+			// sbe-tool's IR generator crashes on one with neither, past every parser rule.
+			problem(field, "a constant field needs a valueRef or a constant type");
+		}
 		Schema.Field result = new Schema.Field(
 				name(field, field.name(), field.javaName()),
 				id(field, field.id()),
@@ -251,15 +255,6 @@ public final class Mapping {
 	 * it nothing below the group's own version is ever read.
 	 */
 	private Schema.Group group(Annotated.Group group, int baseline) {
-		Annotated.Binding binding = group.binding();
-		Annotated.JavaType face = binding == null ? group.javaType() : binding.wire();
-		if (!(face instanceof Annotated.ListOfRecord)) {
-			problem(
-					group, binding == null
-							? "a group must be a List of a record"
-							: "a group's binding must bind a List of a record"
-			);
-		}
 		String dimensionType = declare(group.dimensionType());
 		Body body = body(
 				group, group.components(), group.unmapped(), group.layout(), Math.max(baseline, group.sinceVersion())
@@ -282,7 +277,6 @@ public final class Mapping {
 	}
 
 	private Schema.Data data(Annotated.Data data) {
-		faces.data(data);
 		Schema.Data result = new Schema.Data(
 				name(data, data.name(), data.javaName()),
 				id(data, data.id()),
@@ -441,13 +435,10 @@ public final class Mapping {
 			}
 			members.add(switch (member) {
 				case Annotated.Type type -> {
-					faces.member(type);
+					memberRules(type);
 					yield type(type);
 				}
-				case Annotated.Ref ref -> {
-					faces.ref(ref);
-					yield ref(ref);
-				}
+				case Annotated.Ref ref -> ref(ref);
 				case Annotated.Enum enumeration -> enumeration(enumeration);
 				case Annotated.Set set -> set(set);
 				case Annotated.Composite nested -> composite(nested);
@@ -464,6 +455,38 @@ public final class Mapping {
 		);
 		origins.put(result, composite);
 		return result;
+	}
+
+	/**
+	 * What a composite's inline type must say before sbe-tool reads it: an unmapped
+	 * member its name, a constant its value, and an optional one has no length,
+	 * because a null value is one element's.
+	 */
+	private void memberRules(Annotated.Type member) {
+		Annotated.JavaType javaType = member.javaType();
+		if (javaType == null) {
+			return;
+		}
+		if (javaType instanceof Annotated.Unmapped) {
+			if (member.name().isEmpty()) {
+				problem(member, "an unmapped member needs a name");
+			}
+			return;
+		}
+		if (member.presence() == Presence.CONSTANT && member.value().isEmpty() && member.valueRef().isEmpty()) {
+			problem(member, "a constant member needs a value or a valueRef");
+		}
+		if (member.primitiveType() != PrimitiveType.NONE && member.presence() == Presence.OPTIONAL
+				&& member.length() > 1) {
+			problem(member, wireName(member.name(), member.javaName()) + " has a length; it cannot be optional");
+		}
+	}
+
+	private static Annotated.@Nullable Declaration declarationOf(Annotated.JavaType javaType) {
+		if (javaType instanceof Annotated.Declared declared) {
+			return declared.declaration();
+		}
+		return javaType instanceof Annotated.SetOf set ? set.declaration() : null;
 	}
 
 	private static int sinceVersion(Annotated.Member member) {

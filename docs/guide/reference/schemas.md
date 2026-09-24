@@ -19,6 +19,7 @@ package com.example.trading;
 | `headerType` | `DefaultMessageHeader.class` | The header every message is framed in |
 | `codecs` | `true` | Whether a codec is generated per message; contributes nothing to the schema |
 | `baselineVersion` | `0` | The oldest version the codecs still decode; contributes nothing to the schema |
+| `resource` | none | The schema's XML on the class path, when the schema exists already and the records map it; see [Schema-first](schema-first.md) |
 
 The package is the schema's `package`, and the flyweights go to `<package>.sbe`.
 

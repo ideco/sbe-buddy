@@ -1,122 +1,156 @@
-# Increment 21: A FIX-like order-entry showcase
+# Increment 22: Schema-first mapping
 
 ## Goal
 
-The example's `com.example.trading` grows from a toy into a realistic
-order-entry schema in FIX's shapes, without being FIX or claiming to be:
-FIX tag numbers as ids, FIX's message types as `semanticType`, char enums
-with FIX's values, decimals with constant exponents, timestamps and dates
-as counts. It is the showcase: every sbe-buddy feature appears where such a
-schema would naturally use it, the bindings a user writes beside it, and
-sbe-tool's flyweights generated from its hand-written oracle read what our
-codecs write and the reverse. On the way, a composite, a set and an array
-field may be optional, as SBE allows, and a binding decides what null is on
-the wire.
+A package maps an SBE schema that already exists. `@SbeSchema` names an XML
+resource, sbe-tool generates the flyweights of every message in it, and the
+records in the package map the messages they choose to, with the same
+annotations as today; the codecs and the bindings follow. Nothing of the
+schema is written: the XML is the authority, and it ships from where the
+user put it. Both directions of the workflow are covered: a schema written
+by sbe-buddy is checked in and the package switches to reading it, and a
+schema owned by someone else, a venue's in a jar, is mapped as far as a
+client needs.
+
+Two commits, the second reviewed after the first. The first makes the
+pipeline one flow from the document down, so the second adds a way to get
+the document and little else.
 
 ## Settled before it started
 
-- **Not called FIX.** The package stays `com.example.trading`; the schema
-  follows FIX's shapes and says so in its description, nothing more.
-  `intent.md`'s increment 21 becomes "a FIX-like order-entry schema".
-- **Not copied from the FIX standard.** Its example schemas are licensed CC
-  BY-ND 4.0, and their wire dumps disagree with their own schemas (the
-  order schema's id against its header, the execution report's table
-  against its dump). The schema is written fresh, and sbe-tool's flyweights
-  are the only byte reference.
-- **An optional field whose face has no null value of its own.** SBE puts
-  `presence="optional"` on any field, and sbe-tool accepts it on a
-  composite, a set and an array; sbe-buddy refuses it today
-  (`Price is a composite; a field of it cannot be optional`, and the same
-  for a set and a type with a length). It stops refusing, and the codec
-  reads and writes such a field as its face, which has no null to write:
-  - With a binding, the component goes to `toWire` as it is, `null`
-    included, and `fromWire` is called on whatever is read. The binding
-    chooses the null's representation, a null mantissa, a zeroed composite,
-    an empty set, and returns `null` when it reads it back.
-  - Without one, a `null` component is refused although the field is
-    optional, `price has no null value on the wire; a binding may write
-    one`, and a decoded component is never `null`.
-  - Where the wire has a null of its own, a scalar's or an enum's null
-    value, or a field added above the message's version, nothing changes:
-    the codec settles absence and the binding never sees `null`. A required
-    field still refuses `null`.
-  - The composites guide stops saying a composite has no null value: SBE
-    says an optional composite is null when its first element is. That
-    convention is the binding's to apply, not the codec's.
-- **`BindingContext` gains `presence`**, the field's or member's as the
-  schema has it, a field left at the default taking its named type's, so a
-  binding tells an optional field from a required one.
-- **Unions of unions.** `OrderEntry` over what a client sends, `OrderEvent`
-  over what the venue sends back, and `TradingMessage` over both, for a
-  journal or a gateway that carries either direction.
-- **Version 0.** `quotes` covers evolution; the showcase reads better
-  without frozen versions. `trading.xml` is rewritten, not frozen.
+- **Schemas are never merged.** A package's schema is written from its
+  annotations or read from a resource, never assembled from both. An XML
+  that supplies some types for annotations to build on is a merge; it is
+  out of scope, and `intent.md` says so.
+- **Hybrid means partial.** Some messages of the resource have a record,
+  the rest get flyweights only. A message without a record has no codec,
+  and a union covers only mapped messages. Within a mapped message, a
+  field, group or var-data no component carries is treated as `unmapped`
+  is today: skipped on decode, written as its null value, as empty or as
+  zero length on encode.
+- **The annotations mean the same in both modes.** A member left unwritten
+  lets the XML decide; a member written is checked against the XML node it
+  describes, and a disagreement is an error. The switch from code-first to
+  schema-first is one member on `@SbeSchema`, and on the day the XML is
+  what sbe-buddy wrote, every check passes by construction. `name` still
+  defaults to the Java name, because that is how a record finds its node.
+  An explicit `presence = REQUIRED` cannot be told from the default and is
+  not checked; the face rules catch the drift it could hide.
+- **The face rules run over the IR.** Today `FaceRules` derives the wire
+  side of a component from `Annotated`, duplicating what `CodecWalk`
+  derives from the token, and with minimal annotations there is nothing on
+  the `Annotated` side to derive from. The rules move to where the token
+  meets its annotation, in the walk, and run with `codecs = false` too:
+  turning codecs off does not make a wrong record right. Rules sbe-tool
+  crashes on rather than reports stay before the document, in `Mapping`.
+- **The resource is found on `CLASS_PATH`** through `Filer.getResource`,
+  relative to the package or absolute with a leading slash, as
+  `Class.getResource` reads a name. It is the one location that works in
+  Maven as it is, in Gradle with one line, and for a jar in both. Nothing is
+  written in this mode: writing `<pkg>/schema.xml` beside the user's own
+  copy fails Gradle's `jar` with a duplicate entry. The spike's facts are in
+  `notes.md`.
+- **XInclude resolves against the resource's URI.** The document is parsed
+  from an `InputSource` carrying `FileObject.toUri()`, and the `sbe.xsd`
+  validation of a resource runs on the document after inclusion.
+- **The verify pass falls out.** With complete annotations and a resource,
+  the compilation is the check that the two agree; there is no separate
+  mode for it.
 
 ## What gets built
 
-- **The api.** `BindingContext` gains `@Nullable Presence presence`, null
-  for a group and var-data, which have none; `TypeBinding`'s contract says
-  when a binding is handed `null`.
-- **The rules.** `FaceRules` stops refusing an optional composite, set or
-  array field.
-- **The codec.** On an optional field whose face has no null value: no
-  null check and a straight read with a binding; without one, the refusal
-  above on the way out. The context carries the presence.
-- **The corpus.** A case with an optional composite, set and array field
-  each with a binding writing and reading its null, and each without one,
-  its `null` refused.
-- **The schema, `trading.xml` and its records:**
+### Commit 1: the join
 
-  | Message | Direction | What it shows |
-  | --- | --- | --- |
-  | `NewOrder` (D) | entry | fixed ids and symbol as named `char` strings, `Side`, `OrdType`, `TimeInForce` as char enums over a named encoding type, `ExecInst` as a set, a constant `securityIdSource`, `price` and `stopPx` as optional decimals bound to `BigDecimal`, a quantity composite with exponent 0, `transactTime` as a `uint64` with no `timeUnit` bound to `Instant`, a `parties` group with nested `partySubIds`, explicit `offset`s and `blockLength` with alignment padding |
-  | `ReplaceOrder` (G) | entry | `layout` and `unmapped`: a field the venue's schema keeps and the record no longer carries |
-  | `CancelOrder` (F) | entry | the smallest message, sharing the named types |
-  | `ExecutionReport` (8) | event | `ExecType` and `OrdStatus` with `@UnknownValue`, `lastLiquidity` as an enum bound to a `boolean`, `tradeDate` as a `uint16` of days bound to `LocalDate`, `maturity` as a year-month composite with optional day and week bound to a record of its own, a `fills` group bound to a map keyed by fill id |
-  | `CancelReject` (9) | event | `CxlRejReason` as an enum, `text` as var-data in ISO-8859-1 |
-  | `Reject` (j) | event | `text` as var-data in UTF-8 |
+- **`FaceRules`** takes the type's token and the component's annotation:
+  the face is derived from the token's signal, primitive and array length
+  as `CodecWalk` derives its shape, and an enum, set or composite is
+  matched by the wire name the token names. The rules for a field, a
+  composite's inline member, a ref, a group's `List` face and var-data
+  apply in the walk, each problem on its node; the boxing rule reads the
+  absence the walk already decided. `Mapping` keeps only what must fire
+  before sbe-tool parses: a constant field or member without a value, an
+  unmapped member without a name, an optional member with a length.
+- **`CodecWalk`** collects `Problem`s on their nodes instead of strings on
+  the message, and a message with an error gets no model. It runs for
+  every message whether or not the schema wants codecs; what a codec lacks
+  is reported only when one is wanted, and `CodecEmitter` writes, and
+  checks unions and duplicate codec names, only then. A face problem in a
+  composite that several messages share is reported once.
+- **`Generator`** parses from a document and a node to report sbe-tool's
+  problems on, rendered from the `Schema` in code-first; warnings from the
+  join no longer stop the output, in the generator or in the processor.
+- **The tests** pass as they are, except one that mixed a face rule with a
+  rule of the mapping's in one snippet, which is split into one test per
+  layer. `PlacementTest` and `AnnotationMistakesTest`'s notes say where the
+  face rules now fire.
+- **The documents.** `architecture.md`'s pipeline and rules, the
+  generator's and the processor's `AGENTS.md`.
 
-  - A header of its own, `sequenceNumber` (`uint32`) beside the standard
-    four, as order-entry sessions number their messages.
-  - The bindings the example writes beside the records: decimals reading
-    the exponent from the record's constant member and writing a null
-    price as a null mantissa; the timestamp reading `timeUnit` from its
-    context, whose absence this schema defines as nanoseconds; the date,
-    the year-month, the liquidity flag and the fills map.
-- **The proof.**
-  - `schema.xml` equals `trading.xml`.
-  - The pom runs `SbeTool` over `trading.xml` into `xmlref`, as for
-    `quotes`. Every message goes through our codecs into those flyweights
-    and back, the header's `sequenceNumber` included, with the edge
-    values: a market order's null prices, an empty `fills`, a party
-    without sub-ids, full-length ids, an unknown `ExecType` read as the
-    unknown constant, text at its maximum length, a character ISO-8859-1
-    cannot hold refused.
-  - Each union round-trips its messages and refuses the other direction's
-    through `canDecode`; a gateway test routes a mixed stream by
-    `canDecode` alone; a caller's `switch` over `TradingMessage` takes
-    `OrderEntry` and `OrderEvent` as one case each.
-  - The existing `CodecsTest`, `FlyweightsTest` and `SchemaResourceTest`
-    follow the new schema.
-- **The snippets.** An optional composite, set and array field compiled
-  clean.
-- **The documents.** `intent.md` rewords increment 21 and ticks it;
-  `type-mappings.md` on optional faces without a null value and the
-  context's presence; the guide's bindings and composites pages, and the
-  sets and named-types pages where they refuse an optional field today;
-  the example's `AGENTS.md`.
+### Commit 2: the resource
+
+- **The api.** `@SbeSchema` gains `resource`, empty by default: the
+  schema's XML on the class path, relative to the package or absolute with
+  a leading slash. `id` and `version` stay required and are checked
+  against the document.
+- **The processor** reads the resource through `Filer.getResource` on
+  `CLASS_PATH`, hands the document and its URI to the generator, and writes
+  no `schema.xml`. A resource that is not there is an error on the
+  annotation. `Mapping` and `Generator.validate` do not run.
+- **The generator** parses the resource through an `InputSource` with its
+  URI and XInclude on, validates the included document against `sbe.xsd`,
+  and runs the join as in commit 1. The join gains what code-first could
+  not reach: a record whose id names no message, a component whose wire
+  name names no field, an enum constant or choice the XML lacks, a message
+  whose wire name differs from the token's, and `baselineVersion` above
+  the document's version are problems on their nodes; a field, group or
+  var-data no component carries is written as `unmapped` is, a composite as
+  its members' null values, a group with no entries and var-data with zero
+  length, and passed over on the way in; a declaration a component reaches,
+  through the component or its binding's wire type, is matched to the XML's
+  type by wire name.
+- **The checks.** Every annotation member the XML also states is compared
+  where the token carries it: `id`, `name`, `presence`, `sinceVersion`,
+  `deprecated`, `offset`, `blockLength`, `semanticType`, `description`,
+  `primitiveType`, `length`, `characterEncoding`, `epoch`, `timeUnit`, an
+  enum value's and a choice's `value`. A member written with a value the
+  XML disagrees with is a problem on the annotation naming both.
+- **The corpus.** `schemafirst`: `bigendian`'s records over the XML that
+  package writes, checked in, expecting the generated sources to be the
+  twin's; `partial`: one message of three mapped by two members of seven,
+  round-tripped, the rest shown written empty and passed over whatever a
+  full writer put there. The jar case rests on the spike's facts and the
+  processor's one `CLASS_PATH` lookup, which the example's client exercises
+  with an absolute name. Beside them the processor's `SchemaRoundTripTest`
+  takes every schema of the corpus and the example round: the records
+  compiled code-first write their schema, the same records compiled
+  schema-first over it generate the same sources, byte for byte.
+- **The example.** `com.example.client`, mapping part of `trading.xml` from
+  the class path with the venue's bindings, crossed with the venue's codecs
+  and sbe-tool's flyweights.
+- **The documents.** `intent.md` ticks 22; `type-mappings.md` gains the
+  `resource` member and a section on schema-first; `architecture.md`'s
+  pipeline shows both ways to the document; the guide gains a schema-first
+  page with the Maven note and the two Gradle lines, and the schemas page
+  points to it; `notes.md` carries the spike.
 
 ## Criteria
 
-- Every message of `trading.xml` crosses between our codecs and sbe-tool's
-  flyweights in both directions, the edge values included.
-- A schema with an optional composite, set or array field compiles, and a
-  binding carries `null` through it.
+- After commit 1, `./mvnw verify` is green with the test changes above and
+  no other, and the corpus's generated code is byte-identical to before.
+- A package over an XML sbe-buddy wrote compiles to the same flyweights and
+  codecs as the package that wrote it, for every schema in the repository.
+- A partial mapping of a foreign schema compiles, round-trips against
+  sbe-tool's flyweights and reports each disagreement with the XML on the
+  annotation that states it.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-The Simple Open Framing Header, which is framing, big-endian before a
-body of either order, and the transport's. A schema claiming to be FIX, or
-anything taken from the FIX standard's text. Evolution of `trading`.
+Merging a resource with annotations. `unmapped` groups and var-data in
+code-first, which need `@SbeGroup` and `@SbeData` under `unmapped`, though
+the codec now writes and passes over both. A composite in a header no
+component carries.
+Recompiling on a schema-only edit under Maven, which has no mechanism for
+it; the guide says `clean`. Reading a schema from anywhere but the class
+path.

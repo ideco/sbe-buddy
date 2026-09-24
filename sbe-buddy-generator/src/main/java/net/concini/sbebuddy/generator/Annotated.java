@@ -15,7 +15,9 @@ import net.concini.sbebuddy.PrimitiveType;
  * what an annotation cannot carry: the Java name of the annotated thing, its
  * Java type, and references to declarations by identity rather than by
  * {@code Class}. Nested types are used qualified, {@code Annotated.Field},
- * never imported.
+ * never imported. {@code resource} is the schema's XML on the class path, as
+ * {@code @SbeSchema} names it, empty when the schema is written from these
+ * annotations.
  */
 public record Annotated(
 		String packageName,
@@ -29,7 +31,8 @@ public record Annotated(
 		String description,
 		ByteOrder byteOrder,
 		boolean codecs,
-		int baselineVersion
+		int baselineVersion,
+		String resource
 ) {
 
 	public Annotated {

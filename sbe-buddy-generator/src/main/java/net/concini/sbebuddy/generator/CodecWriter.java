@@ -46,7 +46,7 @@ final class CodecWriter {
 		}
 		List<String> variableLengths = new ArrayList<>();
 		for (Member member : variable(body)) {
-			variableLengths.add(lengthTerm(LENGTH_TERM, member));
+			variableLengths.add(lengthTerm(body, member, false));
 		}
 		List<String> helpers = new ArrayList<>();
 		for (Helper helper : model.helpers()) {
@@ -92,7 +92,7 @@ final class CodecWriter {
 		if (!header.nulls().isEmpty()) {
 			List<String> nulls = new ArrayList<>();
 			for (Member.Unmapped unmapped : header.nulls()) {
-				nulls.add(writeNull(body, unmapped));
+				nulls.add(writeNull(body.encoder(), unmapped));
 			}
 			methods.add(WRITE_NULL_HEADER.fill("encoder", body.encoder(), "members", String.join("\n", nulls)));
 		}
@@ -107,7 +107,9 @@ final class CodecWriter {
 		for (Member member : body.wireOrder()) {
 			writes.add(switch (member) {
 				case Member.Field field -> write(body, field);
-				case Member.Unmapped unmapped -> writeNull(body, unmapped);
+				case Member.Unmapped unmapped -> writeNull(body.encoder(), unmapped);
+				case Member.UnmappedGroup group -> ENCODE_UNMAPPED_GROUP.fill(group);
+				case Member.UnmappedData data -> ENCODE_UNMAPPED_DATA.fill(data);
 				case Member.Group group -> ENCODE_CHECKED_FIELD.fill(
 						group, "call",
 						ENCODE_GROUP_FIELD.fill(
@@ -178,17 +180,21 @@ final class CodecWriter {
 		};
 	}
 
-	/** A field or member no component carries, written as its null value. */
-	private String writeNull(Body body, Member.Unmapped unmapped) {
+	/**
+	 * A field or member no component carries, written as its null value over the
+	 * {@code encoder} class of its body.
+	 */
+	private String writeNull(String encoder, Member.Unmapped unmapped) {
 		return switch (unmapped.shape()) {
-			case Shape.Scalar scalar -> ENCODE_UNMAPPED_FIELD.fill(unmapped, "encoder", body.encoder());
+			case Shape.Scalar scalar -> ENCODE_UNMAPPED_FIELD.fill(unmapped, "encoder", encoder);
 			case Shape.Enum enumeration -> ENCODE_UNMAPPED_ENUM_FIELD.fill(
 					unmapped, "flyweights", model.flyweights(), "enumClass", enumeration.enumClass()
 			);
 			case Shape.Set set -> ENCODE_UNMAPPED_SET_FIELD.fill(unmapped);
 			case Shape.Text text -> throw noNullValue(unmapped.property());
-			case Shape.Array array -> ENCODE_UNMAPPED_ARRAY_FIELD.fill(unmapped, "encoder", body.encoder());
-			case Shape.Composite composite -> throw noNullValue(unmapped.property());
+			case Shape.Array array -> ENCODE_UNMAPPED_ARRAY_FIELD.fill(unmapped, "encoder", encoder);
+			case Shape.Composite composite -> ENCODE_UNMAPPED_COMPOSITE_FIELD
+					.fill(unmapped, "compositeClass", composite.compositeClass());
 			case Shape.Constant constant -> throw noNullValue(unmapped.property());
 		};
 	}
@@ -203,9 +209,9 @@ final class CodecWriter {
 				case Member.Field field -> read(body, field);
 				case Member.Group group -> boundLocal(group, group.binding(), group.addedSince());
 				case Member.Data data -> boundLocal(data, data.binding(), data.addedSince());
-				case Member.Unmapped unmapped -> throw new IllegalStateException(
-						unmapped.property() + " is read though no component carries it"
-				);
+				case Member.Unmapped unmapped -> throw notRead(unmapped.property());
+				case Member.UnmappedGroup group -> throw notRead(group.property());
+				case Member.UnmappedData data -> throw notRead(data.property());
 			});
 		}
 		return String.join(",\n", arguments);
@@ -261,7 +267,8 @@ final class CodecWriter {
 
 	/**
 	 * The body's groups and var-data read into locals, in wire order, before the
-	 * constructor: the flyweight reads them one after another.
+	 * constructor, and the ones no component carries passed over in their place:
+	 * the flyweight reads them one after another.
 	 */
 	private String variableReads(Body body) {
 		List<String> reads = new ArrayList<>();
@@ -276,6 +283,8 @@ final class CodecWriter {
 							? DECODE_DATA.fill(data, "face", face(data), "read", read)
 							: DECODE_ADDED_DATA.fill(data, "face", face(data), "decoder", body.decoder(), "read", read);
 				}
+				case Member.UnmappedGroup group -> DECODE_UNMAPPED_GROUP.fill(group);
+				case Member.UnmappedData data -> DECODE_UNMAPPED_DATA.fill(data);
 				case Member.Field field -> throw notVariable(field.component());
 				case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 			});
@@ -308,6 +317,14 @@ final class CodecWriter {
 			case Helper.Encoded encoded -> ENCODED.fill();
 			case Helper.CharsetConstant charset -> CHARSET_CONSTANT.fill(charset);
 			case Helper.Bytes bytes -> BYTES.fill();
+			case Helper.NoBytes noBytes -> NO_BYTES.fill();
+			case Helper.CompositeNulls nulls -> {
+				List<String> members = new ArrayList<>();
+				for (Member.Unmapped member : nulls.members()) {
+					members.add(writeNull(nulls.encoder(), member));
+				}
+				yield WRITE_NULL_COMPOSITE.fill(nulls, "members", String.join("\n", members));
+			}
 		};
 	}
 
@@ -366,7 +383,7 @@ final class CodecWriter {
 		Body entry = group.entry();
 		List<String> terms = new ArrayList<>();
 		for (Member member : variable(entry)) {
-			terms.add(lengthTerm(NESTED_LENGTH_TERM, member));
+			terms.add(lengthTerm(entry, member, true));
 		}
 		String length = terms.isEmpty()
 				? GROUP_LENGTH.fill(group, "length", lengthOf(group.path()), "encoder", entry.encoder())
@@ -424,24 +441,37 @@ final class CodecWriter {
 		);
 	}
 
-	/** The members that follow the block, groups and var-data, in wire order. */
+	/**
+	 * The members that follow the block, groups and var-data, carried or not, in
+	 * wire order.
+	 */
 	private static List<Member> variable(Body body) {
 		List<Member> variable = new ArrayList<>();
 		for (Member member : body.wireOrder()) {
-			if (member instanceof Member.Group || member instanceof Member.Data) {
+			if (member instanceof Member.Group || member instanceof Member.Data
+					|| member instanceof Member.UnmappedGroup
+					|| member instanceof Member.UnmappedData) {
 				variable.add(member);
 			}
 		}
 		return variable;
 	}
 
-	/** A group's or a data member's share of the length, through its method. */
-	private static String lengthTerm(Template term, Member member) {
+	/**
+	 * A group's or a data member's share of the length, through its method, or for
+	 * one no component carries the dimension's or the length's own size; as a term
+	 * of the message's sum, or a statement in an entry's.
+	 */
+	private static String lengthTerm(Body body, Member member, boolean nested) {
 		return switch (member) {
-			case Member.Group group -> term
+			case Member.Group group -> (nested ? NESTED_LENGTH_TERM : LENGTH_TERM)
 					.fill(group, "length", lengthOf(group.path()), "source", nullableSource(group, group.binding()));
-			case Member.Data data -> term
+			case Member.Data data -> (nested ? NESTED_LENGTH_TERM : LENGTH_TERM)
 					.fill(data, "length", lengthOf(data.path()), "source", nullableSource(data, data.binding()));
+			case Member.UnmappedGroup group -> (nested ? NESTED_UNMAPPED_GROUP_LENGTH_TERM : UNMAPPED_GROUP_LENGTH_TERM)
+					.fill(group);
+			case Member.UnmappedData data -> (nested ? NESTED_UNMAPPED_DATA_LENGTH_TERM : UNMAPPED_DATA_LENGTH_TERM)
+					.fill(data, "encoder", body.encoder());
 			case Member.Field field -> throw notVariable(field.component());
 			case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 		};
@@ -478,6 +508,10 @@ final class CodecWriter {
 
 	private static IllegalStateException notVariable(String name) {
 		return new IllegalStateException(name + " is in the block, not after it");
+	}
+
+	private static IllegalStateException notRead(String name) {
+		return new IllegalStateException(name + " is read though no component carries it");
 	}
 
 	private static IllegalStateException noNullValue(String name) {
