@@ -33,6 +33,12 @@ a composite cannot grow, and what a router dispatches on.
   unions, and one reached through two paths of a hierarchy counts once.
   Two unions' codecs are unrelated types: `Codec<OrderCommand, H>` is no
   `Codec<Ingress, H>`.
+- **A union of unions dispatches flat.** A union's codec switches once over
+  every message beneath it and never delegates to a nested union's codec:
+  the bytes are the messages' either way, and a second switch buys nothing.
+  What nesting gives lives in Java's types: a caller's `switch` may take a
+  nested union as one case, exhaustively checked through the hierarchy, and
+  each nested union's codec serves a channel of its own.
 - **What a union may hold.** Every permitted subtype is an `@SbeMessage`
   record of the schema or a sealed interface whose own subtypes follow the
   same rule. A class, a `non-sealed` subtype, a record without
@@ -60,16 +66,25 @@ a composite cannot grow, and what a router dispatches on.
 
 - **The api.** `@SbeUnion`, retained at `CLASS` on a type, and
   `Codec.canDecode`, documented as a contract.
-- **`Annotated`.** A schema's unions: each the interface's names and its
-  member messages by identity, flattened and without repeats, in template
-  id order.
+- **`Annotated`.** `Union(javaName, qualifiedName, members)` per annotated
+  interface, `members` being messages of `messages` by identity, the
+  hierarchy beneath flattened, each once, in template id order. A nested
+  union is a second `Union` over a subset of the same messages; the tree
+  stays javac's, checked by `Discovery`. `Message` gains `qualifiedName`, so
+  a message nested in its union's interface, the natural style, gets a
+  codec naming it rightly.
 - **`Discovery`.** It finds `@SbeUnion` interfaces in the schema package,
   nested ones included, walks their permitted subtypes and applies the
-  union rules. An `@SbeUnion` in a package without `@SbeSchema` is refused
+  union rules. A wrong subtype reached from two unions is reported once, on
+  the subtype. An `@SbeUnion` in a package without `@SbeSchema` is refused
   where it stands.
-- **The union codec.** A model of its own beside `CodecModel`: the union,
-  its header record and its members, each a record, its codec and its
-  flyweight's `TEMPLATE_ID`. The writer renders it through templates:
+- **One codec per name.** Codecs are named by simple name in the schema
+  package, so two sources of one codec name, a union and a message nested
+  in different types or two such messages, are refused naming both.
+- **The union codec.** A model of its own beside `CodecModel`,
+  `UnionModel(packageName, codec, union, flyweights, header, cases)`, each
+  case a member's record, its codec and the flyweight whose `TEMPLATE_ID`
+  labels the case. The writer renders it through templates:
   - `encodedLength`, `encode` and `encode` with a header switch on the
     record's type, exhaustively, and delegate.
   - `decode`, `decodedLength` and `canDecode` read the header and switch on
