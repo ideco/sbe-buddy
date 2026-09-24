@@ -139,7 +139,8 @@ Each layer is tested where it lives; the module's own `AGENTS.md` says how.
 * **sbe-buddy-tests** holds the corpus: one schema package per case, its
   oracle and its round trips, run against the generated code.
 * **The processor** tests every rule a user can break as the source they
-  write.
+  write, and takes every schema of the corpus and the example round,
+  code-first to schema-first, expecting the same generated sources.
 * **The generator** tests what no source can reach: the rules that compare
   nodes, the all-or-nothing pipeline, `Template` and `SchemaXmlAssert`.
 * **The example** proves the wiring on realistic schemas and interop with

@@ -47,3 +47,8 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
 - `PlacementTest` proves placement and all-or-nothing once per rule layer.
 - `IncrementalCompilationTest` compiles real directories, whole and then one
   record alone, and expects the same output.
+- `SchemaRoundTripTest` compiles every schema package of the corpus and the
+  example code-first, then the same records schema-first over the schemas
+  the first run wrote, and expects the same generated sources: the proof
+  that the two ways to the document are one flow below it, over every
+  construct the repository has.

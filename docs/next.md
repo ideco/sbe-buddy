@@ -120,7 +120,10 @@ the document and little else.
   round-tripped, the rest shown written empty and passed over whatever a
   full writer put there. The jar case rests on the spike's facts and the
   processor's one `CLASS_PATH` lookup, which the example's client exercises
-  with an absolute name.
+  with an absolute name. Beside them the processor's `SchemaRoundTripTest`
+  takes every schema of the corpus and the example round: the records
+  compiled code-first write their schema, the same records compiled
+  schema-first over it generate the same sources, byte for byte.
 - **The example.** `com.example.client`, mapping part of `trading.xml` from
   the class path with the venue's bindings, crossed with the venue's codecs
   and sbe-tool's flyweights.
@@ -135,7 +138,7 @@ the document and little else.
 - After commit 1, `./mvnw verify` is green with the test changes above and
   no other, and the corpus's generated code is byte-identical to before.
 - A package over an XML sbe-buddy wrote compiles to the same flyweights and
-  codecs as the package that wrote it.
+  codecs as the package that wrote it, for every schema in the repository.
 - A partial mapping of a foreign schema compiles, round-trips against
   sbe-tool's flyweights and reports each disagreement with the XML on the
   annotation that states it.
