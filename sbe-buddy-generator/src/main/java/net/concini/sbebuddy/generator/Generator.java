@@ -17,13 +17,24 @@ import java.util.Set;
 import java.util.function.ToIntFunction;
 
 import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.SchemaFactory;
 
 import org.agrona.generation.DynamicPackageOutputManager;
 import org.agrona.generation.StringWriterOutputManager;
 import org.jspecify.annotations.Nullable;
+import org.w3c.dom.Document;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 import uk.co.real_logic.sbe.generation.java.JavaGenerator;
 import uk.co.real_logic.sbe.ir.Ir;
@@ -80,7 +91,75 @@ public final class Generator {
 	 * {@link UncheckedIOException}.
 	 */
 	public static List<Problem> generate(Schema schema, Annotated annotated, DynamicPackageOutputManager output) {
-		Parsed parsed = parse(document(schema), schema, schema.packageName());
+		return generate(parse(document(schema), schema, schema.packageName()), annotated, output);
+	}
+
+	/**
+	 * Steps 4 to 7 over a schema read from a resource, {@code systemId} its URI:
+	 * every XInclude resolved against it, then the included document as a written
+	 * one, validated, parsed, the flyweights and the join. A document sbe-tool or
+	 * the XML parser refuses is a problem naming the annotated package.
+	 */
+	public static List<Problem> generate(
+			String document, String systemId, Annotated annotated, DynamicPackageOutputManager output
+	) {
+		String included;
+		try {
+			included = include(document, systemId);
+		} catch (SAXException e) {
+			return List.of(new Problem(annotated, String.valueOf(e.getMessage())));
+		}
+		return generate(parse(included, annotated, annotated.packageName()), annotated, output);
+	}
+
+	/**
+	 * The document with its XIncludes resolved, as text again for the one path
+	 * every schema takes; the fixups off, as sbe-tool has them, so nothing is added
+	 * that sbe.xsd does not know.
+	 */
+	private static String include(String document, String systemId) throws SAXException {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setNamespaceAware(true);
+		factory.setXIncludeAware(true);
+		try {
+			factory.setFeature("http://apache.org/xml/features/xinclude/fixup-base-uris", false);
+			factory.setFeature("http://apache.org/xml/features/xinclude/fixup-language", false);
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			builder.setErrorHandler(new Refusing());
+			InputSource source = new InputSource(new StringReader(document));
+			source.setSystemId(systemId);
+			Document included = builder.parse(source);
+			StringWriter writer = new StringWriter();
+			TransformerFactory.newInstance().newTransformer()
+					.transform(new DOMSource(included), new StreamResult(writer));
+			return writer.toString();
+		} catch (ParserConfigurationException | TransformerException e) {
+			throw new IllegalStateException(e);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	/** Every report of the parser is a refusal; the default prints and goes on. */
+	private static final class Refusing implements ErrorHandler {
+
+		@Override
+		public void warning(SAXParseException e) throws SAXException {
+			throw e;
+		}
+
+		@Override
+		public void error(SAXParseException e) throws SAXException {
+			throw e;
+		}
+
+		@Override
+		public void fatalError(SAXParseException e) throws SAXException {
+			throw e;
+		}
+	}
+
+	private static List<Problem> generate(Parsed parsed, Annotated annotated, DynamicPackageOutputManager output) {
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			return parsed.problems();

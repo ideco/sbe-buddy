@@ -20,6 +20,7 @@ import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
+import javax.tools.FileObject;
 import javax.tools.StandardLocation;
 
 import org.jspecify.annotations.Nullable;
@@ -41,7 +42,9 @@ import net.concini.sbebuddy.generator.SchemaXml;
  * nothing. Otherwise: discover, map, validate, generate; every problem is a
  * diagnostic of its severity on the element it names; a package without an
  * error gets its flyweights and codecs as sources and its {@code schema.xml} in
- * the class output.
+ * the class output. A package whose {@code @SbeSchema} names a resource reads
+ * its schema from there instead of mapping one, and writes no
+ * {@code schema.xml}.
  */
 @SupportedAnnotationTypes("net.concini.sbebuddy.*")
 public final class SbeProcessor extends AbstractProcessor {
@@ -94,6 +97,10 @@ public final class SbeProcessor extends AbstractProcessor {
 			report(discovered.problems(), discovered, null, schemaPackage);
 			return;
 		}
+		if (!discovered.annotated().resource().isEmpty()) {
+			resource(schemaPackage, discovered);
+			return;
+		}
 		Mapping.Mapped mapped = Mapping.map(discovered.annotated());
 		List<Problem> problems = new ArrayList<>(mapped.problems());
 		if (problems.stream().noneMatch(Problem::isError)) {
@@ -109,6 +116,47 @@ public final class SbeProcessor extends AbstractProcessor {
 			return;
 		}
 		write(schemaPackage, mapped.schema());
+	}
+
+	/**
+	 * A schema read from its resource on the class path, named relative to the
+	 * package or absolute with a leading slash: the flyweights of every message in
+	 * it and the codecs of the messages the records map, and no {@code schema.xml},
+	 * since the resource is the schema and ships from where the user put it. The
+	 * mapping and its validation have nothing to do; the join checks the
+	 * annotations against the document.
+	 */
+	private void resource(PackageElement schemaPackage, Discovery.Discovered discovered) {
+		Annotated annotated = discovered.annotated();
+		String resource = annotated.resource();
+		String path = resource.startsWith("/")
+				? resource.substring(1)
+				: schemaPackage.getQualifiedName().toString().replace('.', '/') + "/" + resource;
+		String document;
+		String systemId;
+		try {
+			FileObject file = processingEnv.getFiler().getResource(StandardLocation.CLASS_PATH, "", path);
+			document = file.getCharContent(true).toString();
+			systemId = file.toUri().toString();
+		} catch (IOException | IllegalArgumentException e) {
+			// A missing file is a FileNotFoundException; a name javac refuses, the other.
+			report(
+					List.of(new Problem(annotated, "no resource " + path + " on the class path")), discovered, null,
+					schemaPackage
+			);
+			return;
+		}
+		List<Problem> generation;
+		try {
+			generation = Generator
+					.generate(
+							document, systemId, annotated,
+							new FilerOutputManager(processingEnv.getFiler(), schemaPackage)
+					);
+		} catch (UncheckedIOException e) {
+			generation = List.of(new Problem(annotated, "could not write generated code: " + e.getMessage()));
+		}
+		report(generation, discovered, null, schemaPackage);
 	}
 
 	private List<Problem> generate(PackageElement schemaPackage, Schema schema, Annotated annotated) {

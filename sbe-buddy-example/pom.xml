@@ -39,6 +39,14 @@
   </dependencies>
 
   <build>
+    <!-- The oracles double as the schemas a client package reads from the class
+         path: com.example.client maps part of trading.xml, as a client maps a
+         venue's published schema. -->
+    <resources>
+      <resource>
+        <directory>src/main/sbe</directory>
+      </resource>
+    </resources>
     <plugins>
       <!-- sbe-tool's own flyweights from the trading oracle, and from the
            quotes oracle and its frozen versions, test code only: the tests

@@ -40,7 +40,7 @@ memory.
 
 | XSD | Java | Members |
 | --- | --- | --- |
-| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`) |
+| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`), `resource` (empty; the schema's XML on the class path when the schema exists already, below) |
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` (the body in wire order, by name; empty for declaration order), `unmapped` (complete `@SbeField`s no component carries) |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit` (`@Deprecated`, as the XSD deprecates it), `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `binding` |
 | `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message, and `binding` |
@@ -342,6 +342,49 @@ sealed interface without it is no union.
   `canDecode` tells it without throwing. There is no unknown member.
 * Codecs are named by simple name in the schema package, so a union and a
   message claiming one name are rejected.
+
+## Schema-first
+
+`@SbeSchema(resource = …)` names an SBE schema that exists already, on the
+class path: relative to the package (`"schema.xml"`) or absolute with a
+leading slash (`"/com/venue/schema.xml"`), as `Class.getResource` reads a
+name. XIncludes resolve relative to the resource. Then:
+
+* The document is the schema. sbe-tool generates the flyweights of every
+  message in it, and nothing is written: no `schema.xml`, since the resource
+  ships from where it is.
+* The annotations mean what they mean code-first. A record maps the message
+  its `id` names, a component the field, group or data of its wire name,
+  and an enum's constants and a set's choices the values and choices of
+  their names. A member left unwritten lets the document decide; a member
+  written is compared with the document where sbe-tool's IR carries it, and
+  a disagreement is an error naming both: `id`, `version`, `semanticVersion`,
+  `description` and `byteOrder` on the schema, and per node `id`, `name`,
+  `type` and `primitiveType`, `presence`, `sinceVersion`, `deprecated`,
+  `offset`, `blockLength`, `length`, `characterEncoding`, `semanticType`,
+  `description`, `epoch`, `timeUnit`, a constant's `value`, an enum value's
+  and a choice's `value`. The IR carries a since-version as the later of a
+  node's and its type's, so only one written above it disagrees; a field's
+  `semanticType` is compared only where its type has none, and a group's
+  not at all. `nullValue`, `minValue`, `maxValue` and `valueRef` are not
+  compared. `baselineVersion` is at most the document's version.
+* A message no record maps gets flyweights and no codec, and a union covers
+  the mapped messages. A field, group or var-data no component carries is
+  written as `unmapped` writes it, a composite as its members' null values,
+  a group with no entries, var-data with zero length, and is passed over on
+  the way in, whatever a fuller writer put there. A component the document
+  lacks is an error.
+* The face comes from the document. A component of a `char` array is a
+  `String`, of an `int8` array a `byte[]`, of a `uint16` an `int`, with no
+  Java declaration of the type; an enum, set or composite the record
+  reaches, through a component or a binding's wire type, needs its Java
+  declaration, matched by wire name, so the codec knows the constants and
+  the record. The header must be declared where the document's is not the
+  standard `messageHeader`. Declarations may live in any package.
+* A schema sbe-buddy wrote passes every comparison as it is: checking the
+  written `schema.xml` in as the package's resource and adding `resource =
+  "schema.xml"` switches the package from code-first to schema-first with no
+  other change and the same generated code.
 
 ## Running example, complete
 

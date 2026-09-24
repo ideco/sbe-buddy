@@ -164,7 +164,8 @@ public final class Discovery {
 				schema.string("description"),
 				schema.enumeration("byteOrder", ByteOrder.class),
 				codecs,
-				schema.integer("baselineVersion")
+				schema.integer("baselineVersion"),
+				schema.string("resource")
 		);
 		remember(annotated, schemaPackage, schema.mirror);
 		return annotated;

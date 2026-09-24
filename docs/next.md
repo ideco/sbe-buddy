@@ -103,22 +103,27 @@ the document and little else.
   name names no field, an enum constant or choice the XML lacks, a message
   whose wire name differs from the token's, and `baselineVersion` above
   the document's version are problems on their nodes; a field, group or
-  var-data no component carries is written as `unmapped` is, an empty
-  group and zero-length var-data included; a declaration a component
-  reaches is matched to the XML's type by wire name.
+  var-data no component carries is written as `unmapped` is, a composite as
+  its members' null values, a group with no entries and var-data with zero
+  length, and passed over on the way in; a declaration a component reaches,
+  through the component or its binding's wire type, is matched to the XML's
+  type by wire name.
 - **The checks.** Every annotation member the XML also states is compared
   where the token carries it: `id`, `name`, `presence`, `sinceVersion`,
   `deprecated`, `offset`, `blockLength`, `semanticType`, `description`,
   `primitiveType`, `length`, `characterEncoding`, `epoch`, `timeUnit`, an
   enum value's and a choice's `value`. A member written with a value the
   XML disagrees with is a problem on the annotation naming both.
-- **The corpus.** One case compiled twice: as code-first, and as
-  schema-first over the XML the first wrote, expecting identical
-  flyweights and codecs; a partial mapping of the same XML, one message of
-  three with two fields of five, round-tripped against the flyweights; a
-  schema in a jar on the class path, mapped from another package.
-- **The example.** A package mapping part of `trading.xml` as a client
-  would, with a binding.
+- **The corpus.** `schemafirst`: `bigendian`'s records over the XML that
+  package writes, checked in, expecting the generated sources to be the
+  twin's; `partial`: one message of three mapped by two members of seven,
+  round-tripped, the rest shown written empty and passed over whatever a
+  full writer put there. The jar case rests on the spike's facts and the
+  processor's one `CLASS_PATH` lookup, which the example's client exercises
+  with an absolute name.
+- **The example.** `com.example.client`, mapping part of `trading.xml` from
+  the class path with the venue's bindings, crossed with the venue's codecs
+  and sbe-tool's flyweights.
 - **The documents.** `intent.md` ticks 22; `type-mappings.md` gains the
   `resource` member and a section on schema-first; `architecture.md`'s
   pipeline shows both ways to the document; the guide gains a schema-first
@@ -131,16 +136,18 @@ the document and little else.
   no other, and the corpus's generated code is byte-identical to before.
 - A package over an XML sbe-buddy wrote compiles to the same flyweights and
   codecs as the package that wrote it.
-- A partial mapping of a foreign schema, in a jar, compiles, round-trips
-  against sbe-tool's flyweights and reports each disagreement with the
-  XML on the annotation that states it.
+- A partial mapping of a foreign schema compiles, round-trips against
+  sbe-tool's flyweights and reports each disagreement with the XML on the
+  annotation that states it.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
 Merging a resource with annotations. `unmapped` groups and var-data in
-code-first, which need `@SbeGroup` and `@SbeData` under `unmapped`.
+code-first, which need `@SbeGroup` and `@SbeData` under `unmapped`, though
+the codec now writes and passes over both. A composite in a header no
+component carries.
 Recompiling on a schema-only edit under Maven, which has no mechanism for
 it; the guide says `clean`. Reading a schema from anywhere but the class
 path.

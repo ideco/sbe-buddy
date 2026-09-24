@@ -144,7 +144,7 @@ user's binding's to decide. No built-in bindings.
 
 **Schema-first.**
 
-* [ ] 22. Schema-first mapping: `@SbeSchema` names an XML resource on the class path, sbe-tool generates every message's flyweights from it, and the records map the messages they choose to with the same annotations, each written member checked against the XML; nothing is written. First the join: the face rules run over the IR where each token meets its annotation, so the pipeline is one flow from the document down
+* [x] 22. Schema-first mapping: `@SbeSchema` names an XML resource on the class path, sbe-tool generates every message's flyweights from it, and the records map the messages they choose to with the same annotations, each written member checked against the XML; nothing is written. First the join: the face rules run over the IR where each token meets its annotation, so the pipeline is one flow from the document down
 
 **The API pass.**
 

@@ -977,6 +977,113 @@ final class AnnotationMistakesTest {
 				public BigDecimal fromWire(long wire, BindingContext context) { return BigDecimal.valueOf(wire, 2); }
 			}""";
 
+	// ---- a schema read from a resource: the annotations against the venue's XML
+
+	@Test
+	void aRecordMapsPartOfTheResourceAndNothingIsWritten() {
+		Javac.Result result = assertClean(
+				SCHEMA_FIRST, inMessage("@SbeField(id = 1) long orderId,\n@SbeField(id = 4) Side side", VENUE_SIDE)
+		);
+
+		assertThat(result.outputs())
+				.containsKeys(
+						"mistakes/OrderCodec.java", "mistakes/sbe/OrderEncoder.java", "mistakes/sbe/CancelEncoder.java"
+				)
+				.doesNotContainKeys("mistakes/schema.xml", "mistakes/CancelCodec.java");
+		assertThat(result.outputs().get("mistakes/OrderCodec.java"))
+				.contains("encoder.legsCount(0);")
+				.contains("legs.next().sbeSkip();")
+				.contains("encoder.putNote(NO_BYTES, 0, 0);")
+				.contains("decoder.skipNote();");
+	}
+
+	@Test
+	void aResourceNotOnTheClassPathIsAProblemOnTheSchema() {
+		Javac.Result result = compile(
+				SCHEMA_FIRST.replace("venue.xml", "nowhere.xml"), inMessage("@SbeField(id = 1) long orderId")
+		);
+
+		assertThat(result.errors()).hasSize(1);
+		assertThat(result.errors().get(0).getMessage(null))
+				.isEqualTo("no resource mistakes/nowhere.xml on the class path");
+		assertThat(result.errors().get(0).getSource().getName()).endsWith("package-info.java");
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void theSchemasIdAndVersionMustAgreeWithTheResource() {
+		Javac.Result result = compile(
+				SCHEMA_FIRST.replace("id = 7, version = 2", "id = 1, version = 0"),
+				inMessage("@SbeField(id = 1) long orderId")
+		);
+
+		assertThat(result.errors()).extracting(diagnostic -> diagnostic.getMessage(null))
+				.containsExactlyInAnyOrder(
+						"the schema has id=\"7\", not \"1\"", "the schema has version=\"2\", not \"0\""
+				);
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void aRecordWhoseIdNamesNoMessageOfTheResourceIsAProblem() {
+		assertErrors(
+				SCHEMA_FIRST, message("@SbeMessage(id = 9)", "@SbeField(id = 1) long orderId"),
+				error("@SbeMessage(id = 9)", "the schema has no message with id 9")
+		);
+	}
+
+	@Test
+	void aComponentTheResourceLacksIsAProblem() {
+		assertErrors(
+				SCHEMA_FIRST, inMessage("@SbeField(id = 1) long orderId,\n@SbeField(id = 5) int nowhere"),
+				error("int nowhere", "the schema's Order has no field named \"nowhere\"")
+		);
+	}
+
+	@Test
+	void aMemberWrittenAgainstTheResourceIsAProblem() {
+		assertErrors(
+				SCHEMA_FIRST,
+				inMessage(
+						"@SbeField(id = 1, sinceVersion = 2) long orderId,\n@SbeField(id = 3, presence = OPTIONAL) Integer qty"
+				),
+				error("long orderId", "the schema has sinceVersion=\"0\", not \"2\""),
+				error("Integer qty", "the schema has id=\"2\", not \"3\"")
+		);
+	}
+
+	@Test
+	void anEnumConstantTheResourceLacksIsAProblemAndSoIsAValueTheEnumLacks() {
+		assertErrors(
+				SCHEMA_FIRST,
+				inMessage(
+						"@SbeField(id = 4) Side side",
+						"@SbeEnum(primitiveType = CHAR) enum Side { @SbeEnumValue(\"1\") BUY, @SbeEnumValue(\"3\") SHORT }"
+				),
+				error("enum Side", "Side has no constant for the schema's value \"SELL\""),
+				error("enum Side", "the schema's Side has no value named \"SHORT\"")
+		);
+	}
+
+	@Test
+	void theFaceComesFromTheResourceWhereTheRecordNamesNoType() {
+		assertErrors(
+				SCHEMA_FIRST, inMessage("@SbeField(id = 3) long symbol"),
+				error("long symbol", "long is not the face of Symbol, which is String")
+		);
+	}
+
+	/** The venue's schema, {@code venue.xml} beside this test's resources. */
+	private static final String SCHEMA_FIRST = """
+			@SbeSchema(id = 7, version = 2, resource = "venue.xml")
+			package mistakes;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	/** The enum the resource's {@code Side} maps to. */
+	private static final String VENUE_SIDE = "@SbeEnum(primitiveType = CHAR) enum Side { @SbeEnumValue(\"1\") BUY, @SbeEnumValue(\"2\") SELL }";
+
 	// ---- the snippet around the mistake
 
 	private static final String HEADER = """

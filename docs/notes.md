@@ -51,6 +51,25 @@ alternatives considered.
 * `XmlSchemaParser` with `stopOnError`, `warningsFatal` and
   `suppressOutput` throws `IllegalArgumentException` from a schema warning
   and prints nothing. (Spike experiment, 2026-09.)
+* `IrGenerator` gives a field's tokens, the `BEGIN_FIELD` and the type's
+  under it, the later of the field's and its type's `sinceVersion` as their
+  version, the field's `deprecated` on the field token and the type's on the
+  type token, and the field's `presence` on the type token; a field's
+  `semanticType` reaches the token only where its type has none; a group's
+  `semanticType` is not read from the document at all. A constant `char`
+  type's `length` stays 1 however long its value, which only `constValue`
+  holds. (`IrGenerator.java`, `Message.java` and `EncodedDataType.java`,
+  read 2026-09-24; each surfaced as a false disagreement of `StatedRules`
+  over the corpus.)
+* `PrimitiveValue.toString()` prints a `char` value as its code point, `66`
+  for `B`; `PrimitiveValue.parse("B", CHAR)` is the value to compare with,
+  and refuses more than one character. (`PrimitiveValue.java`, read
+  2026-09-24, and `AnnotationMistakesTest`.)
+* sbe-tool's group decoders have `sbeSkip()`, which passes over an entry's
+  nested groups and var-data, and every var-data member has `skip<Name>()`,
+  version-guarded, and a static `<name>HeaderLength()`; group encoders have
+  a static `sbeHeaderSize()`. (Generated flyweights of the corpus, read
+  2026-09-24.)
 * `XmlSchemaParser.parse` never validates against `sbe.xsd`; that is a
   separate `validate(xsdFilename, InputSource, options)`, which wants the
   XSD as a file path and sets no error handler, so the JDK's default prints

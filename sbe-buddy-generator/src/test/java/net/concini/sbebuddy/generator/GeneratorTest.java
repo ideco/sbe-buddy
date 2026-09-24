@@ -25,10 +25,14 @@ import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
 import static uk.co.real_logic.sbe.PrimitiveType.INT64;
 import static uk.co.real_logic.sbe.PrimitiveType.UINT16;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.agrona.generation.StringWriterOutputManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The rules that compare nodes, each built as the mistake and asserted as the
@@ -200,6 +204,77 @@ final class GeneratorTest {
 				"p.sbe.MDecoder", "p.sbe.MetaAttribute", "p.MCodec"
 		);
 	}
+
+	@Test
+	void aResourceIsReadWithItsIncludesResolvedAgainstItsUri(@TempDir Path directory) throws IOException {
+		Files.createDirectories(directory.resolve("common"));
+		Files.writeString(directory.resolve("common/types.xml"), INCLUDED_TYPES);
+		Path resource = directory.resolve("schema.xml");
+		Files.writeString(resource, INCLUDING_SCHEMA);
+		Annotated annotated = annotated(0, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator
+				.generate(Files.readString(resource), resource.toUri().toString(), annotated, output);
+
+		assertThat(problems).isEmpty();
+		assertThat(output.getSources().keySet()).contains("p.MCodec", "p.sbe.MEncoder", "p.sbe.MessageHeaderEncoder");
+	}
+
+	@Test
+	void anIncludeThatCannotBeResolvedIsAProblemNamingThePackage(@TempDir Path directory) throws IOException {
+		Path resource = directory.resolve("schema.xml");
+		Files.writeString(resource, INCLUDING_SCHEMA);
+		Annotated annotated = annotated(0, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator
+				.generate(Files.readString(resource), resource.toUri().toString(), annotated, output);
+
+		assertThat(problems).hasSize(1);
+		assertThat(problems.get(0).node()).isSameAs(annotated);
+		assertThat(problems.get(0).message()).contains("common/types.xml");
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aResourceDisagreeingWithTheAnnotationsIsAProblemNamingWhatDisagrees() {
+		String document = INCLUDING_SCHEMA.replace("<xi:include href=\"common/types.xml\"/>", INCLUDED_TYPES)
+				.replace("id=\"1\" version=\"0\"", "id=\"2\" version=\"0\"");
+		Annotated.Field qty = annotatedField("qty", 3, primitive(INT));
+		Annotated annotated = annotated(0, annotatedMessage("M", 1, qty));
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(document, "memory:schema.xml", annotated, output);
+
+		assertThat(problems).containsExactlyInAnyOrder(
+				new Problem(annotated, "the schema has id=\"2\", not \"1\""),
+				new Problem(qty, "the schema has id=\"1\", not \"3\"")
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	/** A schema whose types arrive by XInclude, relative to the document. */
+	private static final String INCLUDING_SCHEMA = """
+			<?xml version="1.0" encoding="UTF-8"?>
+			<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" xmlns:xi="http://www.w3.org/2001/XInclude" package="p" id="1" version="0">
+			    <xi:include href="common/types.xml"/>
+			    <sbe:message name="M" id="1">
+			        <field name="qty" id="1" type="int32"/>
+			    </sbe:message>
+			</sbe:messageSchema>
+			""";
+
+	private static final String INCLUDED_TYPES = """
+			<types>
+			    <composite name="messageHeader">
+			        <type name="blockLength" primitiveType="uint16"/>
+			        <type name="templateId" primitiveType="uint16"/>
+			        <type name="schemaId" primitiveType="uint16"/>
+			        <type name="version" primitiveType="uint16"/>
+			    </composite>
+			</types>
+			""";
 
 	/**
 	 * The one problem naming the construct the codec lacks, and nothing written.

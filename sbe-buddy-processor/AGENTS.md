@@ -24,6 +24,10 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
 - `Class`-typed members are read from the `AnnotationMirror`, never through
   an annotation instance (`notes.md`).
 - Never load an Agrona buffer class: a user's javac would need a JVM flag.
+- A resource is read through `Filer.getResource` on `CLASS_PATH` alone, the
+  one location Maven, Gradle and a jar agree on (`notes.md`), and its URI
+  goes to the generator for XInclude. Schema-first writes no `schema.xml`:
+  Gradle's `jar` fails on the duplicate.
 
 ## Tests
 
@@ -36,9 +40,10 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
   `codecs = false`, which the face rules ignore, except the unions, which
   need codecs. A snippet breaks rules of one layer only: a mapping error
   stops the pipeline before the join, so a face rule beside it would go
-  unreported. It asserts every
-  diagnostic, the text of the line it lands on, and that nothing was written.
-  Where a rule allows something, a test asserts it compiles clean.
+  unreported. It asserts every diagnostic, the text of the line it lands
+  on, and that nothing was written. Where a rule allows something, a test
+  asserts it compiles clean. The schema-first snippets read `venue.xml`
+  from the test resources, which the test class path carries.
 - `PlacementTest` proves placement and all-or-nothing once per rule layer.
 - `IncrementalCompilationTest` compiles real directories, whole and then one
   record alone, and expects the same output.

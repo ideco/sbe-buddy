@@ -41,6 +41,9 @@ public final class CodecEmitter {
 	 */
 	public static List<Problem> emit(Ir ir, Annotated annotated, DynamicPackageOutputManager output) {
 		Problems problems = new Problems();
+		List<Problem> schema = new ArrayList<>();
+		new StatedRules(schema, ir).schema(annotated);
+		problems.addAll(schema);
 		Map<String, String> sources = new LinkedHashMap<>();
 		Map<Annotated.Message, CodecModel> models = new IdentityHashMap<>();
 		for (Annotated.Message message : annotated.messages()) {
