@@ -13,9 +13,11 @@ Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
 CodecWalk        the IR and Annotated to a CodecModel
 CodecModel       what a codec is made of
 CodecWriter      a CodecModel to source
-CodecTemplates   the text blocks the writer fills
+CodecTemplates   the text blocks the writers fill
+UnionModel       what a union's codec is made of: its members' codecs
+UnionWriter      a UnionModel to source
 Template         a text block with named placeholders
-CodecEmitter     the walk and the writer per message, then the output
+CodecEmitter     the walk and the writer per message, a union's codec over them, then the output
 Problem          a mistake on a node of either model
 ```
 
@@ -66,6 +68,9 @@ Problem          a mistake on a node of either model
   and its templates in `CodecTemplates`.
 - Templates hold no conditionals and no loops. What varies is decided in Java
   and filled in; no code is assembled by concatenation.
+- A union's codec composes its members' codecs and writes no wire code of its
+  own. It switches on the record's type to encode and on the flyweights'
+  `TEMPLATE_ID` constants to decode, once over every message beneath it.
 - Generated codecs use fully qualified names and no imports, and are not
   formatted afterwards. Keep them readable: they are read while debugging.
 

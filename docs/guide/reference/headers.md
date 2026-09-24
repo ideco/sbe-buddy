@@ -109,7 +109,7 @@ ApplicationHeader header = codec.decodeHeader(buffer, offset);
 if (header.templateId() == OrderDecoder.TEMPLATE_ID) { … }  // the flyweight in com.example.feed.sbe
 ```
 
-It reads any message of the schema, whichever codec it is called on, so a receiver can read the header before choosing the codec for the message behind it. `decode` still checks the schema id and the template id, and refuses a message that is not its own; it ignores the header's own members.
+It reads any message of the schema, whichever codec it is called on, so a receiver can read the header before choosing the codec for the message behind it. A [union](unions.md)'s codec chooses by the header itself, and `canDecode` asks any codec whether the message is its own. `decode` still checks the schema id and the template id, and refuses a message that is not its own; it ignores the header's own members.
 
 ## Passing a message on
 

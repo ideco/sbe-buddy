@@ -26,10 +26,11 @@ import net.concini.sbebuddy.tests.SchemaCase.RoundTrip;
  * the schema the processor wrote into the jar is the case's oracle, and every
  * value the case lists goes to the wire and back whole. A round trip proves the
  * codec contract as a whole: {@code encodedLength} is what {@code encode}
- * writes, at an offset and touching nothing around it; {@code decodedLength}
- * and {@code lastDecodedLength} agree with it; the decoded value equals the
- * original, and encodes to the same bytes, both on its own and with the header
- * {@code decodeHeader} reads, as a relay passes a message on.
+ * writes, at an offset and touching nothing around it; {@code canDecode} takes
+ * it; {@code decodedLength} and {@code lastDecodedLength} agree with it; the
+ * decoded value equals the original, and encodes to the same bytes, both on its
+ * own and with the header {@code decodeHeader} reads, as a relay passes a
+ * message on.
  */
 final class SchemaCasesTest {
 
@@ -87,6 +88,7 @@ final class SchemaCasesTest {
 		assertThat(Arrays.copyOfRange(bytes, 0, OFFSET)).as("the bytes before the offset").containsOnly(UNTOUCHED);
 		assertThat(Arrays.copyOfRange(bytes, OFFSET + length, bytes.length)).as("the bytes after the message")
 				.containsOnly(UNTOUCHED);
+		assertThat(codec.canDecode(buffer, OFFSET)).as("canDecode").isTrue();
 		assertThat(codec.decodedLength(buffer, OFFSET)).as("decodedLength").isEqualTo(length);
 
 		T decoded = codec.decode(buffer, OFFSET);

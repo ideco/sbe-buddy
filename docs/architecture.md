@@ -35,7 +35,7 @@ One compilation of an `@SbeSchema` package runs:
 4  schema.xml ──► MessageSchema       sbe-tool  XmlSchemaParser
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
-7  Ir + Annotated ──► codec sources   ours      CodecWalk, CodecModel, CodecWriter
+7  Ir + Annotated ──► codec sources   ours      CodecWalk, CodecModel, CodecWriter, UnionWriter
 8  schema.xml ──► a resource          ours      the schema ships in the jar
 ```
 
@@ -91,7 +91,8 @@ Three layers, in the order a mistake meets them.
   configuration into `<schema package>.sbe`; the schema goes into the jar as
   `<schema package>/schema.xml`.
 * **Codecs** are walked from the IR into a `CodecModel` and written from it,
-  so a codec calls what sbe-tool generated and holds no wire numbers.
+  so a codec calls what sbe-tool generated and holds no wire numbers. A
+  union's codec is a `UnionModel` over its members' models.
 
 ## The codec contract
 
@@ -101,6 +102,7 @@ public interface Codec<T, H extends MessageHeader> {
   int encode(T value, MutableDirectBuffer buffer, int offset);   // writes exactly encodedLength(value) bytes
   int encode(T value, H header, MutableDirectBuffer buffer, int offset);  // the header's own members from header
   T decode(DirectBuffer buffer, int offset);                     // acting version and block length from the header
+  boolean canDecode(DirectBuffer buffer, int offset);            // whether decode takes it, by the header alone
   H decodeHeader(DirectBuffer buffer, int offset);               // the whole header, nothing checked
   int lastDecodedLength();                                       // bytes consumed by the last decode
   int decodedLength(DirectBuffer buffer, int offset);            // bytes a decode would consume, without decoding
@@ -111,8 +113,11 @@ A codec is a stateful instance, one per thread; bindings are stateless. Its
 one exception of its own is `IllegalArgumentException`, for a value it
 cannot represent or bytes that are not its message; everything else passes
 through unwrapped. `H` is the schema's header record; the standard four
-members of a header are always the message's own. `Codec` is implemented
-only by generated code, so it may grow.
+members of a header are always the message's own. `null` is never a value.
+A message's codec knows its one template; a union's codec composes its
+members' codecs, switching once over every message beneath it, and writes no
+wire code of its own. `Codec` is implemented only by generated code, so it
+may grow.
 
 ## Testing
 

@@ -31,9 +31,9 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
   compiled here. sbe-buddy-tests is where it meets javac.
 - `AnnotationMistakesTest` holds one test per rule, written as the source a
   user types around a shared package, imports and enclosing record, with
-  `codecs = false`. It asserts every diagnostic, the text of the line it lands
-  on, and that nothing was written. Where a rule allows something, a test
-  asserts it compiles clean.
+  `codecs = false`, except the unions, which need codecs. It asserts every
+  diagnostic, the text of the line it lands on, and that nothing was written.
+  Where a rule allows something, a test asserts it compiles clean.
 - `PlacementTest` proves placement and all-or-nothing once per rule layer.
 - `IncrementalCompilationTest` compiles real directories, whole and then one
   record alone, and expects the same output.

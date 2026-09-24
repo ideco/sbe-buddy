@@ -4,19 +4,23 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.agrona.generation.DynamicPackageOutputManager;
+import org.jspecify.annotations.Nullable;
 
 import uk.co.real_logic.sbe.ir.Ir;
 
 /**
  * Step 7 of the pipeline: one {@code <Msg>Codec} per message, each walked into
- * a {@link CodecModel} by {@link CodecWalk} and written by {@link CodecWriter}.
- * A construct the codec does not cover yet is a problem naming the message;
- * nothing is skipped silently, and nothing is written while any problem stands.
+ * a {@link CodecModel} by {@link CodecWalk} and written by {@link CodecWriter},
+ * then one {@code <Union>Codec} per union, composed from its members' codecs
+ * and written by {@link UnionWriter}. A construct the codec does not cover yet
+ * is a problem naming the message; nothing is skipped silently, and nothing is
+ * written while any problem stands.
  */
 public final class CodecEmitter {
 
@@ -30,12 +34,20 @@ public final class CodecEmitter {
 	 * an {@link UncheckedIOException}.
 	 */
 	public static List<Problem> emit(Ir ir, Annotated annotated, DynamicPackageOutputManager output) {
-		List<Problem> problems = new ArrayList<>();
+		List<Problem> problems = new ArrayList<>(duplicateCodecs(annotated));
 		Map<String, String> sources = new LinkedHashMap<>();
+		Map<Annotated.Message, CodecModel> models = new IdentityHashMap<>();
 		for (Annotated.Message message : annotated.messages()) {
 			CodecModel model = CodecWalk.walk(ir, annotated, message, problems);
 			if (model != null) {
+				models.put(message, model);
 				sources.put(model.codec(), CodecWriter.write(model));
+			}
+		}
+		for (Annotated.Union union : annotated.unions()) {
+			UnionModel model = union(annotated, union, models, problems);
+			if (model != null) {
+				sources.put(model.codec(), UnionWriter.write(model));
 			}
 		}
 		if (!problems.isEmpty()) {
@@ -52,5 +64,76 @@ public final class CodecEmitter {
 			}
 		}
 		return List.of();
+	}
+
+	/**
+	 * A union's codec, composed from its members' models; null with a problem
+	 * naming the union when a member has no codec.
+	 */
+	private static @Nullable UnionModel union(
+			Annotated annotated, Annotated.Union union, Map<Annotated.Message, CodecModel> models,
+			List<Problem> problems
+	) {
+		List<UnionModel.Case> cases = new ArrayList<>();
+		CodecModel any = null;
+		for (Annotated.Message member : union.members()) {
+			CodecModel model = models.get(member);
+			if (model == null) {
+				problems.add(
+						new Problem(
+								union, "no codec for " + union.javaName() + ": its message " + member.javaName()
+										+ " has none"
+						)
+				);
+				continue;
+			}
+			any = model;
+			cases.add(
+					new UnionModel.Case(
+							member.qualifiedName(), annotated.packageName() + "." + model.codec(),
+							Character.toLowerCase(model.codec().charAt(0)) + model.codec().substring(1),
+							model.flyweights() + "." + model.message() + "Decoder"
+					)
+			);
+		}
+		if (any == null || cases.size() < union.members().size()) {
+			return null;
+		}
+		return new UnionModel(
+				annotated.packageName(), union.javaName() + "Codec", union.qualifiedName(), union.javaName(),
+				any.flyweights(), any.header(), cases
+		);
+	}
+
+	/**
+	 * Codecs are named by simple name in the schema package, so a union and a
+	 * message, or two messages, nested in different types may both claim one.
+	 */
+	private static List<Problem> duplicateCodecs(Annotated annotated) {
+		Map<String, List<Object>> claims = new LinkedHashMap<>();
+		Map<Object, String> descriptions = new IdentityHashMap<>();
+		for (Annotated.Message message : annotated.messages()) {
+			claims.computeIfAbsent(message.javaName() + "Codec", name -> new ArrayList<>()).add(message);
+			descriptions.put(message, "the message " + message.qualifiedName());
+		}
+		for (Annotated.Union union : annotated.unions()) {
+			claims.computeIfAbsent(union.javaName() + "Codec", name -> new ArrayList<>()).add(union);
+			descriptions.put(union, "the union " + union.qualifiedName());
+		}
+		List<Problem> problems = new ArrayList<>();
+		for (Map.Entry<String, List<Object>> claim : claims.entrySet()) {
+			if (claim.getValue().size() > 1) {
+				List<String> sources = claim.getValue().stream().map(descriptions::get).toList();
+				for (Object node : claim.getValue()) {
+					problems.add(
+							new Problem(
+									node,
+									claim.getKey() + " would be generated twice: for " + String.join(" and ", sources)
+							)
+					);
+				}
+			}
+		}
+		return problems;
 	}
 }

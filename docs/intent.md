@@ -29,7 +29,7 @@ express is expressible as annotated Java with identical IR and bytes:
 primitives, unsigned and `char`, enums, sets, named types, composites,
 fixed-length arrays, groups, var-data, constants, optional presence, schema
 evolution (`sinceVersion`, `deprecated`, acting version, `semanticVersion`),
-byte order, custom header types. Plus message families as sealed interfaces
+byte order, custom header types. Plus unions of messages as sealed interfaces
 with a dispatching codec, the one Java-side feature. Then what makes the
 codec worth using: built-in bindings for the JDK types the SBE specification
 gives a standard encoding, and a real FIX order-entry schema as the proof
@@ -42,7 +42,7 @@ RPC (`rpc.md`), Aeron transport, typed flyweights, tooling over sbe-tool's
 schema corpus. sbe-tool's own `JavaDtoGenerator` is the nearest prior art
 to the codec: it generates its own DTO classes from the IR, where sbe-buddy
 maps to the user's records, with bindings, `null` for absence and
-families. None of these appears in code until
+unions. None of these appears in code until
 the scope above is complete, and nothing built may preclude them.
 
 ## Non-negotiables
@@ -124,9 +124,9 @@ the block, one at a time.
 
 * [x] 18. Evolution through every construct: `sinceVersion` inside groups and composites, var-data appended inside a group included, every frozen version decoded in both directions
 
-**Families.**
+**Unions.**
 
-* [ ] 19. Message families: the sealed interface and its dispatching codec
+* [x] 19. Unions: `@SbeUnion` on a sealed interface and its dispatching codec, composed from the message codecs; `canDecode` on every codec
 
 **JDK bindings.** Built on the normal SBE model, no special cases; the wire
 representation stays explicit, above all for timestamps and their
@@ -136,7 +136,7 @@ precision.
 
 **A real schema.**
 
-* [ ] 21. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` as a family, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
+* [ ] 21. A FIX order-entry subset, `NewOrderSingle` and `ExecutionReport` in a union, in a package of its own with its hand-written schema as the oracle and FIX tags as field ids; byte-compatible with sbe-tool's flyweights from that oracle in both directions
 
 **The API pass.**
 

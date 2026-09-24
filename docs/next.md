@@ -1,112 +1,135 @@
-# Increment 18: Evolution through every construct
+# Increment 19: Unions
 
 ## Goal
 
-A schema evolves the ways SBE allows, and the codec reads every earlier
-version of it. Today the codec refuses anything appended inside a group, and
-reads a member appended to a composite from older messages without a guard.
-This increment follows SBE's own rules: what the standard lets a schema
-append, the codec reads from older and newer messages alike; what it forbids
-is refused by the compiler with the official way instead.
-
-## What SBE allows
-
-From the FIX standard's schema extension mechanism and sbe-tool's versioning
-guide:
-
-- **Fields** may be appended to the end of a message's root block or of a
-  group's block. The header's and the dimension's block lengths let a
-  reader of either version step over the difference.
-- **A group** may be appended after the existing groups, at the root or
-  nested within a group; **var-data** after the existing var-data, at the
-  root or within a group.
-- **A composite cannot be extended**: "It is not possible to add fields to a
-  composite type without creating a new message template and schema
-  version." The official way is a new composite, carried by a new field.
-- **The header's encoding cannot change.**
-
-## What the spike showed
-
-- **Appending inside a group almost works.** With the codec's three
-  refusals lifted, a field, a nested group and var-data appended inside a
-  group's entry compiled and round-tripped, and a hand-built version 0
-  message decoded to `null` for all three with the right lengths. sbe-tool's
-  group decoders guard every appended member by the message's acting
-  version, which the codec's added-member templates already read.
-- **An appended composite member is read from bytes it does not own.**
-  sbe-tool puts no version guard inside a composite (`JavaGenerator.java`,
-  `generateFieldNotPresentCondition`), and the walk never marks a
-  composite's member as added, so a member appended in version 1 read
-  `0x5A5A5A5A` from a version 0 message: the bytes after its block. The
-  compiler accepted an `int` for it.
-- **An older reader cannot skip a group or var-data appended inside an
-  entry.** sbe-tool's `next()` starts an entry at the message's limit
-  (`JavaGenerator.java`, the group decoder's `next`), and an older reader
-  never reads the unknown nested part, so it reads that as the next entry.
-  The standard allows the append; older sbe-tool readers of a group with
-  more than one entry, or with anything after it, do not survive it.
-  Appending fields to an entry is safe both ways.
+A sealed interface over messages of one schema, annotated `@SbeUnion`, gets a
+codec of its own: `<Union>Codec implements Codec<Union, H>`. It decodes any
+of its messages to the interface, chosen by the header's template id, and
+encodes any of them by the record's type. The caller handles the result with
+an exhaustive `switch`, which javac checks, so a message joining the union
+breaks every `switch` that misses it at compile time. A union is how a stream
+carries several messages, how a message is replaced by a new template, since
+a composite cannot grow, and what a router dispatches on.
 
 ## Settled before it started
 
-- **Inside a group, everything SBE allows.** The codec's refusals of a
-  field, a group and var-data appended above the baseline inside a group
-  go. Each decodes to `null` from a message older than it, decided on the
-  acting version, and the compiler asks for a box on a field that can be
-  absent, as it already does.
-- **A composite's member is never newer than its composite.** A member,
-  inline or a ref, whose `sinceVersion` is above its composite's own is
-  refused by `Mapping`: `a composite cannot be extended in a later version;
-  declare a new composite and append a field of it`. The composite's own
-  `sinceVersion`, the version the whole type arrived in, stays as it is.
-- **A header's member is never versioned.** A header member with a
-  `sinceVersion` is refused by `Mapping`: `a header cannot change: a reader
-  needs its length before its version`.
-- **The older-reader limit is documented, not warned about.** The guide
-  recommends appending fields to an entry, and says what a nested group or
-  var-data appended inside an entry costs readers of the older version.
+- **The name is union.** On the wire a union is a tagged union whose tag is
+  the template id. "Family" suggested lineage, which is one use among
+  several; the docs rename it throughout.
+- **A union is opted into.** `@SbeUnion` goes on a sealed interface in a
+  schema package. Nothing is inferred from a sealed interface alone: an
+  interface that mixes a message with another record stays an ordinary
+  interface, and one meant as a union but holding a mistake is an error
+  instead of a silently missing codec. The annotation contributes nothing
+  to the schema.
+- **Compose, don't regenerate.** A union codec owns one codec per member
+  message and delegates to it; it writes no wire code of its own, so its
+  bytes are its members' bytes, and every member codec stays usable alone.
+  No visitor or handler interface is generated: pattern matching is the
+  visitor.
+- **Hierarchies follow one rule.** Every annotated interface gets a codec
+  over all the messages beneath it; an unannotated sealed interface in
+  between flattens into the one above it. A record may belong to several
+  unions, and one reached through two paths of a hierarchy counts once.
+  Two unions' codecs are unrelated types: `Codec<OrderCommand, H>` is no
+  `Codec<Ingress, H>`.
+- **A union of unions dispatches flat.** A union's codec switches once over
+  every message beneath it and never delegates to a nested union's codec:
+  the bytes are the messages' either way, and a second switch buys nothing.
+  What nesting gives lives in Java's types: a caller's `switch` may take a
+  nested union as one case, exhaustively checked through the hierarchy, and
+  each nested union's codec serves a channel of its own.
+- **What a union may hold.** Every permitted subtype is an `@SbeMessage`
+  record of the schema or a sealed interface whose own subtypes follow the
+  same rule. A class, a `non-sealed` subtype, a record without
+  `@SbeMessage`, a generic union, a union on a schema with `codecs = false`
+  and `@SbeUnion` outside a schema package are refused by `Discovery`, on
+  the element that is wrong. Java already keeps a sealed interface's
+  subtypes in its package outside a named module.
+- **`Codec` gains `boolean canDecode(DirectBuffer buffer, int offset)`.** It
+  answers, without throwing, whether `decode` would take the message at the
+  offset: the schema id, the template id, and a version at or above the
+  baseline. A message codec knows one template, a union codec its members'.
+  A router asks it instead of catching `decode`'s
+  `IllegalArgumentException`, which `decode` keeps. No codec skips a
+  message it cannot read: with groups or var-data its length is unknown to
+  it, so skipping is the transport's.
+- **No unknown member.** A template id outside the union is not a value:
+  an unknown-message record would have no body to hold, and every `switch`
+  would carry a case for it.
+- **`encode(null, …)` is refused on every codec**, message and union alike,
+  with `IllegalArgumentException("value is required")`, from
+  `encodedLength` and both `encode`s. Today a message codec throws a
+  `NullPointerException`.
 
 ## What gets built
 
-- **`CodecWalk`.** The three refusals inside a group go.
-- **`Mapping`.** The two rules, each on the member it names.
-- **The corpus.** One schema at three versions, each its own package with
-  its own records, codecs and oracle, so every version reads every other
-  through our codecs:
-  - `evolution.v0`: a message whose group's entry holds a field and a
-    composite.
-  - `evolution.v1`: the entry appends a field after the composite, and the
-    nested entries of a group already there append one too.
-  - `evolution`, version 2: the entry appends a nested group and var-data.
-  - Their tests cross: v0 and v1 each read the other's messages; the
-    current version reads v0's and v1's, with every appended member `null`;
-    lengths agree in every direction the readers support.
-- **The snippets.** A composite member newer than its composite, a ref
-  newer than its composite, a versioned header member.
-- **The example.** `quotes` version 9 appends a field to the contributors
-  entry, freezing `quotes-v8.xml` with its reference flyweights. The
-  reference tests cross versions 8 and 9 both ways: sbe-tool's version 8
-  reader steps over the appended field by the entry's block length, and our
-  codec reads version 8's entries with the field `null`.
-- **The documents.** `type-mappings.md`'s evolution rules; the guide's
-  groups, composites and headers pages, and the stale line of the
-  retire-a-field how-to about composites without a layout; `notes.md` on
-  the group decoder's `next` and the composite without a guard; `intent.md`
-  ticks 18.
+- **The api.** `@SbeUnion`, retained at `CLASS` on a type, and
+  `Codec.canDecode`, documented as a contract.
+- **`Annotated`.** `Union(javaName, qualifiedName, members)` per annotated
+  interface, `members` being messages of `messages` by identity, the
+  hierarchy beneath flattened, each once, in template id order. A nested
+  union is a second `Union` over a subset of the same messages; the tree
+  stays javac's, checked by `Discovery`. `Message` gains `qualifiedName`, so
+  a message nested in its union's interface, the natural style, gets a
+  codec naming it rightly.
+- **`Discovery`.** It finds `@SbeUnion` interfaces in the schema package,
+  nested ones included, walks their permitted subtypes and applies the
+  union rules. A wrong subtype reached from two unions is reported once, on
+  the subtype. An `@SbeUnion` in a package without `@SbeSchema` is refused
+  where it stands.
+- **One codec per name.** Codecs are named by simple name in the schema
+  package, so two sources of one codec name, a union and a message nested
+  in different types or two such messages, are refused naming both.
+- **The union codec.** A model of its own beside `CodecModel`,
+  `UnionModel(packageName, codec, union, unionName, flyweights, header,
+  cases)`, each case a member's record, its codec and the flyweight whose
+  `TEMPLATE_ID` labels the case. The writer renders it through templates:
+  - `encodedLength`, `encode` and `encode` with a header switch on the
+    record's type, exhaustively, and delegate.
+  - `decode`, `decodedLength` and `canDecode` read the header and switch on
+    the template id, the cases being the flyweights' constants, so no wire
+    number is written. `lastDecodedLength` is the last member codec's.
+  - `decodeHeader` is any member's, since the header is the schema's.
+  - A template id outside the union is `IllegalArgumentException("not a
+    <Union>: schemaId …, templateId …; its templates are …")`.
+  - A member whose message has no codec, because it holds a construct the
+    codec lacks, is a problem naming the union as well as the message.
+- **Message codecs.** `canDecode`, and the `null` check before any write.
+- **The corpus.**
+  - `unions`: a flat union; a hierarchy with codecs at two levels and an
+    unannotated interface flattened between them; a record in two unions;
+    a record reached twice. Round trips through every union codec, and
+    tests that a narrower union's `canDecode` refuses its wider union's
+    other templates.
+  - `replacement.v0` and `replacement`: a message over a composite in
+    version 0, and in version 1 a new template over a new composite beside
+    it, both in one union. A version 0 reader's `canDecode` says no to the
+    new template and its `decode` refuses it; the current union reads both
+    templates; a current writer still sends the old template to old
+    readers.
+  - `SchemaCasesTest` asserts `canDecode` on every round trip's bytes.
+- **The snippets.** Every refusal above, and a clean hierarchy with an
+  unannotated interface in the middle.
+- **The documents.** `type-mappings.md`'s families section becomes unions;
+  a guide page for unions, with the exhaustive `switch`, hierarchies,
+  replacing a message and routing with `canDecode`; `architecture.md`'s
+  codec contract; `intent.md` renames families and ticks 19; `rpc.md`'s
+  mentions follow the name.
 
 ## Criteria
 
-- Every appended member of every construct SBE lets grow decodes from every
-  older version of the corpus's schema, and every version a reader supports
-  crosses both ways with its lengths.
-- The quotes reference tests cross versions 8 and 9 in both directions.
-- Nothing a composite or a header gains in a later version compiles.
+- Every union codec round-trips every member through the whole codec
+  contract, and a caller's `switch` over its result compiles only when it
+  covers every member.
+- A router can tell every codec's messages from others' through `canDecode`
+  alone.
+- The replacement case crosses its versions both ways.
 - `./mvnw verify` is green on a fresh clone, and the CI job passes on this
   pull request.
 
 ## Out of scope
 
-A new message template as the way to replace a message wholesale, which
-families in increment 19 give a home. Deprecation beyond the attribute. A
-set choice or enum value added in a later version stays under the
-unknown-value contract of `type-mappings.md`.
+The FIX order-entry union, increment 21. RPC and any service layer
+(`rpc.md`). A union spanning schemas. Skipping a message the codec cannot
+read.

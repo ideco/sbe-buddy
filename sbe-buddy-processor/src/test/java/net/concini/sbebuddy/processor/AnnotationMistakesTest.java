@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
  * would be typed, compiled through the processor, asserting every diagnostic
  * with the line it lands on and that nothing was written; and where a rule
  * allows something, that it compiles clean. The schemas set {@code codecs =
- * false}, so what is tested is the mapping and not the codec emitter.
+ * false}, so what is tested is the mapping and not the codec emitter, except
+ * for the unions, which need codecs.
  */
 final class AnnotationMistakesTest {
 
@@ -665,6 +666,140 @@ final class AnnotationMistakesTest {
 		);
 	}
 
+	// ---- unions
+
+	@Test
+	void aUnionIsASealedInterface() {
+		assertErrors(
+				WITH_CODECS,
+				HEADER + """
+						@SbeUnion interface Orders {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1) long orderId) implements Orders {}
+						""",
+				error("interface Orders", "@SbeUnion goes on a sealed interface")
+		);
+	}
+
+	@Test
+	void aUnionIsNotGeneric() {
+		assertErrors(
+				WITH_CODECS,
+				HEADER + """
+						@SbeUnion sealed interface Orders<T> permits Order {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1) long orderId) implements Orders<String> {}
+						""",
+				error("interface Orders<T>", "a union is not generic: its codec decodes to one type")
+		);
+	}
+
+	@Test
+	void aUnionNeedsCodecs() {
+		assertErrors(
+				HEADER + """
+						@SbeUnion sealed interface Orders permits Order {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1) long orderId) implements Orders {}
+						""",
+				error("interface Orders", "a union needs codecs, and codecs = false on @SbeSchema generates none")
+		);
+	}
+
+	@Test
+	void everySubtypeOfAUnionIsAMessageOrASealedInterface() {
+		assertErrors(
+				WITH_CODECS,
+				HEADER + """
+						@SbeUnion sealed interface Orders permits Order, Note, Batch, Open {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1) long orderId) implements Orders {}
+						record Note(long orderId) implements Orders {}
+						final class Batch implements Orders {}
+						non-sealed interface Open extends Orders {}
+						""",
+				error("record Note", "Note is in the union Orders but carries no @SbeMessage"),
+				error(
+						"class Batch",
+						"Batch is in the union Orders but is neither an @SbeMessage record nor a sealed interface"
+				),
+				error(
+						"interface Open",
+						"Open is in the union Orders and non-sealed, which leaves the union open to types its codec "
+								+ "cannot know"
+				)
+		);
+	}
+
+	@Test
+	void aSubtypeWrongInTwoUnionsIsReportedOnce() {
+		assertErrors(
+				WITH_CODECS,
+				HEADER + """
+						@SbeUnion sealed interface Orders permits Order, Note {}
+						@SbeUnion sealed interface Notes permits Note {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1) long orderId) implements Orders {}
+						record Note(long orderId) implements Orders, Notes {}
+						""",
+				error("record Note", "Note is in the union Notes but carries no @SbeMessage")
+		);
+	}
+
+	@Test
+	void anUnannotatedSealedInterfaceFlattensIntoTheUnionAboveIt() {
+		Javac.Result result = assertClean(
+				WITH_CODECS,
+				HEADER + """
+						@SbeUnion sealed interface Ingress permits Orders, Logon {}
+						sealed interface Orders extends Ingress permits Order, Cancel {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1) long orderId) implements Orders {}
+						@SbeMessage(id = 2) record Cancel(@SbeField(id = 1) long orderId) implements Orders {}
+						@SbeMessage(id = 3) record Logon(@SbeField(id = 1) int sessionId) implements Ingress {}
+						"""
+		);
+
+		assertThat(result.outputs()).containsKey("mistakes/IngressCodec.java").doesNotContainKey(
+				"mistakes/OrdersCodec.java"
+		);
+		assertThat(result.outputs().get("mistakes/IngressCodec.java"))
+				.contains(
+						"case mistakes.Order member ->", "case mistakes.Cancel member ->",
+						"case mistakes.Logon member ->"
+				);
+	}
+
+	@Test
+	void aUnionAndAMessageCannotShareACodecsName() {
+		assertErrors(
+				WITH_CODECS,
+				HEADER + """
+						interface Feed {
+						@SbeUnion sealed interface Order permits Placed {}
+						}
+						@SbeMessage(id = 1) record Placed(@SbeField(id = 1) long orderId) implements Feed.Order {}
+						@SbeMessage(id = 2) record Order(@SbeField(id = 1) long orderId) {}
+						""",
+				error(
+						"@SbeUnion sealed interface Order",
+						"OrderCodec would be generated twice: for the message mistakes.Order and the union mistakes.Feed.Order"
+				),
+				error(
+						"@SbeMessage(id = 2)",
+						"OrderCodec would be generated twice: for the message mistakes.Order and the union mistakes.Feed.Order"
+				)
+		);
+	}
+
+	@Test
+	void aUnionOverAMessageWithoutACodecIsAProblem() {
+		assertErrors(
+				WITH_CODECS,
+				HEADER + """
+						@SbeType(primitiveType = CHAR, length = 8, characterEncoding = "UTF-8") final class Name {}
+						@SbeUnion sealed interface Orders permits Order {}
+						@SbeMessage(id = 1) record Order(@SbeField(id = 1, type = Name.class) String name) implements Orders {}
+						""",
+				error("@SbeMessage(id = 1)", "no codec for a string in UTF-8 yet; set codecs = false on @SbeSchema"),
+				error("@SbeUnion sealed interface Orders", "no codec for Orders: its message Order has none")
+		);
+	}
+
 	// ---- declarations the snippets share
 
 	private static final String SIDE = "@SbeEnum(primitiveType = CHAR) enum Side { @SbeEnumValue(\"B\") Buy, @SbeEnumValue(\"S\") Sell }";
@@ -709,6 +844,14 @@ final class AnnotationMistakesTest {
 				import net.concini.sbebuddy.SbeSchema;
 				""".formatted(version, baseline);
 	}
+
+	/** The schema of the snippets with codecs, which a union needs. */
+	private static final String WITH_CODECS = """
+			@SbeSchema(id = 1, version = 0)
+			package mistakes;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
 
 	/** The schema of the snippets, framed in a header of its own. */
 	private static String framedIn(String header) {

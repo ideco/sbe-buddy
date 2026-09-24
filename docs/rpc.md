@@ -12,8 +12,9 @@ Checked whenever `Codec<T>` or the generated artifacts change:
    `tryClaim` and the codec writes into the claimed region. Already in scope.
 2. Reading `schemaId` and `templateId` from a buffer without decoding, so a
    dispatcher can route. A static header peek in the api is enough.
-3. Dispatch by template id over a family: a sealed interface's codec that
-   decodes to the interface type. Increment 16.
+3. Dispatch by template id over a union: a sealed interface's codec that
+   decodes to the interface type, and `canDecode` to route without
+   decoding. Increment 19.
 4. Codecs that are instances with no static state, so a session can own one
    per thread. Already so.
 5. Per-message codecs that stay usable standing alone, so a generated service
@@ -26,7 +27,7 @@ callers and the observers all generated from one contract.
 
 * **Contract.** `@RpcService(id)` on an interface, `@RpcMethod(id)` on each
   method, both `uint16` and hand-assigned. Request and response types are
-  `@SbeMessage` records or sealed families. `void` is one-way, `R` is unary,
+  `@SbeMessage` records or unions. `void` is one-way, `R` is unary,
   `Stream<R>` streams. No client or server in the contract: the other
   direction is another contract implemented on the other side.
 * **Wire.** One envelope schema owned by sbe-buddy with a reserved schema id:
@@ -43,7 +44,7 @@ callers and the observers all generated from one contract.
   callers, and a dispatcher builder with one typed slot per method and no
   reflection.
 * **Errors are values.** Business outcomes are leaves of the response
-  family; infrastructure failures are `Complete.status`; a throwing handler
+  union; infrastructure failures are `Complete.status`; a throwing handler
   is a bug reported once to an `ErrorHandler`. The server never throws.
 * **Idempotency** is per method and opt-in; the dispatcher dedupes by
   `(session, correlationId)` over a bounded window.

@@ -5,9 +5,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
@@ -44,6 +47,7 @@ import net.concini.sbebuddy.SbeRef;
 import net.concini.sbebuddy.SbeSchema;
 import net.concini.sbebuddy.SbeSet;
 import net.concini.sbebuddy.SbeType;
+import net.concini.sbebuddy.SbeUnion;
 import net.concini.sbebuddy.UnknownValue;
 import net.concini.sbebuddy.generator.Annotated;
 import net.concini.sbebuddy.generator.Problem;
@@ -79,6 +83,7 @@ public final class Discovery {
 	private final Map<Object, Element> origins = new IdentityHashMap<>();
 	private final Map<Object, AnnotationMirror> mirrors = new IdentityHashMap<>();
 	private final Map<TypeElement, Annotated.Declaration> declarations = new HashMap<>();
+	private final Set<TypeElement> misfits = new HashSet<>();
 
 	private Discovery(Elements elements, Types types) {
 		this.elements = elements;
@@ -113,8 +118,9 @@ public final class Discovery {
 		Members schema = members(schemaPackage, SbeSchema.class);
 		List<TypeElement> declarationTypes = new ArrayList<>();
 		List<TypeElement> messageTypes = new ArrayList<>();
+		List<TypeElement> unionTypes = new ArrayList<>();
 		for (TypeElement type : ElementFilter.typesIn(schemaPackage.getEnclosedElements())) {
-			walk(type, declarationTypes, messageTypes);
+			walk(type, declarationTypes, messageTypes, unionTypes);
 		}
 		// javac enters a package's types in an order an incremental build does not
 		// keep, so the schema takes its own: messages by id, declarations by name.
@@ -131,8 +137,20 @@ public final class Discovery {
 			}
 		}
 		List<Annotated.Message> messages = new ArrayList<>();
+		Map<TypeElement, Annotated.Message> messagesByType = new HashMap<>();
 		for (TypeElement type : messageTypes) {
-			messages.add(message(type));
+			Annotated.Message message = message(type);
+			messages.add(message);
+			messagesByType.put(type, message);
+		}
+		unionTypes.sort(Comparator.comparing(Discovery::qualifiedName));
+		boolean codecs = schema.flag("codecs");
+		List<Annotated.Union> unions = new ArrayList<>();
+		for (TypeElement type : unionTypes) {
+			Annotated.Union union = union(type, messagesByType, codecs);
+			if (union != null) {
+				unions.add(union);
+			}
 		}
 		Annotated annotated = new Annotated(
 				schemaPackage.getQualifiedName().toString(),
@@ -141,10 +159,11 @@ public final class Discovery {
 				header(schemaPackage, schema),
 				declared,
 				messages,
+				unions,
 				schema.string("semanticVersion"),
 				schema.string("description"),
 				schema.enumeration("byteOrder", ByteOrder.class),
-				schema.flag("codecs"),
+				codecs,
 				schema.integer("baselineVersion")
 		);
 		remember(annotated, schemaPackage, schema.mirror);
@@ -152,21 +171,105 @@ public final class Discovery {
 	}
 
 	/**
-	 * A message or a declaration, then the types nested in it, except inside a
-	 * composite, whose nested types are its inline members.
+	 * A message, a declaration or a union, then the types nested in it, except
+	 * inside a composite, whose nested types are its inline members.
 	 */
-	private static void walk(TypeElement type, List<TypeElement> declarations, List<TypeElement> messages) {
+	private static void walk(
+			TypeElement type, List<TypeElement> declarations, List<TypeElement> messages, List<TypeElement> unions
+	) {
 		if (has(type, SbeMessage.class)) {
 			messages.add(type);
 		} else if (isDeclaration(type)) {
 			declarations.add(type);
 		}
+		if (has(type, SbeUnion.class)) {
+			unions.add(type);
+		}
 		if (has(type, SbeComposite.class)) {
 			return;
 		}
 		for (TypeElement nested : ElementFilter.typesIn(type.getEnclosedElements())) {
-			walk(nested, declarations, messages);
+			walk(nested, declarations, messages, unions);
 		}
+	}
+
+	// ---- unions
+	// ----------------------------------------------------------------------------------
+
+	/**
+	 * A sealed interface over messages of this schema: the hierarchy beneath it
+	 * flattened to its messages, each once, in template id order. Null where the
+	 * interface or a subtype breaks a rule.
+	 */
+	private Annotated.@Nullable Union union(
+			TypeElement type, Map<TypeElement, Annotated.Message> messagesByType, boolean codecs
+	) {
+		if (!isSealedInterface(type)) {
+			problem(type, "@SbeUnion goes on a sealed interface");
+			return null;
+		}
+		int before = problems.size();
+		if (!type.getTypeParameters().isEmpty()) {
+			problem(type, "a union is not generic: its codec decodes to one type");
+		}
+		if (!codecs) {
+			problem(type, "a union needs codecs, and codecs = false on @SbeSchema generates none");
+		}
+		Map<TypeElement, Annotated.Message> members = new LinkedHashMap<>();
+		boolean clean = flatten(type, type, messagesByType, members);
+		if (!clean || problems.size() > before) {
+			return null;
+		}
+		List<Annotated.Message> ordered = new ArrayList<>(members.values());
+		ordered.sort(Comparator.comparingInt(Annotated.Message::id));
+		Annotated.Union union = new Annotated.Union(type.getSimpleName().toString(), qualifiedName(type), ordered);
+		remember(union, type, members(type, SbeUnion.class).mirror);
+		return union;
+	}
+
+	/**
+	 * The messages beneath a sealed interface into {@code members}; false where a
+	 * subtype is neither a message of this schema nor a sealed interface. Such a
+	 * subtype is reported once, whichever union reaches it first.
+	 */
+	private boolean flatten(
+			TypeElement union, TypeElement type, Map<TypeElement, Annotated.Message> messagesByType,
+			Map<TypeElement, Annotated.Message> members
+	) {
+		boolean clean = true;
+		for (TypeMirror permitted : type.getPermittedSubclasses()) {
+			TypeElement subtype = (TypeElement) types.asElement(permitted);
+			Annotated.Message message = messagesByType.get(subtype);
+			if (message != null) {
+				members.put(subtype, message);
+			} else if (isSealedInterface(subtype)) {
+				clean &= flatten(union, subtype, messagesByType, members);
+			} else {
+				clean = false;
+				if (misfits.add(subtype)) {
+					problem(subtype, misfit(subtype, union));
+				}
+			}
+		}
+		return clean;
+	}
+
+	private static String misfit(TypeElement subtype, TypeElement union) {
+		String name = subtype.getSimpleName() + " is in the union " + union.getSimpleName();
+		if (has(subtype, SbeMessage.class)) {
+			return name + " but is a message of another schema";
+		}
+		if (subtype.getModifiers().contains(Modifier.NON_SEALED)) {
+			return name + " and non-sealed, which leaves the union open to types its codec cannot know";
+		}
+		if (subtype.getKind() == ElementKind.RECORD) {
+			return name + " but carries no @SbeMessage";
+		}
+		return name + " but is neither an @SbeMessage record nor a sealed interface";
+	}
+
+	private static boolean isSealedInterface(TypeElement type) {
+		return type.getKind() == ElementKind.INTERFACE && type.getModifiers().contains(Modifier.SEALED);
 	}
 
 	private static String qualifiedName(TypeElement type) {
@@ -493,6 +596,7 @@ public final class Discovery {
 		}
 		Annotated.Message result = new Annotated.Message(
 				type.getSimpleName().toString(),
+				qualifiedName(type),
 				message.integer("id"),
 				components(type),
 				unmapped(message, type),

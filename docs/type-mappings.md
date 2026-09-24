@@ -290,14 +290,27 @@ members is a construct the codec lacks.
   below `baselineVersion` is refused.
 * `byteOrder` applies to every encoding of the schema.
 
-## Families
+## Unions
 
-A sealed interface in the schema package with `@SbeMessage` leaves is a
-family. It carries no annotation. `<Iface>Codec implements Codec<Iface, H>`
-decodes by template id and encodes by the record's type; a template id
-outside the family is an `IllegalArgumentException`. Nested hierarchies
-flatten; a record may belong to several families; every leaf must be an
-`@SbeMessage` of the same schema.
+`@SbeUnion` on a sealed interface in the schema package makes it a union:
+`<Union>Codec implements Codec<Union, H>` encodes any of its messages by the
+record's type and decodes any of them, chosen by the header's template id,
+to the interface. The annotation contributes nothing to the schema, and a
+sealed interface without it is no union.
+
+* Every permitted subtype is an `@SbeMessage` record of the schema or a
+  sealed interface whose subtypes follow the same rule; anything else,
+  `non-sealed` included, is rejected, and so is a generic union and a union
+  on a schema with `codecs = false`.
+* Every annotated interface gets a codec over all the messages beneath it;
+  an unannotated sealed interface in between flattens into it. A record may
+  belong to several unions and counts once however often it is reached.
+* A union's codec composes its members' codecs and switches once over all of
+  them, never through a nested union's codec; its bytes are its members'.
+* A template id outside the union is an `IllegalArgumentException`, and
+  `canDecode` tells it without throwing. There is no unknown member.
+* Codecs are named by simple name in the schema package, so a union and a
+  message claiming one name are rejected.
 
 ## Running example, complete
 
@@ -308,6 +321,7 @@ example module holds one schema per concern instead.
 @SbeSchema(id = 1, version = 2)
 package com.example.trading;
 
+@SbeUnion
 sealed interface IngressMessage permits PlaceOrder, CancelOrder {}
 
 @SbeMessage(id = 1)
