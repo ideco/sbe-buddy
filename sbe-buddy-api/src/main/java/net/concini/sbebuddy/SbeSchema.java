@@ -7,11 +7,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Declares an SBE schema for a Java package or maps the package to an existing schema.
- * By default, annotated Java declarations define the schema and its XML is generated.
- * When {@link #resource()} is set, the XML defines the schema and records map the
- * messages and members they need.
- * Both modes generate standard SBE flyweights and, unless disabled, record codecs.
+ * Declares an SBE schema for a Java package.
+ *
+ * <p>By default, annotated Java declarations define the schema and its XML is generated.
+ * When {@link #resource()} is set, the complete declaration must match the existing
+ * XML schema, which is then used for generation.</p>
+ *
+ * <p>Both modes generate standard SBE flyweights and, unless disabled, record codecs.</p>
  */
 @Documented
 @Retention(RetentionPolicy.CLASS)
@@ -19,24 +21,24 @@ import java.lang.annotation.Target;
 public @interface SbeSchema {
 
 	/**
-	 * The schema ID. Must match the XML in schema-first mode.
+	 * The schema ID written to message headers.
 	 */
 	int id();
 
 	/**
 	 * The numeric schema version written to message headers.
-	 * Must match the XML in schema-first mode.
 	 */
 	int version();
 
 	/**
 	 * The schema's semantic version label, independent of {@link #version()}.
-	 * It does not control encoding or decoding.
+	 * It does not control encoding or decoding. Empty means unspecified.
 	 */
 	String semanticVersion() default "";
 
 	/**
-	 * A description of the schema. Empty means unspecified.
+	 * A description of the schema.
+	 * Empty means unspecified.
 	 */
 	String description() default "";
 
@@ -62,11 +64,13 @@ public @interface SbeSchema {
 	 * The classpath resource containing an existing SBE XML schema.
 	 * Paths are relative to this package, or absolute when prefixed with {@code /}.
 	 *
-	 * <p>When set, the XML defines the schema. Records may map only some messages
-	 * and members, and schema attributes stated in annotations are checked
-	 * against the XML. The XML resource is not rewritten.
+	 * <p>When set, the schema described by the annotations must match the resource,
+	 * including every message, member, type and schema attribute.
+	 * The comparison accounts for XSD defaults and ignores the order of top-level
+	 * type declarations and messages. Other member order is preserved.</p>
 	 *
-	 * <p>When empty, the schema is generated from the annotated Java declarations.
+	 * <p>Flyweights and codecs are generated from the resource, which is not rewritten.
+	 * When empty, the XML schema is generated from the annotated Java declarations.</p>
 	 */
 	String resource() default "";
 
@@ -76,7 +80,7 @@ public @interface SbeSchema {
 	 *
 	 * <p>A required field introduced at or below this version cannot be absent
 	 * due to schema evolution, so its record component can use a primitive type.
-	 * This setting affects codecs only and is not written to the SBE schema.
+	 * This setting affects codecs only and is not written to the SBE schema.</p>
 	 */
 	int baselineVersion() default 0;
 }

@@ -6,9 +6,10 @@ Javadoc is reviewed.
 
 ## Schema
 
-An SBE definition of messages, their types and their wire representation.
-In code-first mode, sbe-buddy generates its XML from annotated Java. In
-schema-first mode, an existing XML resource supplies the schema.
+An SBE definition of messages, their types and their wire representation. In
+code-first mode, sbe-buddy generates its XML from annotated Java. In schema-
+first mode, the complete Java declaration must match an existing XML resource,
+which supplies the schema for generation.
 
 ## Code-first
 
@@ -18,27 +19,28 @@ generates codecs for the records when enabled.
 
 ## Schema-first
 
-The mode selected by `SbeSchema.resource`, in which an existing XML schema
-defines the wire representation. Records map the messages and members the
-application needs; any schema attributes explicitly stated in annotations
-are checked against the XML.
+The mode selected by `SbeSchema.resource`, in which an existing XML schema is
+checked against the complete schema declared in Java, then used for
+generation. The comparison accounts for XSD defaults and ignores the order of
+top-level type declarations and messages. It checks schema equivalence, not
+just wire compatibility; partial schema declarations are not supported.
 
 ## Message
 
 A message definition in an SBE schema, identified by its template ID within
-that schema. A Java record annotated with `SbeMessage` defines or maps a
-message. Use "encoded message" when referring to a particular message's bytes.
+that schema. A Java record annotated with `SbeMessage` declares a message. Use
+"encoded message" when referring to a particular message's bytes.
 
 ## Field
 
-An SBE `field` element in the fixed-length block of a message or group.
-Groups and variable-length data are separate schema constructs; use "member"
-when referring to them collectively with fields.
+An SBE `field` element in the fixed-length block of a message or group. Groups
+and variable-length data are separate schema constructs; use "member" when
+referring to them collectively with fields.
 
 ## Record component
 
-A value declared in a Java record's header. A component may map to a field,
-a group, variable-length data or a member of a composite. Use "annotation
+A value declared in a Java record's header. A component may map to a field, a
+group, variable-length data or a member of a composite. Use "annotation
 member" for an annotation's settings, such as `SbeField.id`.
 
 ## Wire representation
@@ -55,17 +57,18 @@ component carries. It can also specify bindings for value conversion.
 
 ## Binding
 
-A user-supplied conversion between a component's application type and the
-Java value used by the codec for its wire representation. For example, a
-binding can convert between `BigDecimal` and a composite record containing a
-mantissa and exponent. The binding does not define the schema's wire layout.
+A user-supplied conversion between a component's application type and the Java
+value used by the codec for its wire representation. For example, a binding
+can convert between `BigDecimal` and a composite record containing a mantissa
+and exponent. The binding does not define the schema's wire layout.
 
 ## Unmapped member
 
-A schema member with no corresponding record component. Decoding passes over
-it; encoding writes the empty representation defined by the codec for that
-construct, such as a null sentinel or an empty group. Its original value is
-not retained through a decode-encode cycle.
+A schema member explicitly declared in the annotations but with no
+corresponding record component. Decoding passes over it; encoding writes the
+empty representation defined by the codec for that construct, such as a null
+sentinel or an empty group. Its original value is not retained through a
+decode-encode cycle.
 
 ## Flyweight
 
@@ -75,7 +78,47 @@ buffer or offset for reuse.
 
 ## Codec
 
-Generated code that encodes records through SBE flyweights and decodes
-encoded messages into records. A message codec handles one message type;
-a union codec dispatches to the codecs of its member messages. Codec instances
-reuse mutable flyweights and must not be shared between threads.
+Generated code that encodes records through SBE flyweights and decodes encoded
+messages into records. A message codec handles one message type; a union codec
+dispatches to the codecs of its member messages. Codec instances reuse mutable
+flyweights and must not be shared between threads.
+
+## Schema version
+
+The numeric version of the SBE schema. Encoded messages carry the writer's
+schema version in their header so readers can interpret their layout.
+
+## Semantic version
+
+An optional descriptive version label on the schema, independent of its
+numeric schema version. It does not control encoding or decoding.
+
+## Baseline version
+
+The oldest schema version accepted by a generated codec. Messages below this
+version are rejected. This is a sbe-buddy setting, not an SBE schema
+attribute.
+
+## Template ID
+
+The numeric identifier of a message within an SBE schema. Encoded messages
+carry it in their header to identify the message type.
+
+## Message header
+
+The schema-defined header preceding a message's body. The standard header
+contains block length, template ID, schema ID and schema version. Generated
+message codecs encode and decode the header as part of the message.
+
+## Block length
+
+The number of bytes reserved for the fixed-length fields of a message or group
+entry, including padding. It excludes the message or group header, nested
+groups and variable-length data.
+
+## Wire order
+
+The order of members in the encoded message or composite. For messages and
+group entries, fields precede groups, followed by variable-length data. Wire
+order can differ from record component order when an explicit `layout` is
+declared.
