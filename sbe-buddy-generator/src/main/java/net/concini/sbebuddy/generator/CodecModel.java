@@ -104,20 +104,6 @@ record CodecModel(
 		}
 
 		/**
-		 * A group no component carries: written with no entries, and passed over on the
-		 * way in, entry by entry, through a local of its decoder class.
-		 */
-		record UnmappedGroup(String property, String decoder) implements Member {
-		}
-
-		/**
-		 * Var-data no component carries: written empty, and skipped on the way in;
-		 * {@code bulk} is the name the flyweight's put and skip take.
-		 */
-		record UnmappedData(String property, String bulk) implements Member {
-		}
-
-		/**
 		 * A repeating group read into a local of its component's name before the
 		 * constructor; {@code addedSince} is the flyweight's since-version method when
 		 * the group was appended above the baseline, or null; {@code binding} and
@@ -351,23 +337,6 @@ record CodecModel(
 
 		/** The codec's constant for one encoding, by the name the schema gives it. */
 		record CharsetConstant(String constant, String name) implements Helper {
-		}
-
-		/** The empty array var-data no component carries is written from. */
-		record NoBytes() implements Helper {
-		}
-
-		/**
-		 * A composite no component carries, written as its members' null values over
-		 * its encoder, a nested composite through its own such method.
-		 */
-		record CompositeNulls(String compositeClass, String encoder, List<Member.Unmapped> members)
-				implements
-					Helper {
-
-			public CompositeNulls {
-				members = List.copyOf(members);
-			}
 		}
 
 		/** The length check before bytes reach their flyweight. */

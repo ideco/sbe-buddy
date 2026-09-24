@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 import javax.xml.XMLConstants;
@@ -95,21 +96,86 @@ public final class Generator {
 	}
 
 	/**
-	 * Steps 4 to 7 over a schema read from a resource, {@code systemId} its URI:
-	 * every XInclude resolved against it, then the included document as a written
-	 * one, validated, parsed, the flyweights and the join. A document sbe-tool or
-	 * the XML parser refuses is a problem naming the annotated package.
+	 * Steps 3 to 7 over a schema read from a resource, {@code systemId} its URI:
+	 * the document rendered from {@code schema} is compared with the resource, its
+	 * XIncludes resolved against the URI, by {@link SchemaEquivalence}, and each
+	 * difference is a problem on the schema node it is on, or on the schema where
+	 * no node corresponds; with none, the resource is the document the rest of the
+	 * pipeline takes. A resource the XML parser or sbe.xsd refuses is a problem
+	 * naming the schema.
 	 */
 	public static List<Problem> generate(
-			String document, String systemId, Annotated annotated, DynamicPackageOutputManager output
+			Schema schema, String resource, String systemId, Annotated annotated, DynamicPackageOutputManager output
 	) {
 		String included;
 		try {
-			included = include(document, systemId);
+			included = include(resource, systemId);
 		} catch (SAXException e) {
-			return List.of(new Problem(annotated, String.valueOf(e.getMessage())));
+			return List.of(new Problem(schema, String.valueOf(e.getMessage())));
 		}
-		return generate(parse(included, annotated, annotated.packageName()), annotated, output);
+		List<SchemaEquivalence.Difference> differences;
+		try {
+			differences = SchemaEquivalence.differences(document(schema), included);
+		} catch (IllegalArgumentException e) {
+			return List.of(new Problem(schema, "sbe.xsd: " + e.getMessage()));
+		}
+		if (!differences.isEmpty()) {
+			List<Problem> problems = new ArrayList<>();
+			for (SchemaEquivalence.Difference difference : differences) {
+				problems.add(new Problem(node(schema, difference.path()), difference.message()));
+			}
+			return problems;
+		}
+		return generate(parse(included, schema, schema.packageName()), annotated, output);
+	}
+
+	/**
+	 * The node a difference's path names, or the nearest one on the path that
+	 * exists: a message the resource has and the schema lacks lands on the schema.
+	 */
+	private static Object node(Schema schema, List<SchemaEquivalence.Segment> path) {
+		Object node = schema;
+		for (SchemaEquivalence.Segment segment : path) {
+			Object next = child(node, segment.element(), segment.name());
+			if (next == null) {
+				return node;
+			}
+			node = next;
+		}
+		return node;
+	}
+
+	private static @Nullable Object child(Object node, String element, String name) {
+		return switch (node) {
+			case Schema schema -> element.equals("message")
+					? first(schema.messages(), message -> message.name().equals(name))
+					: first(schema.types(), declaration -> wireName(declaration).equals(name));
+			case Schema.Message message -> member(message.fields(), message.groups(), message.data(), name);
+			case Schema.Group group -> member(group.fields(), group.groups(), group.data(), name);
+			case Schema.Composite composite -> first(composite.members(), member -> memberName(member).equals(name));
+			case Schema.Enum enumeration -> first(enumeration.validValues(), value -> value.name().equals(name));
+			case Schema.Set set -> first(set.choices(), choice -> choice.name().equals(name));
+			default -> null;
+		};
+	}
+
+	private static @Nullable Object member(
+			List<Schema.Field> fields, List<Schema.Group> groups, List<Schema.Data> data, String name
+	) {
+		Object member = first(fields, field -> field.name().equals(name));
+		if (member == null) {
+			member = first(groups, group -> group.name().equals(name));
+		}
+		return member == null ? first(data, datum -> datum.name().equals(name)) : member;
+	}
+
+	private static <T> @Nullable T first(List<T> nodes, Predicate<T> matches) {
+		for (T node : nodes) {
+			if (matches.test(node)) {
+				return node;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -386,6 +452,16 @@ public final class Generator {
 	private static String wireName(Schema.Declaration declaration) {
 		return switch (declaration) {
 			case Schema.Type type -> type.name();
+			case Schema.Composite composite -> composite.name();
+			case Schema.Enum enumeration -> enumeration.name();
+			case Schema.Set set -> set.name();
+		};
+	}
+
+	private static String memberName(Schema.Member member) {
+		return switch (member) {
+			case Schema.Type type -> type.name();
+			case Schema.Ref ref -> ref.name();
 			case Schema.Composite composite -> composite.name();
 			case Schema.Enum enumeration -> enumeration.name();
 			case Schema.Set set -> set.name();

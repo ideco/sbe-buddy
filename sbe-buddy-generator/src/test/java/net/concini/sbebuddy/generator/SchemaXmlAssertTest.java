@@ -48,7 +48,7 @@ final class SchemaXmlAssertTest {
 				""".formatted(HEADER);
 
 		assertThatThrownBy(() -> SchemaXmlAssert.parse(oracle))
-				.isInstanceOf(AssertionError.class)
+				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("70000");
 	}
 }

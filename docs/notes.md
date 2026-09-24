@@ -59,8 +59,9 @@ alternatives considered.
   `semanticType` is not read from the document at all. A constant `char`
   type's `length` stays 1 however long its value, which only `constValue`
   holds. (`IrGenerator.java`, `Message.java` and `EncodedDataType.java`,
-  read 2026-09-24; each surfaced as a false disagreement of `StatedRules`
-  over the corpus.)
+  read 2026-09-24; each surfaced as a false disagreement when the
+  annotations were compared with the document through the IR, which is why
+  the comparison is between documents.)
 * `PrimitiveValue.toString()` prints a `char` value as its code point, `66`
   for `B`; `PrimitiveValue.parse("B", CHAR)` is the value to compare with,
   and refuses more than one character. (`PrimitiveValue.java`, read

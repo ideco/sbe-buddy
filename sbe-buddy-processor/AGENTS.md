@@ -26,8 +26,9 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
 - Never load an Agrona buffer class: a user's javac would need a JVM flag.
 - A resource is read through `Filer.getResource` on `CLASS_PATH` alone, the
   one location Maven, Gradle and a jar agree on (`notes.md`), and its URI
-  goes to the generator for XInclude. Schema-first writes no `schema.xml`:
-  Gradle's `jar` fails on the duplicate.
+  goes to the generator for XInclude, beside the schema the mapping made,
+  which the generator holds against it. Schema-first writes no
+  `schema.xml`: Gradle's `jar` fails on the duplicate.
 
 ## Tests
 
@@ -48,7 +49,9 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
 - `IncrementalCompilationTest` compiles real directories, whole and then one
   record alone, and expects the same output.
 - `SchemaRoundTripTest` compiles every schema package of the corpus and the
-  example code-first, then the same records schema-first over the schemas
-  the first run wrote, and expects the same generated sources: the proof
-  that the two ways to the document are one flow below it, over every
+  example code-first, a package that is schema-first in the repository
+  with its `resource` spliced out, then the same records schema-first over
+  the schemas the first run wrote, and expects the same generated sources
+  and, for the spliced packages, their resource written back equivalent:
+  the proof that the switch loses nothing in either direction, over every
   construct the repository has.

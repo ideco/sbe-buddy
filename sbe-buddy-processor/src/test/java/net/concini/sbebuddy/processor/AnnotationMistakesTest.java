@@ -980,27 +980,32 @@ final class AnnotationMistakesTest {
 	// ---- a schema read from a resource: the annotations against the venue's XML
 
 	@Test
-	void aRecordMapsPartOfTheResourceAndNothingIsWritten() {
-		Javac.Result result = assertClean(
-				SCHEMA_FIRST, inMessage("@SbeField(id = 1) long orderId,\n@SbeField(id = 4) Side side", VENUE_SIDE)
-		);
+	void aPackageOverItsOwnSchemaCompilesCleanAndWritesNoSchema() {
+		Javac.Result result = assertClean(SCHEMA_FIRST, inMessage(ORDER, VENUE, VENUE_LEG));
 
 		assertThat(result.outputs())
 				.containsKeys(
-						"mistakes/OrderCodec.java", "mistakes/sbe/OrderEncoder.java", "mistakes/sbe/CancelEncoder.java"
+						"mistakes/OrderCodec.java", "mistakes/CancelCodec.java", "mistakes/sbe/OrderEncoder.java",
+						"mistakes/sbe/CancelEncoder.java"
 				)
-				.doesNotContainKeys("mistakes/schema.xml", "mistakes/CancelCodec.java");
-		assertThat(result.outputs().get("mistakes/OrderCodec.java"))
-				.contains("encoder.legsCount(0);")
-				.contains("legs.next().sbeSkip();")
-				.contains("encoder.putNote(NO_BYTES, 0, 0);")
-				.contains("decoder.skipNote();");
+				.doesNotContainKey("mistakes/schema.xml");
+	}
+
+	@Test
+	void anUnmappedFieldCarriesOneNoComponentDoes() {
+		assertClean(
+				SCHEMA_FIRST,
+				message(
+						"@SbeMessage(id = 1, layout = {\"orderId\", \"symbol\", \"side\", \"flags\", \"qty\", \"legs\", \"note\"}, unmapped = @SbeField(id = 5, name = \"flags\", type = Flags.class))",
+						ORDER.replace("@SbeField(id = 5) Set<Flags> flags,\n", ""), VENUE, VENUE_LEG
+				)
+		);
 	}
 
 	@Test
 	void aResourceNotOnTheClassPathIsAProblemOnTheSchema() {
 		Javac.Result result = compile(
-				SCHEMA_FIRST.replace("venue.xml", "nowhere.xml"), inMessage("@SbeField(id = 1) long orderId")
+				SCHEMA_FIRST.replace("venue.xml", "nowhere.xml"), inMessage(ORDER, VENUE, VENUE_LEG)
 		);
 
 		assertThat(result.errors()).hasSize(1);
@@ -1013,29 +1018,83 @@ final class AnnotationMistakesTest {
 	@Test
 	void theSchemasIdAndVersionMustAgreeWithTheResource() {
 		Javac.Result result = compile(
-				SCHEMA_FIRST.replace("id = 7, version = 2", "id = 1, version = 0"),
-				inMessage("@SbeField(id = 1) long orderId")
+				SCHEMA_FIRST.replace("id = 7, version = 2", "id = 1, version = 3"), inMessage(ORDER, VENUE, VENUE_LEG)
 		);
 
 		assertThat(result.errors()).extracting(diagnostic -> diagnostic.getMessage(null))
 				.containsExactlyInAnyOrder(
-						"the schema has id=\"7\", not \"1\"", "the schema has version=\"2\", not \"0\""
+						"the schema has id=\"7\", not \"1\"", "the schema has version=\"2\", not \"3\""
 				);
 		assertThat(result.outputs()).isEmpty();
 	}
 
 	@Test
-	void aRecordWhoseIdNamesNoMessageOfTheResourceIsAProblem() {
+	void aMessageOfTheResourceNoRecordMapsIsAProblemOnTheSchema() {
+		Javac.Result result = compile(SCHEMA_FIRST, inMessage(ORDER, VENUE_TYPES, VENUE_LEG));
+
+		assertThat(result.errors()).hasSize(1);
+		assertThat(result.errors().get(0).getMessage(null))
+				.isEqualTo("the schema has a message \"Cancel\" (id 2) and no record maps it");
+		assertThat(result.errors().get(0).getSource().getName()).endsWith("package-info.java");
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void aRecordTheResourceLacksIsAProblem() {
 		assertErrors(
-				SCHEMA_FIRST, message("@SbeMessage(id = 9)", "@SbeField(id = 1) long orderId"),
-				error("@SbeMessage(id = 9)", "the schema has no message with id 9")
+				SCHEMA_FIRST,
+				inMessage(
+						ORDER, VENUE, VENUE_LEG, "@SbeMessage(id = 9) record Extra(@SbeField(id = 1) long orderId) {}"
+				),
+				error("record Extra", "the schema has no message named \"Extra\"")
 		);
+	}
+
+	@Test
+	void aFieldOfTheResourceNoComponentCarriesIsAProblem() {
+		assertErrors(
+				SCHEMA_FIRST, inMessage(ORDER.replace("@SbeField(id = 5) Set<Flags> flags,\n", ""), VENUE, VENUE_LEG),
+				error(
+						"@SbeMessage(id = 1)",
+						"the schema's Order has a field \"flags\" no component carries; add it, or declare it unmapped"
+				)
+		);
+	}
+
+	@Test
+	void aGroupOrVarDataOfTheResourceNoComponentCarriesIsAProblem() {
+		Javac.Result result = compile(
+				SCHEMA_FIRST,
+				inMessage(
+						ORDER.replace(
+								",\n@SbeGroup(id = 6) List<Leg> legs,\n@SbeData(id = 8, type = VarStringEncoding.class) String note",
+								""
+						),
+						VENUE, VENUE_LEG
+				)
+		);
+
+		// The framing composites reach the schema only through the group and the data.
+		assertThat(result.errors()).extracting(diagnostic -> diagnostic.getMessage(null))
+				.containsExactlyInAnyOrder(
+						"the schema's Order has a group \"legs\" no component carries",
+						"the schema's Order has a data \"note\" no component carries",
+						"the schema has a composite \"groupSizeEncoding\" and no declaration maps it",
+						"the schema has a composite \"varStringEncoding\" and no declaration maps it"
+				);
+		assertThat(result.outputs()).isEmpty();
 	}
 
 	@Test
 	void aComponentTheResourceLacksIsAProblem() {
 		assertErrors(
-				SCHEMA_FIRST, inMessage("@SbeField(id = 1) long orderId,\n@SbeField(id = 5) int nowhere"),
+				SCHEMA_FIRST,
+				inMessage(
+						ORDER.replace(
+								"@SbeField(id = 1) long orderId,",
+								"@SbeField(id = 1) long orderId,\n@SbeField(id = 9) int nowhere,"
+						), VENUE, VENUE_LEG
+				),
 				error("int nowhere", "the schema's Order has no field named \"nowhere\"")
 		);
 	}
@@ -1045,11 +1104,46 @@ final class AnnotationMistakesTest {
 		assertErrors(
 				SCHEMA_FIRST,
 				inMessage(
-						"@SbeField(id = 1, sinceVersion = 2) long orderId,\n@SbeField(id = 3, presence = OPTIONAL) Integer qty"
+						ORDER.replace("sinceVersion = 1) Integer qty", "sinceVersion = 2) Integer qty")
+								.replace(
+										"type = Symbol.class) String symbol",
+										"type = Symbol.class, presence = OPTIONAL) String symbol"
+								),
+						VENUE, VENUE_LEG
 				),
-				error("long orderId", "the schema has sinceVersion=\"0\", not \"2\""),
-				error("Integer qty", "the schema has id=\"2\", not \"3\"")
+				error("Integer qty", "the schema has sinceVersion=\"1\", not \"2\""),
+				error("String symbol", "the schema has presence=\"required\", not \"optional\"")
 		);
+	}
+
+	@Test
+	void aDeclarationTheResourceLacksIsAProblem() {
+		assertErrors(
+				SCHEMA_FIRST,
+				inMessage(
+						ORDER, VENUE, VENUE_LEG,
+						"@SbeEnum(primitiveType = UINT8) enum Extra { @SbeEnumValue(\"1\") ONE }"
+				),
+				error("enum Extra", "the schema has no enum named \"Extra\"")
+		);
+	}
+
+	@Test
+	void aTypeOfTheResourceNoDeclarationMapsIsAProblemOnTheSchema() {
+		Javac.Result result = compile(
+				SCHEMA_FIRST,
+				inMessage(
+						ORDER.replace("@SbeField(id = 5) Set<Flags> flags,\n", ""),
+						VENUE.replace(VENUE_FLAGS + "\n", ""), VENUE_LEG
+				)
+		);
+
+		assertThat(result.errors()).extracting(diagnostic -> diagnostic.getMessage(null))
+				.containsExactlyInAnyOrder(
+						"the schema has a set \"Flags\" and no declaration maps it",
+						"the schema's Order has a field \"flags\" no component carries; add it, or declare it unmapped"
+				);
+		assertThat(result.outputs()).isEmpty();
 	}
 
 	@Test
@@ -1057,19 +1151,15 @@ final class AnnotationMistakesTest {
 		assertErrors(
 				SCHEMA_FIRST,
 				inMessage(
-						"@SbeField(id = 4) Side side",
-						"@SbeEnum(primitiveType = CHAR) enum Side { @SbeEnumValue(\"1\") BUY, @SbeEnumValue(\"3\") SHORT }"
+						ORDER,
+						VENUE.replace(
+								VENUE_SIDE,
+								"@SbeEnum(primitiveType = CHAR) enum Side { @SbeEnumValue(\"1\") BUY, @SbeEnumValue(\"3\") SHORT }"
+						),
+						VENUE_LEG
 				),
-				error("enum Side", "Side has no constant for the schema's value \"SELL\""),
+				error("enum Side", "the schema's Side has a value named \"SELL\" and no constant maps it"),
 				error("enum Side", "the schema's Side has no value named \"SHORT\"")
-		);
-	}
-
-	@Test
-	void theFaceComesFromTheResourceWhereTheRecordNamesNoType() {
-		assertErrors(
-				SCHEMA_FIRST, inMessage("@SbeField(id = 3) long symbol"),
-				error("long symbol", "long is not the face of Symbol, which is String")
 		);
 	}
 
@@ -1081,8 +1171,30 @@ final class AnnotationMistakesTest {
 			import net.concini.sbebuddy.SbeSchema;
 			""";
 
-	/** The enum the resource's {@code Side} maps to. */
+	/** The components of {@code Order} that map every member of the venue's. */
+	private static final String ORDER = """
+			@SbeField(id = 1) long orderId,
+			@SbeField(id = 3, type = Symbol.class) String symbol,
+			@SbeField(id = 4) Side side,
+			@SbeField(id = 5) Set<Flags> flags,
+			@SbeField(id = 2, presence = OPTIONAL, sinceVersion = 1) Integer qty,
+			@SbeGroup(id = 6) List<Leg> legs,
+			@SbeData(id = 8, type = VarStringEncoding.class) String note""";
+
 	private static final String VENUE_SIDE = "@SbeEnum(primitiveType = CHAR) enum Side { @SbeEnumValue(\"1\") BUY, @SbeEnumValue(\"2\") SELL }";
+
+	private static final String VENUE_FLAGS = "@SbeSet(primitiveType = UINT8) enum Flags { @SbeChoice(value = 0, name = \"urgent\") URGENT }";
+
+	/** The venue's declared types, which its messages reach. */
+	private static final String VENUE_TYPES = """
+			@SbeType(primitiveType = CHAR, length = 6) final class Symbol { private Symbol() {} }
+			""" + VENUE_SIDE + "\n" + VENUE_FLAGS + "\n";
+
+	/** The venue's types and its second message, beside the record of Order. */
+	private static final String VENUE = VENUE_TYPES
+			+ "@SbeMessage(id = 2) record Cancel(@SbeField(id = 1) long orderId) {}\n";
+
+	private static final String VENUE_LEG = "record Leg(@SbeField(id = 7) int legId) {}";
 
 	// ---- the snippet around the mistake
 

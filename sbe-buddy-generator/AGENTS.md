@@ -7,9 +7,9 @@ out. No javac here; the processor is the only front-end.
 Annotated        the api's annotations as data, plus what javac knows
 Mapping          Annotated to Schema, and the rules one node decides
 FaceRules        a component's Java type against the face its token hands it, applied by the walk
-StatedRules      what an annotation states against what its token states, applied by the walk
 Schema           sbe.xsd as records
 SchemaXml        Schema to XML, exactly what the model holds
+SchemaEquivalence whether two documents are one schema, and where they differ
 Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
 CodecWalk        the IR and Annotated to a CodecModel
 CodecModel       what a codec is made of
@@ -52,15 +52,13 @@ Problem          a mistake on a node of either model
   the rule and the codec never disagree. It runs with `codecs = false` too.
   A rule sbe-tool crashes on rather than reports, a constant without a
   value, stays in `Mapping`, before the document.
-- It compares what an annotation states with what the document states:
-  `StatedRules`, in the walk beside the face rules. Over a written schema
-  every comparison holds by construction, and the corpus proves it on every
-  build; over a resource they keep the annotations honest. A comparison the
-  IR cannot support, a group's `semanticType`, a since-version below the
-  token's, is left out and said so in `type-mappings.md`.
-- Only the walk knows a record from the document's side: a record whose id
-  names no message, a component or enum constant the document lacks, and
-  a group or var-data no component carries are its to report or write.
+- It compares the annotations with a resource: `SchemaEquivalence`, on
+  the document rendered from them, not on the IR, which blurs since-versions
+  and semantic types (`notes.md`). It is the one equivalence the oracles'
+  tests apply too, through `SchemaXmlAssert`, so what the corpus proves
+  against its oracles the compiler proves against a resource. Each
+  difference names a path, and `Generator` puts it on the schema node the
+  path reaches.
 - Everything else is sbe-tool's, reported verbatim on the package. Our
   documents raise nothing there, so anything it reports is our mistake.
 
@@ -108,8 +106,9 @@ Problem          a mistake on a node of either model
 - Here: `GeneratorTest` for the rules that compare nodes, the all-or-nothing
   pipeline and the constructs the codec refuses; `MappingTest`,
   `TemplateTest`, and `SchemaXmlAssert` with its own test.
-- `SchemaXmlAssert` is the XML equivalence every module uses, shipped in the
-  test jar. It fills the XSD's defaults, matches `type`, `composite`, `enum`,
-  `set` and `message` by name and everything else in sequence.
+- `SchemaXmlAssert` is the assertion every module uses over
+  `SchemaEquivalence`, shipped in the test jar: the XSD's defaults filled,
+  `type`, `composite`, `enum`, `set` and `message` matched by name and
+  everything else in sequence.
 - `Fixtures` holds plain factories, fixed defaults inside, for the few models
   built by hand. Build a node once and pass it to its parent.

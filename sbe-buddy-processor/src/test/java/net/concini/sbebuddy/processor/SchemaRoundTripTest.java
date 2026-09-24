@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import javax.tools.Diagnostic;
@@ -24,74 +26,101 @@ import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import net.concini.sbebuddy.generator.SchemaXmlAssert;
+
 /**
- * Every schema in the repository, the corpus and the example, goes round: the
- * records compiled code-first write their schema, and the same records compiled
- * schema-first over that schema generate the same flyweights and codecs, byte
- * for byte. The switch from one to the other is the one member spliced into
- * each {@code package-info}, and the schema each package wrote is served from a
+ * Every schema in the repository, the corpus and the example, goes round in
+ * both directions: the records compiled code-first write their schema, and the
+ * same records compiled schema-first over that schema generate the same
+ * flyweights and codecs, byte for byte; a package that is schema-first in the
+ * repository is compiled code-first with its resource spliced out and writes
+ * its resource back, equivalent. The switch is the one member spliced into each
+ * {@code package-info}, and the schema each package wrote is served from a
  * class-path directory, as a checked-in resource would be.
  */
 final class SchemaRoundTripTest {
 
-	/** The modules' schema sources, relative to this module. */
-	private static final List<Path> SOURCE_ROOTS = List
-			.of(Path.of("../sbe-buddy-tests/src/main/java"), Path.of("../sbe-buddy-example/src/main/java"));
-
-	/**
-	 * What the modules' own schema-first packages read from the class path: the
-	 * corpus's resources and the example's oracles.
-	 */
-	private static final List<Path> RESOURCE_ROOTS = List
-			.of(Path.of("../sbe-buddy-tests/src/main/resources"), Path.of("../sbe-buddy-example/src/main/sbe"));
+	/** The modules' schema sources and, beside each, the module's resources. */
+	private static final Map<Path, Path> ROOTS = Map.of(
+			Path.of("../sbe-buddy-tests/src/main/java"), Path.of("../sbe-buddy-tests/src/main/resources"),
+			Path.of("../sbe-buddy-example/src/main/java"), Path.of("../sbe-buddy-example/src/main/resources")
+	);
 
 	@TempDir
 	Path directory;
 
 	@Test
-	void everySchemaWrittenCodeFirstMapsTheSameRecordsSchemaFirst() throws IOException {
-		List<Path> sources = new ArrayList<>();
-		for (Path root : SOURCE_ROOTS) {
-			try (Stream<Path> files = Files.walk(root)) {
-				sources.addAll(files.filter(file -> file.toString().endsWith(".java")).toList());
+	void everySchemaGoesRoundInBothDirections() throws IOException {
+		List<Path> codeFirst = new ArrayList<>();
+		Map<String, Path> frozen = new TreeMap<>();
+		for (Map.Entry<Path, Path> root : ROOTS.entrySet()) {
+			try (Stream<Path> files = Files.walk(root.getKey())) {
+				for (Path source : files.filter(file -> file.toString().endsWith(".java")).toList()) {
+					codeFirst.add(
+							source.endsWith("package-info.java") ? writingItsSchema(source, root, frozen) : source
+					);
+				}
 			}
 		}
-		Compilation codeFirst = compile(directory.resolve("code-first"), sources, RESOURCE_ROOTS);
-		assertThat(codeFirst.errors()).isEmpty();
-		Map<String, String> schemas = codeFirst.schemas();
+		Compilation written = compile(directory.resolve("code-first"), codeFirst, List.of());
+		assertThat(written.errors()).isEmpty();
+		Map<String, String> schemas = written.schemas();
 		assertThat(schemas).as("schemas written code-first").hasSizeGreaterThan(20);
+		for (Map.Entry<String, Path> resource : frozen.entrySet()) {
+			String schema = schemas.get(resource.getKey());
+			assertThat(schema).as("the schema written for " + resource.getKey()).isNotNull();
+			SchemaXmlAssert.assertThat(schema).matches(Files.readString(resource.getValue()));
+		}
 
 		Path resources = directory.resolve("resources");
 		schemas.forEach((path, schema) -> write(resources, path, schema));
 		List<Path> schemaFirst = new ArrayList<>();
-		for (Path source : sources) {
+		for (Path source : codeFirst) {
 			schemaFirst.add(source.endsWith("package-info.java") ? readingItsSchema(source) : source);
 		}
-		List<Path> classpath = new ArrayList<>(RESOURCE_ROOTS);
-		classpath.add(resources);
-		Compilation again = compile(directory.resolve("schema-first"), schemaFirst, classpath);
+		Compilation again = compile(directory.resolve("schema-first"), schemaFirst, List.of(resources));
 
 		assertThat(again.errors()).isEmpty();
 		assertThat(again.schemas()).as("nothing written schema-first").isEmpty();
-		assertThat(again.generated().keySet()).isEqualTo(codeFirst.generated().keySet());
-		codeFirst.generated()
+		assertThat(again.generated().keySet()).isEqualTo(written.generated().keySet());
+		written.generated()
 				.forEach((path, source) -> assertThat(again.generated().get(path)).as(path).isEqualTo(source));
 	}
 
 	/**
-	 * The package-info with {@code resource = "schema.xml"} spliced into its
-	 * {@code @SbeSchema}, written under the temporary directory; one that names a
-	 * resource already, the example's client, as it is.
+	 * The package-info as it is, or with its {@code resource} spliced out of its
+	 * {@code @SbeSchema}, that resource noted under the path its schema is written
+	 * to, so the schema written code-first can be held against it.
 	 */
-	private Path readingItsSchema(Path packageInfo) throws IOException {
-		String source = Files.readString(packageInfo);
-		if (source.contains("resource =")) {
+	private Path writingItsSchema(Path packageInfo, Map.Entry<Path, Path> root, Map<String, Path> frozen) {
+		String source = read(packageInfo);
+		Matcher resource = RESOURCE.matcher(source);
+		if (!resource.find()) {
 			return packageInfo;
 		}
+		Path packageDirectory = root.getKey().relativize(packageInfo.getParent());
+		frozen.put(
+				packageDirectory.toString().replace(File.separatorChar, '/') + "/schema.xml",
+				root.getValue().resolve(packageDirectory).resolve(resource.group(2))
+		);
+		// A member in the middle of the list keeps one of its two commas.
+		String stripped = resource.replaceFirst(resource.group(1) != null && resource.group(3) != null ? ", " : "");
+		return write(directory.resolve("code-first-sources"), packageDirectory.resolve("package-info.java"), stripped);
+	}
+
+	/**
+	 * The package-info with {@code resource = "schema.xml"} spliced into its
+	 * {@code @SbeSchema}, written under the temporary directory.
+	 */
+	private Path readingItsSchema(Path packageInfo) {
+		String source = read(packageInfo);
 		String switched = source.replace("@SbeSchema(", "@SbeSchema(resource = \"schema.xml\", ");
 		assertThat(switched).as(packageInfo.toString()).isNotEqualTo(source);
-		return write(directory.resolve("switched"), packageInfo.toString().replace("..", "up"), switched);
+		return write(directory.resolve("schema-first-sources"), packageInfo.toString().replace("..", "up"), switched);
 	}
+
+	/** {@code resource = "…"} in a member list, with the comma either side. */
+	private static final Pattern RESOURCE = Pattern.compile("(, )?resource = \"([^\"]+)\"(, )?");
 
 	/**
 	 * What a compilation left behind: the diagnostics, the class output with the
@@ -149,6 +178,18 @@ final class SchemaRoundTripTest {
 			}
 		}
 		return files;
+	}
+
+	private static String read(Path file) {
+		try {
+			return Files.readString(file);
+		} catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
+	private static Path write(Path root, Path relative, String content) {
+		return write(root, relative.toString(), content);
 	}
 
 	private static Path write(Path root, String relative, String content) {
