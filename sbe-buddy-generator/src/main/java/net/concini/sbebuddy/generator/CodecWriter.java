@@ -148,7 +148,12 @@ final class CodecWriter {
 	private String write(Body body, Member.Field field, Shape shape, String source) {
 		return switch (shape) {
 			case Shape.Scalar scalar -> ENCODE_FIELD.fill(field, "source", source);
-			case Shape.Text text -> ENCODE_STRING_FIELD.fill(field, "source", source, "encoder", body.encoder());
+			case Shape.Text text -> text.charset() == null
+					? ENCODE_STRING_FIELD.fill(field, "source", source, "encoder", body.encoder())
+					: ENCODE_ENCODED_STRING_FIELD.fill(
+							field, "source", source, "encoder", body.encoder(), "charset", text.charset(), "bulk",
+							text.bulk()
+					);
 			case Shape.Array array -> ENCODE_ARRAY_FIELD.fill(array, "source", source);
 			case Shape.Enum enumeration -> ENCODE_ENUM_FIELD
 					.fill(field, "enumClass", enumeration.enumClass(), "source", source);
@@ -297,6 +302,8 @@ final class CodecWriter {
 			case Helper.GroupMethods methods -> groupMethods(methods);
 			case Helper.DataMethods methods -> dataMethods(methods);
 			case Helper.Utf8 utf8 -> UTF_8.fill();
+			case Helper.Encoded encoded -> ENCODED.fill();
+			case Helper.CharsetConstant charset -> CHARSET_CONSTANT.fill(charset);
 			case Helper.Bytes bytes -> BYTES.fill();
 		};
 	}
@@ -385,11 +392,22 @@ final class CodecWriter {
 			case BYTES -> COUNT_BYTES.fill(methods, "component", data.component());
 			case ASCII -> COUNT_ASCII.fill(methods, "component", data.component());
 			case UTF_8 -> COUNT_UTF_8.fill(methods, "component", data.component());
+			case ENCODED -> COUNT_ENCODED
+					.fill(methods, "component", data.component(), "charset", String.valueOf(data.charset()));
 		};
 		String lengthMethod = DATA_LENGTH.fill(
 				methods, "length", length, "face", face(data), "component", data.component(), "property",
 				data.property(), "count", count
 		);
+		if (data.content() == Content.ENCODED) {
+			return String.join(
+					"\n\n", lengthMethod,
+					WRITE_ENCODED_TEXT.fill(
+							methods, "path", data.path(), "component", data.component(), "charset",
+							String.valueOf(data.charset())
+					)
+			);
+		}
 		if (data.content() != Content.BYTES) {
 			return String.join(
 					"\n\n", lengthMethod,

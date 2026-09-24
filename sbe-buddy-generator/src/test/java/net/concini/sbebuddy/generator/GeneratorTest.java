@@ -130,34 +130,41 @@ final class GeneratorTest {
 	}
 
 	@Test
-	void aConstructTheCodecLacksLeavesTheOutputUntouched() {
-		// sbe-tool accepts the schema and generates its flyweights; the codec has no
-		// text data in UTF-16 yet, so the flyweights must not reach the output either.
-		Annotated.Composite varUtf16Encoding = annotatedComposite(
-				"VarUtf16Encoding", "p.VarUtf16Encoding", "varUtf16Encoding",
-				annotatedType("length", UINT16, primitive(INT)), annotatedType("varData", CHAR, 0, "UTF-16", text())
+	void aConstructTheCodecRefusesLeavesTheOutputUntouched() {
+		// sbe-tool accepts the schema and generates its flyweights, which read the
+		// encoding by name at run time; the codec refuses one the JDK does not know,
+		// so the flyweights must not reach the output either.
+		Annotated.Composite varKlingonEncoding = annotatedComposite(
+				"VarKlingonEncoding", "p.VarKlingonEncoding", "varKlingonEncoding",
+				annotatedType("length", UINT16, primitive(INT)), annotatedType("varData", CHAR, 0, "x-klingon", text())
 		);
 		Annotated annotated = annotated(
-				0, List.of(varUtf16Encoding),
+				0, List.of(varKlingonEncoding),
 				annotatedMessage(
 						"M", 1, annotatedField("qty", 1, primitive(INT)),
-						annotatedData("note", 2, text(), varUtf16Encoding)
+						annotatedData("note", 2, text(), varKlingonEncoding)
 				)
 		);
 
-		assertLacks(annotated, "text data in UTF-16");
+		assertRefused(
+				annotated,
+				"no codec for text in x-klingon: the JDK knows no such encoding; set codecs = false on @SbeSchema"
+		);
 	}
 
 	@Test
-	void aStringInAnEncodingThatIsNotAsciiIsAConstructTheCodecLacks() {
-		// The flyweight's String form goes through String.getBytes there, and
-		// what the codec would check is not settled.
-		Annotated.Type name = annotatedType("Name", CHAR, 8, "UTF-8", null);
+	void aCharArrayInAnEncodingWritingZeroBytesHasNoCodec() {
+		// The flyweight reads a char array up to its first zero byte, which UTF-16
+		// writes inside a character.
+		Annotated.Type name = annotatedType("Name", CHAR, 8, "UTF-16", null);
 		Annotated annotated = annotated(
 				0, List.of(name), annotatedMessage("M", 1, annotatedField("name", 1, text(), name))
 		);
 
-		assertLacks(annotated, "a string in UTF-8");
+		assertRefused(
+				annotated,
+				"no codec for a char array in UTF-16: it writes zero bytes inside a character, and sbe-tool's flyweight ends a char array at its first zero byte; set codecs = false on @SbeSchema"
+		);
 	}
 
 	@Test
@@ -197,15 +204,10 @@ final class GeneratorTest {
 	/**
 	 * The one problem naming the construct the codec lacks, and nothing written.
 	 */
-	private static void assertLacks(Annotated annotated, String construct) {
+	private static void assertRefused(Annotated annotated, String problem) {
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
-		assertThat(generate(annotated, output)).containsExactly(
-				new Problem(
-						annotated.messages().get(0),
-						"no codec for " + construct + " yet; set codecs = false on @SbeSchema"
-				)
-		);
+		assertThat(generate(annotated, output)).containsExactly(new Problem(annotated.messages().get(0), problem));
 		assertThat(output.getSources()).isEmpty();
 	}
 

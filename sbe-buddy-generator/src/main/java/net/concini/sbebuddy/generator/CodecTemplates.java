@@ -372,6 +372,45 @@ final class CodecTemplates {
 				return value;
 			}""");
 
+	/**
+	 * In another encoding, the flyweight's String form would write an unmappable
+	 * char as '?' and read it back; the codec encodes it, refusing what the
+	 * encoding cannot hold, and writes the bytes, padded with zeros.
+	 */
+	static final Template ENCODE_ENCODED_STRING_FIELD = Template.of(
+			"encoder.put{bulk}(fixed({source}, {charset}, {encoder}.{property}Length(), \"{component}\"), 0);"
+	);
+
+	static final Template CHARSET_CONSTANT = Template
+			.of("private static final java.nio.charset.Charset {constant} = java.nio.charset.Charset.forName({name});");
+
+	/**
+	 * A CharsetEncoder reports what String.getBytes would replace: an unmappable
+	 * char, a lone surrogate.
+	 */
+	static final Template ENCODED = Template.of(
+			"""
+					private static byte[] encoded(String value, java.nio.charset.Charset charset, long maxLength, String field) {
+						java.nio.ByteBuffer bytes;
+						try {
+							bytes = charset.newEncoder().encode(java.nio.CharBuffer.wrap(value));
+						} catch (java.nio.charset.CharacterCodingException e) {
+							throw new IllegalArgumentException(field + " cannot be written in " + charset.name() + ": " + value, e);
+						}
+						if (bytes.remaining() > maxLength) {
+							throw new IllegalArgumentException(
+									field + " is longer than " + maxLength + " bytes in " + charset.name() + ": " + bytes.remaining());
+						}
+						byte[] encoded = new byte[bytes.remaining()];
+						bytes.get(encoded);
+						return encoded;
+					}
+
+					private static byte[] fixed(String value, java.nio.charset.Charset charset, int length, String field) {
+						return java.util.Arrays.copyOf(encoded(value, charset, length, field), length);
+					}"""
+	);
+
 	// ---- a fixed-length array: a pair per field, over the index accessors
 
 	static final Template ENCODE_ARRAY_FIELD = Template.of("write{field}({source}, encoder);");
@@ -590,6 +629,9 @@ final class CodecTemplates {
 
 	static final Template COUNT_UTF_8 = Template.of("utf8(value, {lengthEncoder}.lengthMaxValue(), \"{component}\")");
 
+	static final Template COUNT_ENCODED = Template
+			.of("encoded(value, {charset}, {lengthEncoder}.lengthMaxValue(), \"{component}\").length");
+
 	static final Template COUNT_BYTES = Template
 			.of("bytes(value, {lengthEncoder}.lengthMaxValue(), \"{component}\")");
 
@@ -601,6 +643,16 @@ final class CodecTemplates {
 			private static void write{path}(String value, {encoder} encoder) {
 				{length}(value);
 				encoder.{property}(value);
+			}""");
+
+	/** Encoded once, for the write; its length method encodes it to count. */
+	static final Template WRITE_ENCODED_TEXT = Template.of("""
+			private static void write{path}(String value, {encoder} encoder) {
+				if (value == null) {
+					throw new IllegalArgumentException("{component} is required");
+				}
+				byte[] bytes = encoded(value, {charset}, {lengthEncoder}.lengthMaxValue(), "{component}");
+				encoder.put{bulk}(bytes, 0, bytes.length);
 			}""");
 
 	static final Template WRITE_DATA_BYTES = Template.of("""

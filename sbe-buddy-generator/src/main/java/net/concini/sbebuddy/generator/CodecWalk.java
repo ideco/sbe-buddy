@@ -1,10 +1,12 @@
 package net.concini.sbebuddy.generator;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -337,13 +339,17 @@ final class CodecWalk {
 		String property = JavaUtil.formatPropertyName(token.name());
 		boolean added = token.version() > owner.baseline();
 		Content content = content(tokens.get(3), data);
-		if (content == null) {
-			return null;
-		}
+		String charset = null;
 		switch (content) {
 			case ASCII -> helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
 			case UTF_8 -> helpers.putIfAbsent(new Key(Helper.Utf8.class, ""), new Helper.Utf8());
 			case BYTES -> helpers.putIfAbsent(new Key(Helper.Bytes.class, ""), new Helper.Bytes());
+			case ENCODED -> {
+				charset = charset(characterEncoding(tokens.get(3), data.javaName()), false);
+				if (charset == null) {
+					return null;
+				}
+			}
 		}
 		String path = owner.prefix() + Generators.toUpperFirstChar(property);
 		Bound bound = null;
@@ -359,7 +365,7 @@ final class CodecWalk {
 			}
 		}
 		Member.Data member = new Member.Data(
-				data.javaName(), property, path, content, added ? property + "SinceVersion" : null,
+				data.javaName(), property, path, content, charset, added ? property + "SinceVersion" : null,
 				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
 		helpers.put(
@@ -373,28 +379,75 @@ final class CodecWalk {
 	}
 
 	/**
-	 * Decided by the component, whose face the rules tied to the varData type: a
-	 * String is text in the type's encoding, which the codec checks in ASCII and
-	 * counts in UTF-8.
+	 * Decided by the face, which the rules tied to the varData type: a String is
+	 * text in the type's encoding, which the codec checks in ASCII, counts in UTF-8
+	 * and encodes to count in any other.
 	 */
-	private @Nullable Content content(Token varData, Annotated.Data data) {
+	private static Content content(Token varData, Annotated.Data data) {
 		Annotated.Binding binding = data.binding();
 		Annotated.JavaType face = binding == null ? data.javaType() : binding.wire();
 		if (!(face instanceof Annotated.Text)) {
 			return Content.BYTES;
 		}
-		String encoding = varData.encoding().characterEncoding();
-		if (encoding == null) {
-			throw new IllegalStateException(data.javaName() + " is text over a varData without an encoding");
-		}
+		String encoding = characterEncoding(varData, data.javaName());
 		if (JavaUtil.isAsciiEncoding(encoding)) {
 			return Content.ASCII;
 		}
-		if (JavaUtil.isUtf8Encoding(encoding)) {
-			return Content.UTF_8;
+		return JavaUtil.isUtf8Encoding(encoding) ? Content.UTF_8 : Content.ENCODED;
+	}
+
+	private static String characterEncoding(Token text, String component) {
+		String encoding = text.encoding().characterEncoding();
+		if (encoding == null) {
+			throw new IllegalStateException(component + " is text without an encoding");
 		}
-		problems.add(lacking("text data in " + encoding));
-		return null;
+		return encoding;
+	}
+
+	/**
+	 * The codec's constant for text in an encoding other than ASCII and UTF-8,
+	 * declared once, with the method that encodes through it. Null, with the
+	 * problem, for an encoding the JDK does not know or cannot write, and for a
+	 * char array one that writes a zero byte inside a character: sbe-tool's
+	 * flyweight reads a char array up to its first zero byte.
+	 */
+	private @Nullable String charset(String encoding, boolean charArray) {
+		Charset charset;
+		try {
+			charset = Charset.forName(encoding);
+		} catch (IllegalArgumentException e) {
+			// Charset's own exceptions for a name it does not know, or cannot read.
+			problems.add(noCodec("text in " + encoding + ": the JDK knows no such encoding"));
+			return null;
+		}
+		if (!charset.canEncode()) {
+			problems.add(noCodec("text in " + encoding + ": the JDK can read it but not write it"));
+			return null;
+		}
+		if (charArray && containsZero("A".getBytes(charset))) {
+			problems.add(
+					noCodec(
+							"a char array in " + encoding
+									+ ": it writes zero bytes inside a character, and sbe-tool's flyweight ends a char array at its first zero byte"
+					)
+			);
+			return null;
+		}
+		String constant = charset.name().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "_") + "_CHARSET";
+		helpers.putIfAbsent(new Key(Helper.Encoded.class, ""), new Helper.Encoded());
+		helpers.putIfAbsent(
+				new Key(Helper.CharsetConstant.class, constant), new Helper.CharsetConstant(constant, literal(encoding))
+		);
+		return constant;
+	}
+
+	private static boolean containsZero(byte[] bytes) {
+		for (byte b : bytes) {
+			if (b == 0) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ---- how a field or member reaches the wire
@@ -439,7 +492,8 @@ final class CodecWalk {
 
 	/**
 	 * A scalar through its accessor, a char string through the flyweight's String
-	 * form in ASCII, and any other array through a pair of its own.
+	 * form in ASCII and as encoded bytes in any other encoding, and any other array
+	 * through a pair of its own.
 	 */
 	private @Nullable Shape encoding(Token type, Owner owner, String property, String component) {
 		PrimitiveType primitive = type.encoding().primitiveType();
@@ -450,13 +504,14 @@ final class CodecWalk {
 			);
 		}
 		if (primitive == PrimitiveType.CHAR) {
-			String encoding = type.encoding().characterEncoding();
-			if (!JavaUtil.isAsciiEncoding(encoding)) {
-				problems.add(lacking("a string in " + encoding));
-				return null;
+			String encoding = characterEncoding(type, component);
+			String bulk = Generators.toUpperFirstChar(property);
+			if (JavaUtil.isAsciiEncoding(encoding)) {
+				helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
+				return new Shape.Text(null, bulk);
 			}
-			helpers.putIfAbsent(new Key(Helper.Ascii.class, ""), new Helper.Ascii());
-			return new Shape.Text();
+			String charset = charset(encoding, true);
+			return charset == null ? null : new Shape.Text(charset, bulk);
 		}
 		String field = owner.prefix() + Generators.toUpperFirstChar(property);
 		helpers.putIfAbsent(
@@ -591,7 +646,11 @@ final class CodecWalk {
 				Encoding encoding = type.encoding();
 				boolean text = encoding.primitiveType() == PrimitiveType.CHAR
 						&& encoding.constValue().byteArrayValue(PrimitiveType.CHAR).length > 1;
-				yield new Shape.Constant(text ? new Shape.Text() : new Shape.Scalar(null), null);
+				// A constant is only compared, through the flyweight's String form.
+				Shape read = text
+						? new Shape.Text(null, Generators.toUpperFirstChar(JavaUtil.formatPropertyName(field.name())))
+						: new Shape.Scalar(null);
+				yield new Shape.Constant(read, null);
 			}
 			case BEGIN_ENUM -> {
 				Annotated.Enum enumeration = declared(declaration, Annotated.Enum.class, component);
@@ -854,5 +913,9 @@ final class CodecWalk {
 
 	private static String lacking(String construct) {
 		return "no codec for " + construct + " yet; set codecs = false on @SbeSchema";
+	}
+
+	private static String noCodec(String construct) {
+		return "no codec for " + construct + "; set codecs = false on @SbeSchema";
 	}
 }
