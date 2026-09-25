@@ -1,6 +1,16 @@
 package net.concini.sbebuddy;
 
-/** The {@code byteOrder} attribute. */
+/**
+ * The byte order used to encode multibyte values in an SBE schema.
+ */
 public enum ByteOrder {
-	LITTLE_ENDIAN, BIG_ENDIAN
+	/**
+	 * Encodes the least significant byte first.
+	 */
+	LITTLE_ENDIAN,
+
+	/**
+	 * Encodes the most significant byte first.
+	 */
+	BIG_ENDIAN
 }
