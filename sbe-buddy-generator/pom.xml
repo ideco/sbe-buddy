@@ -10,6 +10,8 @@
   </parent>
 
   <artifactId>sbe-buddy-generator</artifactId>
+  <name>sbe-buddy generator</name>
+  <description>The schema model, the mapping from the annotations, the SBE XML and the codec emitter, with no javac.</description>
 
   <dependencies>
     <dependency>

@@ -158,5 +158,14 @@ Each layer is tested where it lives; the module's own `AGENTS.md` says how.
   buffer class.
 * Versions live in the root pom only; a dependency arrives with the change
   that first needs it.
-* CI runs `./mvnw -B -ntp verify` on JDK 21 and JDK 25. `main` takes pull
-  requests only.
+* CI runs `./mvnw -B -ntp -Prelease verify` on JDK 21 and JDK 25. `main`
+  takes pull requests only.
+* A release is a tag `vX.Y.Z` on `main` whose root POM carries `X.Y.Z`;
+  `.github/workflows/release.yml` publishes it to Maven Central. The
+  `release` profile attaches the sources and javadoc jars and deploys into
+  `target/staging`, not to a server; `.github/central-publish.sh` signs
+  what is there, bundles it and uploads the bundle to the Central Portal.
+  The api, the generator and the processor are deployed; the parent, the
+  example and the tests are not. The deployed POMs are Maven 4's consumer
+  POMs, flattened by `.mvn/maven.config`, so they stand alone at model
+  4.0.0 and no consumer resolves the parent.

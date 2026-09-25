@@ -10,6 +10,8 @@
   </parent>
 
   <artifactId>sbe-buddy-tests</artifactId>
+  <name>sbe-buddy tests</name>
+  <description>The corpus compiled by the real build; not deployed.</description>
 
   <!-- The corpus, compiled by the real build: one package per schema under
        src/main/java, the processor reaching it through annotationProcessorPaths
@@ -68,6 +70,8 @@
   </build>
 
   <properties>
+    <!-- Proof, not product: never deployed. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
     <module.name>net.concini.sbebuddy.tests</module.name>
   </properties>
 </project>

@@ -25,4 +25,6 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
           cache: maven
-      - run: ./mvnw -B -ntp verify
+      # The release profile adds the sources and javadoc jars, so a javadoc
+      # error fails the pull request rather than the release.
+      - run: ./mvnw -B -ntp -Prelease verify

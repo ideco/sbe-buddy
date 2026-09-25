@@ -10,6 +10,8 @@
   </parent>
 
   <artifactId>sbe-buddy-api</artifactId>
+  <name>sbe-buddy API</name>
+  <description>The annotations a schema is written in, the Codec contract and TypeBinding: all a user compiles against.</description>
 
   <!-- The flyweights sbe-tool generates compile against Agrona, and the api is
        all a user depends on. -->

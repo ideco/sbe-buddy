@@ -625,6 +625,25 @@ alternatives considered.
   set, breaks the launcher before Maven starts. CI and a plain workstation
   are unaffected; a container that sets it must pass those flags in
   `MAVEN_OPTS` instead. (Spike experiment, 2026-09-20.)
+* Install and deploy write two POMs per module: the POM as written, model
+  4.1.0 with `root` and a parent without a version, attached under the
+  classifier `build`, and a consumer POM as the main one, generated at
+  install or deploy time into `target/consumer-*.pom`, at model 4.0.0.
+  The consumer POM keeps the parent reference and leaves `${…}` versions
+  for the parent to resolve, unless `maven.consumer.pom.flatten` is `true`:
+  then the parent's content is inlined, every version resolved, test
+  dependencies dropped and the parent reference gone. The switch is read
+  from user properties only; as a property in the root POM, even in a
+  profile, it changes nothing, and in `.mvn/maven.config` it applies.
+  `name` is not inherited, so a module without one has none in the
+  flattened POM. (Deploys into a file repository, 2026-09-25.)
+* A deploy into a `file:` repository, `altDeploymentRepository` of
+  `maven-deploy-plugin` 3.2.0, writes `.md5` and `.sha1` beside every file
+  and the consumer POM, not the build POM, as the main one. A project
+  resolving only from that directory, with an empty local repository,
+  compiles against the flattened api and runs the processor.
+  (`.github/central-publish.sh` dry run and a scratch consumer project,
+  2026-09-25.)
 
 ## Gradle 8.14.3
 
