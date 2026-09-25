@@ -7,11 +7,22 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * On one constant of an {@code @SbeEnum}, in place of {@code @SbeEnumValue}:
- * every wire value the enum does not know decodes to it, so a reader keeps
- * working when a writer adds values. It has no wire form, so encoding it is an
- * {@code IllegalArgumentException}. The Java side; contributes no
- * {@code validValue} to the schema.
+ * Marks the fallback constant in an {@link SbeEnum} enum for unknown wire
+ * values. At most one constant may carry this annotation, in place of
+ * {@link SbeEnumValue}.
+ *
+ * <p>
+ * Decoding maps unknown values to this constant without retaining the original
+ * wire value. Encoding the constant throws {@link IllegalArgumentException}
+ * because it has no wire representation.
+ * </p>
+ *
+ * <p>
+ * In an optional field the wire null sentinel decodes to null; in a required
+ * field, a composite's enum member among them, it is an unknown value like any
+ * other and decodes to this constant. A field the message predates decodes to
+ * null either way. This annotation adds no value to the SBE schema.
+ * </p>
  */
 @Documented
 @Retention(RetentionPolicy.CLASS)

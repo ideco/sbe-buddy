@@ -57,7 +57,7 @@ primitive it is the default mapping below; anything else is an error.
 | --- | --- | --- |
 | `type` | `@SbeType` on a `final` class, or on a component of an `@SbeComposite` record (an inline element) | `name`, `primitiveType`, `length` (1), `characterEncoding`, `nullValue`, `minValue`, `maxValue`, `presence`, `value` (the constant), `valueRef`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and, on a composite's component only, `binding` |
 | `composite` | `@SbeComposite` on a record | `name`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` and `unmapped` for its inline `type` members, as on a message |
-| `ref` | `@SbeRef` on a component of an `@SbeComposite` record | `value` (the declared type's class; omitted when the component type is itself the `@SbeEnum`, `@SbeSet` or `@SbeComposite`), `name`, `offset`, `sinceVersion`, `deprecated`; and `binding` |
+| `ref` | `@SbeRef` on a component of an `@SbeComposite` record | `value` (the declared type's class; omitted only when the component type is itself the `@SbeEnum` or `@SbeComposite`, since a set's component is a `Set` and a named type's its face), `name`, `offset`, `sinceVersion`, `deprecated`; and `binding` |
 | `enum` | `@SbeEnum` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
 | `validValue` | `@SbeEnumValue` on each constant | `value`, `name`, `description`, `sinceVersion`, `deprecated` |
 | `set` | `@SbeSet` on a Java enum | `name`, `encodingType` / `primitiveType`, `offset`, `semanticType`, `description`, `sinceVersion`, `deprecated` |
@@ -236,9 +236,11 @@ component alone says which binding it wants over which wire.
 Every call is handed the component's `BindingContext`: its name as the
 codec's messages give it, the wire primitive after a named type is resolved
 (an array's or a string's element, an enum's or a set's encoding; `null` for
-a composite and a group), the type's `characterEncoding` for `char` arrays
-and text var-data, and the field's `epoch` and `timeUnit` as the schema
-writes them, `null` where absent, never a default filled in. sbe-buddy
+a composite, a group and binary var-data), the type's `characterEncoding` for
+`char` arrays and text var-data, `US-ASCII` where the schema declares none as
+sbe-tool fills it in, and `null` for anything else, a single `char` included,
+and the field's `epoch` and `timeUnit` as the schema writes them, `null` where
+absent, never a default filled in. sbe-buddy
 interprets none of it; a binding reads what it needs and never supplies
 anything to the schema. The context also carries the field's or member's
 `presence`, a field left at the default taking its named type's, and `null`
@@ -353,8 +355,9 @@ relative to the package (`"schema.xml"`) or absolute with a leading slash
 resolve relative to the resource. Then:
 
 * The annotations describe the whole document, as code-first: every
-  message has its record, every field, group and var-data of a message is a
-  component or an `unmapped` entry, every type of the document has its
+  message has its record, every field of a message is a component or an
+  `unmapped` entry and every group and var-data a component, since only a
+  field can be unmapped, every type of the document has its
   declaration, and every member means what it means code-first. Nothing is
   left for the document to decide.
 * The document rendered from the annotations must be one schema with the

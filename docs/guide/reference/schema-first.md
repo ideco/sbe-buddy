@@ -13,7 +13,7 @@ package com.example.trading;
 
 ## The check
 
-The annotations are the ones that wrote the document, complete: every message has its record, every field, group and var-data of a message is a component or an `unmapped` entry, and every type of the document has its declaration. The compiler renders the schema from them as code-first would and holds it against the resource, with the XSD's defaults filled on both sides so an absent attribute equals its default, declarations and messages matched by name regardless of order and everything else in sequence. Each difference is an error on the node it is on, naming both sides:
+The annotations are the ones that wrote the document, complete: every message has its record, every field of a message is a component or an `unmapped` entry, every group and var-data a component, since only a field can be unmapped, and every type of the document has its declaration. The compiler renders the schema from them as code-first would and holds it against the resource, with the XSD's defaults filled on both sides so an absent attribute equals its default, declarations and messages matched by name regardless of order and everything else in sequence. Each difference is an error on the node it is on, naming both sides:
 
 * on the package, for what the document has and no annotation maps: `the schema has a message "Reject" (id 6) and no record maps it`, `the schema has an enum "ExecType" and no declaration maps it`;
 * on the record, for a member it does not carry: `the schema's NewOrder has a field "locateReqd" no component carries; add it, or declare it unmapped`, `the schema's ExecutionReport has a group "fills" no component carries`;

@@ -6,29 +6,72 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** The {@code enum} element, on a Java enum. */
+/**
+ * Declares an SBE enum represented by a Java enum. Every constant carries
+ * {@link SbeEnumValue} or {@link UnknownValue}, and at least one carries
+ * {@link SbeEnumValue}; Java ordinal values are not used for encoding.
+ *
+ * <p>
+ * Unknown wire values cause decoding to fail unless one constant is marked with
+ * {@link UnknownValue}. In an optional field the wire null sentinel decodes to
+ * null; anywhere else it is an unknown value like any other.
+ * </p>
+ */
 @Documented
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface SbeEnum {
 
+	/**
+	 * The enum name in the schema. An empty value uses the enum's simple name.
+	 */
 	String name() default "";
 
 	/**
-	 * The encoding as a declared type; exactly one of this and
-	 * {@link #primitiveType()}.
+	 * The named type used to encode the enum: an {@link SbeType} of length one over
+	 * one of the primitives {@link #primitiveType()} allows. Exactly one of this
+	 * member and {@link #primitiveType()} must be specified.
 	 */
 	Class<?> encodingType() default void.class;
 
+	/**
+	 * The primitive used to encode the enum: {@code char}, {@code int8},
+	 * {@code uint8}, {@code int16}, {@code uint16} or {@code int32}. Exactly one of
+	 * this member and {@link #encodingType()} must be specified.
+	 */
 	PrimitiveType primitiveType() default PrimitiveType.NONE;
 
+	/**
+	 * The byte offset when this declaration is an inline member of a composite,
+	 * relative to the start of that composite. Zero leaves the offset unspecified
+	 * for sbe-tool to calculate.
+	 *
+	 * <p>
+	 * On a top-level declaration the offset is still written to the schema, and
+	 * sbe-tool applies it to every reference inside a composite that sets no offset
+	 * of its own. A field is positioned by {@link SbeField#offset()}.
+	 * </p>
+	 */
 	int offset() default 0;
 
+	/**
+	 * A semantic type label for the enum. Empty means unspecified.
+	 */
 	String semanticType() default "";
 
+	/**
+	 * A description of the enum. Empty means unspecified.
+	 */
 	String description() default "";
 
+	/**
+	 * The schema version in which the enum was introduced.
+	 */
 	int sinceVersion() default 0;
 
+	/**
+	 * The schema version in which the enum was deprecated. Zero means unspecified.
+	 * Deprecation does not remove the enum.
+	 */
 	int deprecated() default 0;
 }
