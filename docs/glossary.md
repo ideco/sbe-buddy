@@ -64,11 +64,11 @@ exponent. A binding does not change the schema.
 
 ## Unmapped member
 
-A schema member explicitly declared in the annotations but with no
-corresponding record component. Decoding passes over it; encoding writes the
-empty representation defined by the codec for that construct, such as a null
-sentinel or an empty group. Its original value is not retained through a
-decode-encode cycle.
+A field, or a composite's inline type, explicitly declared in the annotations
+but with no corresponding record component; groups and variable-length data
+cannot be unmapped. Decoding passes over it; encoding writes its null
+sentinel, in every element of an array. Its original value is not retained
+through a decode-encode cycle.
 
 ## Flyweight
 
@@ -170,8 +170,10 @@ It is distinct from Java null, which is the value exposed by the codec.
 
 ## Unknown value
 
-An enum wire value that is neither a declared value nor the null sentinel.
-Decoding rejects it unless the Java enum declares an UnknownValue constant.
+An enum wire value that is not a declared value. In an optional field the
+null sentinel is not unknown, since it decodes to null; in a required field it
+is. Decoding rejects an unknown value unless the Java enum declares an
+UnknownValue constant.
 That constant does not retain the original wire value and cannot be encoded.
 
 ## Message union

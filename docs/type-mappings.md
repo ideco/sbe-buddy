@@ -236,9 +236,11 @@ component alone says which binding it wants over which wire.
 Every call is handed the component's `BindingContext`: its name as the
 codec's messages give it, the wire primitive after a named type is resolved
 (an array's or a string's element, an enum's or a set's encoding; `null` for
-a composite and a group), the type's `characterEncoding` for `char` arrays
-and text var-data, and the field's `epoch` and `timeUnit` as the schema
-writes them, `null` where absent, never a default filled in. sbe-buddy
+a composite, a group and binary var-data), the type's `characterEncoding` for
+`char` arrays and text var-data, `US-ASCII` where the schema declares none as
+sbe-tool fills it in, and `null` for anything else, a single `char` included,
+and the field's `epoch` and `timeUnit` as the schema writes them, `null` where
+absent, never a default filled in. sbe-buddy
 interprets none of it; a binding reads what it needs and never supplies
 anything to the schema. The context also carries the field's or member's
 `presence`, a field left at the default taking its named type's, and `null`

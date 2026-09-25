@@ -19,9 +19,9 @@ import java.lang.annotation.Target;
  *
  * <p>
  * In an optional field the wire null sentinel decodes to null; in a required
- * field, a field added in a later version, or a composite member, it is an
- * unknown value like any other and decodes to this constant. This annotation
- * adds no value to the SBE schema.
+ * field, a composite's enum member among them, it is an unknown value like any
+ * other and decodes to this constant. A field the message predates decodes to
+ * null either way. This annotation adds no value to the SBE schema.
  * </p>
  */
 @Documented

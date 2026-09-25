@@ -8,8 +8,10 @@ import java.lang.annotation.Target;
 
 /**
  * Declares variable-length data in a message or group entry. The encoded value
- * consists of a length prefix followed by the payload. Data components come
- * after every field and group; any other order is rejected, never rearranged.
+ * consists of a length prefix followed by the payload. In wire order, data
+ * follows every field and group, and any other wire order is rejected, never
+ * rearranged; with a {@code layout}, the components may be declared in any
+ * order.
  *
  * <p>
  * Without a binding, the component is a {@link String} for text or a

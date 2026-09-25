@@ -41,8 +41,8 @@ public record BindingContext(
 ```
 
 * `name`: the component's name, as the codec's own messages give it, so a binding's exception says which field it refused.
-* `primitiveType`: the wire primitive after a named type is resolved; an array's or a string's element, an enum's or a set's encoding; `null` for a composite and a group. A `long` face is an `int64`, a `uint64` or a `uint32`, and this tells which.
-* `characterEncoding`: the type's, for a `char` array and text var-data; `null` otherwise.
+* `primitiveType`: the wire primitive after a named type is resolved; an array's or a string's element, an enum's or a set's encoding; `null` for a composite, a group and binary var-data. A `long` face is an `int64`, a `uint64` or a `uint32`, and this tells which.
+* `characterEncoding`: the type's, for a `char` array and text var-data, `US-ASCII` where the schema declares none, as sbe-tool fills it in; `null` otherwise, a single `char` included.
 * `epoch` and `timeUnit`: the field's attributes as the schema writes them, `null` where the field leaves them out, and always `null` on a composite's member, where the schema has neither.
 * `presence`: the field's or the member's, a field left at the default taking its named type's; `null` for a group and var-data, which have none. A binding over a face without a null value of its own reads it to tell an optional field from a required one.
 
