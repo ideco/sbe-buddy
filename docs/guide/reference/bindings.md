@@ -250,7 +250,9 @@ public @Nullable BigDecimal fromWire(PriceEncoding wire, BindingContext context)
 }
 ```
 
-Without a binding, such a field is its face in the record and is never `null` after a decode; a `null` on the way out is refused although the field is optional, `price has no null value on the wire; a binding may write one`.
+Appended in a later version, such a field is still `null` when the message predates it, without calling the binding, as any field is.
+
+Without a binding, such a field is its face in the record and is `null` after a decode only when the message predates it; a `null` on the way out is refused although the field is optional, `price has no null value on the wire; a binding may write one`.
 
 The checks the codec makes on the wire's face still apply to what the binding hands it: a string longer than its field, an array of the wrong length, a constant other than the schema's, compared on its wire side, is refused after `toWire`. A binding's own exception passes through the codec unwrapped.
 

@@ -129,7 +129,7 @@ final class CodecWriter {
 		return switch (field.absence()) {
 			case NONE -> write(body, field, field.shape(), source);
 			case REQUIRED, ADDED -> ENCODE_CHECKED_FIELD.fill(field, "call", write(body, field, field.shape(), source));
-			case NO_NULL_VALUE -> field.binding() == null
+			case NO_NULL_VALUE, ADDED_NO_NULL_VALUE -> field.binding() == null
 					? ENCODE_NO_NULL_VALUE_FIELD.fill(field, "call", write(body, field, field.shape(), source))
 					: write(body, field, field.shape(), source);
 			case OPTIONAL -> switch (field.shape()) {
@@ -227,7 +227,7 @@ final class CodecWriter {
 		return switch (field.absence()) {
 			case NONE, REQUIRED, NO_NULL_VALUE -> read;
 			case OPTIONAL -> DECODE_OPTIONAL_FIELD.fill("isNull", isNull(body, field), "read", read);
-			case ADDED -> DECODE_ADDED_FIELD.fill(field, "decoder", body.decoder(), "read", read);
+			case ADDED, ADDED_NO_NULL_VALUE -> DECODE_ADDED_FIELD.fill(field, "decoder", body.decoder(), "read", read);
 		};
 	}
 

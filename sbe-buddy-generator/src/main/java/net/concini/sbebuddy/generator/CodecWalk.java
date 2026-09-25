@@ -95,13 +95,28 @@ final class CodecWalk {
 	/**
 	 * Whose flyweights a body's accessors are on: the message's or a group's, whose
 	 * decoders guard by version, or a composite's, which never does. {@code prefix}
-	 * keeps a member's or an entry's helpers apart from a field's of the same name,
-	 * and {@code baseline} is the version below which nothing in the body is read.
+	 * is the group's path or the composite's class, empty for the message, and
+	 * {@code baseline} is the version below which nothing in the body is read.
 	 */
 	private record Owner(String encoder, String decoder, String prefix, Kind kind, int baseline) {
 
 		enum Kind {
 			MESSAGE, COMPOSITE, GROUP
+		}
+
+		/**
+		 * A member's path, which names its helpers and its binding's context: a group
+		 * entry's member after the group's path and {@code $}, a composite's after its
+		 * class and {@code $$}. No SBE name holds a {@code $}, so {@code Fills$Price},
+		 * {@code Fills$$Price} and {@code FillsPrice} are three members.
+		 */
+		String path(String property) {
+			String member = Generators.toUpperFirstChar(property);
+			return switch (kind) {
+				case MESSAGE -> member;
+				case GROUP -> prefix + "$" + member;
+				case COMPOSITE -> prefix + "$$" + member;
+			};
 		}
 	}
 
@@ -193,7 +208,7 @@ final class CodecWalk {
 	private @Nullable Shape nullShape(Member.Field field, String headerClass) {
 		return switch (field.shape()) {
 			case Shape.Scalar scalar -> new Shape.Scalar(null);
-			case Shape.Text text -> new Shape.Array(headerClass + Generators.toUpperFirstChar(field.property()));
+			case Shape.Text text -> new Shape.Array(headerClass + "$$" + Generators.toUpperFirstChar(field.property()));
 			case Shape.Array array -> array;
 			case Shape.Enum enumeration -> enumeration;
 			case Shape.Set set -> set;
@@ -314,7 +329,7 @@ final class CodecWalk {
 		Annotated.Binding binding = component.binding();
 		if (binding != null) {
 			bound = bound(
-					binding, owner.prefix() + Generators.toUpperFirstChar(property), name, typeTokens.get(0),
+					binding, owner.path(property), name, typeTokens.get(0),
 					field.encoding().epoch(), field.encoding().timeUnit(), field.encoding().presence()
 			);
 			if (bound == null) {
@@ -326,7 +341,8 @@ final class CodecWalk {
 			return null;
 		}
 		return new Member.Field(
-				name, property, shape, withoutNullValue(absence(field, component.javaType(), owner), shape),
+				name, property, shape,
+				withoutNullValue(absence(field, component.javaType(), owner), shape, field, owner),
 				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
 	}
@@ -366,7 +382,7 @@ final class CodecWalk {
 	private static Shape unmappedEncoding(Token type, Owner owner, String property) {
 		return type.arrayLength() <= 1
 				? new Shape.Scalar(null)
-				: new Shape.Array(owner.prefix() + Generators.toUpperFirstChar(property));
+				: new Shape.Array(owner.path(property));
 	}
 
 	private Member.@Nullable Group group(List<Token> tokens, Annotated.Group group, Owner owner, String block) {
@@ -375,7 +391,7 @@ final class CodecWalk {
 		}
 		Token token = tokens.get(0);
 		String property = JavaUtil.formatPropertyName(token.name());
-		String path = owner.prefix() + Generators.toUpperFirstChar(property);
+		String path = owner.path(property);
 		Bound bound = null;
 		Annotated.Binding binding = group.binding();
 		if (binding != null) {
@@ -428,7 +444,7 @@ final class CodecWalk {
 				}
 			}
 		}
-		String path = owner.prefix() + Generators.toUpperFirstChar(property);
+		String path = owner.path(property);
 		Bound bound = null;
 		Annotated.Binding binding = data.binding();
 		if (binding != null) {
@@ -530,13 +546,18 @@ final class CodecWalk {
 	// ---- how a field or member reaches the wire
 
 	/**
-	 * An optional field whose face has no null value of its own, a composite, a set
-	 * or an array, leaves null to its binding.
+	 * An optional field whose face has no null value of its own, a composite, a
+	 * set, an array or a string, leaves null to its binding; appended above the
+	 * body's baseline, it is still null when the message predates it, since the
+	 * flyweight then has nothing to read.
 	 */
-	private static Absence withoutNullValue(Absence absence, Shape shape) {
+	private static Absence withoutNullValue(Absence absence, Shape shape, Token field, Owner owner) {
 		boolean noNullValue = shape instanceof Shape.Composite || shape instanceof Shape.Set
 				|| shape instanceof Shape.Array || shape instanceof Shape.Text;
-		return absence == Absence.OPTIONAL && noNullValue ? Absence.NO_NULL_VALUE : absence;
+		if (absence != Absence.OPTIONAL || !noNullValue) {
+			return absence;
+		}
+		return field.version() > owner.baseline() ? Absence.ADDED_NO_NULL_VALUE : Absence.NO_NULL_VALUE;
 	}
 
 	/**
@@ -608,7 +629,7 @@ final class CodecWalk {
 			String charset = charset(encoding, true);
 			return charset == null ? null : new Shape.Text(charset, bulk);
 		}
-		String field = owner.prefix() + Generators.toUpperFirstChar(property);
+		String field = owner.path(property);
 		helpers.putIfAbsent(
 				new Key(Helper.ArrayPair.class, field),
 				new Helper.ArrayPair(
@@ -758,7 +779,7 @@ final class CodecWalk {
 			if (binding != null) {
 				// A member has no epoch or time unit: the schema gives them to fields.
 				bound = bound(
-						binding, owner.prefix() + Generators.toUpperFirstChar(property), name, token, null, null,
+						binding, owner.path(property), name, token, null, null,
 						token.encoding().presence()
 				);
 				if (bound == null) {
