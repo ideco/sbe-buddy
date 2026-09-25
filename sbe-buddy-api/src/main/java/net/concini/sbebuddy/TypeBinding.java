@@ -32,8 +32,9 @@ import org.jspecify.annotations.Nullable;
  * The codec handles absent values without invoking the binding, except for
  * optional fields whose Java wire representation has no scalar null sentinel,
  * namely composites, sets, strings and arrays. For those fields, the binding
- * receives null application values and defines their wire representation. A
- * group's or variable-length data's binding never receives null.
+ * receives null application values and defines their wire representation; a
+ * message that predates such a field still decodes it to null without invoking
+ * the binding. A group's or variable-length data's binding never receives null.
  * </p>
  *
  * <p>

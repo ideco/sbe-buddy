@@ -87,8 +87,9 @@ public @interface SbeField {
 	 * For optional scalar and enum fields, the wire null value maps to
 	 * {@code null}. Optional sets, arrays, strings and composites have no null
 	 * value of their own: with a binding, the binding represents {@code null};
-	 * without one, the field compiles, decodes to a value, never {@code null}, and
-	 * encoding a {@code null} component throws {@link IllegalArgumentException}.
+	 * without one, the field compiles, decodes to a value, {@code null} only when
+	 * the message predates the field, and encoding a {@code null} component throws
+	 * {@link IllegalArgumentException}.
 	 * </p>
 	 *
 	 * <p>
