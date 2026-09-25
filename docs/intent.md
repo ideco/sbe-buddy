@@ -149,7 +149,7 @@ user's binding's to decide. No built-in bindings.
 **Schema-first.**
 
 * [x] 22. Schema-first mapping: `@SbeSchema` names an XML resource on the class path, sbe-tool generates every message's flyweights from it, and the records map the messages they choose to with the same annotations, each written member checked against the XML; nothing is written. First the join: the face rules run over the IR where each token meets its annotation, so the pipeline is one flow from the document down
-* [x] 23. Schema-first without drift: the annotations describe the whole document, every message, member and type, and the compiler proves the document rendered from them and the resource are one schema, each difference an error on the node it is on; partial mapping goes, and views are parked. A package goes code-first, freezes its schema, reads it, and back, losing nothing either way; the showcase is frozen
+* [x] 23. Schema-first without drift: the annotations describe the whole document, every message, member and type, and the compiler proves the document rendered from them and the resource are one schema, each difference an error on the node it is on; partial mapping goes, and views are parked. A package goes code-first, freezes its schema, reads it, and back, losing nothing either way
 
 **The API pass.**
 

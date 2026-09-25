@@ -1,13 +1,11 @@
 # sbe-buddy-example
 
 Realistic schemas a user would write, `com.example.trading` and
-`com.example.quotes`, and a client of the first, `com.example.client`,
-compiled with the processor. It proves the wiring and interop with sbe-tool;
-coverage belongs in sbe-buddy-tests.
+`com.example.quotes`, compiled with the processor. It proves the wiring and
+interop with sbe-tool; coverage belongs in sbe-buddy-tests.
 
-- `quotes`'s oracle is a file in `src/main/sbe`, and its test asserts the
-  `schema.xml` in the class output equals it. `trading`'s schema is the
-  resource its package reads, so the compiler asserts that.
+- Each package's oracle is a file in `src/main/sbe`. One test per package
+  asserts the `schema.xml` in the class output equals it.
 - An oracle grows only with the change that needs it. Never edit it to make a
   failing test pass; a mismatch means the model, the writer or the records
   are wrong.
@@ -15,9 +13,9 @@ coverage belongs in sbe-buddy-tests.
   FIX or taken from its standard. It stays at version 0; every construct a
   user would reach for appears where such a schema would use it, beside the
   bindings a user would write. Its schema is written fresh, and sbe-tool's
-  flyweights are the only byte reference. It is frozen: `trading.xml` lives
-  under `src/main/resources` beside the package, which reads it, so the
-  compiler's check stands in for the oracle test.
+  flyweights are the only byte reference. It is code-first, as the project
+  is: the records write the schema, and its oracle test holds it against
+  `trading.xml`.
 - `quotes` grows a construct per increment and bumps its schema version. The
   previous oracle is then frozen as `quotes-vN.xml`, with only its leading
   comment saying so, and never edited again.
