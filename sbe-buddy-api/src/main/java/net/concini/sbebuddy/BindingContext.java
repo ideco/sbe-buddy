@@ -3,30 +3,33 @@ package net.concini.sbebuddy;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What the schema says about the component a {@link TypeBinding} stands for,
- * handed to it on every call, so one binding class serves every component it
- * fits. Each component with a binding has one context in its codec, built once
- * from the schema; sbe-buddy interprets none of it.
+ * Schema metadata supplied to a {@link TypeBinding} for a record component.
+ * Generated codecs create one immutable context per bound component and reuse
+ * it for every conversion.
+ *
+ * <p>The context describes the declared schema, not the header or version of
+ * the message currently being processed. A binding can use this information
+ * to serve components with different wire representations.</p>
  *
  * @param name
- *            the component's name, as the codec's own messages name it
+ *            the component name used in codec diagnostics
  * @param primitiveType
- *            the wire primitive after a named type is resolved: an array's or a
- *            string's element, an enum's or a set's encoding; null for a
- *            composite and a group
+ *            the resolved SBE primitive type; for strings and arrays, the
+ *            element type; for enums and sets, the encoding type; null for
+ *            composites and groups
  * @param characterEncoding
- *            the type's, for a {@code char} array and text var-data; otherwise
- *            null
+ *            the character encoding declared on a fixed-length string or
+ *            text variable-length data; null when unspecified or inapplicable
  * @param epoch
- *            the field's {@code epoch} as the schema writes it; null where it
- *            is absent or the schema has none, as on a composite's member
+ *            the field's epoch label, passed through without interpretation;
+ *            null when unspecified or inapplicable
  * @param timeUnit
- *            the field's {@code timeUnit} as the schema writes it; null where
- *            it is absent or the schema has none
+ *            the field's time-unit label, passed through without interpretation;
+ *            null when unspecified or inapplicable
  * @param presence
- *            the field's or member's presence, a field left at the default
- *            taking its named type's; null for a group and var-data, which have
- *            none
+ *            the effective presence of the field or composite member, including
+ *            presence inherited from a named type; null for groups and
+ *            variable-length data
  */
 public record BindingContext(
 		String name,
