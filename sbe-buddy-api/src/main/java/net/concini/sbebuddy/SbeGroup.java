@@ -47,7 +47,9 @@ public @interface SbeGroup {
 	/**
 	 * The composite type describing the group's dimension header. Defaults to
 	 * {@link GroupSizeEncoding}, which represents the entry block length and entry
-	 * count as two unsigned 16-bit values.
+	 * count as two unsigned 16-bit values. Another composite needs members named
+	 * {@code blockLength} and {@code numInGroup}, each {@code uint8} or
+	 * {@code uint16}, or sbe-tool refuses it.
 	 */
 	Class<?> dimensionType() default GroupSizeEncoding.class;
 
@@ -58,7 +60,8 @@ public @interface SbeGroup {
 	 * <p>
 	 * Zero leaves the length unspecified for sbe-tool to calculate from the field
 	 * layout. A length larger than the fields require reserves trailing space in
-	 * each entry for alignment or future fields.
+	 * each entry for alignment or future fields; sbe-tool rejects one smaller than
+	 * the fields need.
 	 * </p>
 	 *
 	 * <p>
@@ -121,12 +124,15 @@ public @interface SbeGroup {
 
 	/**
 	 * Fields declared in each group entry without corresponding record components.
-	 * Each field must specify its name and type, and appear in {@link #layout()}.
+	 * Each field must specify its name and its {@code type()} or
+	 * {@code primitiveType()}, and appear in {@link #layout()}. Only fields can be
+	 * unmapped, not groups or variable-length data, and codecs do not yet support
+	 * an unmapped field of a composite type.
 	 *
 	 * <p>
 	 * This allows a retired field to keep its place on the wire after its component
-	 * is removed. Encoding writes its null or empty representation; decoding skips
-	 * it.
+	 * is removed. Encoding writes its null value: in every element of an array, no
+	 * bits for a set, nothing for a constant. Decoding skips it.
 	 * </p>
 	 */
 	SbeField[] unmapped() default {};

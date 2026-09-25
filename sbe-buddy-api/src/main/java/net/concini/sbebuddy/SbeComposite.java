@@ -13,15 +13,17 @@ import java.lang.annotation.Target;
  *
  * <p>
  * Use {@link SbeType} for an inline primitive type and {@link SbeRef} for a
- * reference to a named type. An enum, set or composite declared inside the
- * record can supply an inline declaration through a component of that type.
+ * reference to a named type. An enum or composite nested directly in the record
+ * supplies an inline declaration through a component of its type, and a set
+ * through a component of {@code Set<E>}.
  * </p>
  *
  * <p>
- * Ordinary composites cannot gain members in later schema versions: their
- * flyweights do not skip members based on the acting version. To add members,
- * declare a new composite and a new field using it. Message headers have
- * separate layout rules.
+ * A composite cannot gain members in later schema versions: no member may have
+ * a {@code sinceVersion} above the composite's, because its flyweights do not
+ * skip members by the acting version. To add members, declare a new composite
+ * and a new field using it. A message header cannot change at all: neither it
+ * nor a member has a {@code sinceVersion}.
  * </p>
  */
 @Documented
@@ -41,8 +43,9 @@ public @interface SbeComposite {
 	 * for sbe-tool to calculate.
 	 *
 	 * <p>
-	 * To position a field or a reference to this type, use
-	 * {@link SbeField#offset()} or {@link SbeRef#offset()} instead.
+	 * On a top-level declaration the offset is still written to the schema, and
+	 * sbe-tool applies it to every reference inside a composite that sets no offset
+	 * of its own. A field is positioned by {@link SbeField#offset()}.
 	 * </p>
 	 */
 	int offset() default 0;
@@ -86,8 +89,9 @@ public @interface SbeComposite {
 	 * must specify its name and primitive type, and appear in {@link #layout()}.
 	 *
 	 * <p>
-	 * Encoding writes the member's null or empty representation; decoding skips it.
-	 * This preserves its place on the wire after the component is removed.
+	 * Encoding writes the member's null value, in every element of an array;
+	 * decoding skips it. This preserves its place on the wire after the component
+	 * is removed.
 	 * </p>
 	 */
 	SbeType[] unmapped() default {};

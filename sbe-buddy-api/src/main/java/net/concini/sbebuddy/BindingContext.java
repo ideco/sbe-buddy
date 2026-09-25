@@ -14,14 +14,17 @@ import org.jspecify.annotations.Nullable;
  * </p>
  *
  * @param name
- *            the component name used in codec diagnostics
+ *            the record component's Java name, which may differ from its name
+ *            in the schema, as codec diagnostics give it
  * @param primitiveType
  *            the resolved SBE primitive type; for strings and arrays, the
  *            element type; for enums and sets, the encoding type; null for
- *            composites and groups
+ *            composites, groups and binary variable-length data
  * @param characterEncoding
- *            the character encoding declared on a fixed-length string or text
- *            variable-length data; null when unspecified or inapplicable
+ *            the character encoding of a fixed-length {@code char} array or of
+ *            text variable-length data, {@code US-ASCII} where the schema
+ *            declares none; null for anything else, a scalar {@code char}
+ *            included
  * @param epoch
  *            the field's epoch label, passed through without interpretation;
  *            null when unspecified or inapplicable

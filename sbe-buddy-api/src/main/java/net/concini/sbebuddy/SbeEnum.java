@@ -7,13 +7,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Declares an SBE enum represented by a Java enum. Each wire value is declared
- * with {@link SbeEnumValue}; Java ordinal values are not used for encoding.
+ * Declares an SBE enum represented by a Java enum. Every constant carries
+ * {@link SbeEnumValue} or {@link UnknownValue}, and at least one carries
+ * {@link SbeEnumValue}; Java ordinal values are not used for encoding.
  *
  * <p>
  * Unknown wire values cause decoding to fail unless one constant is marked with
- * {@link UnknownValue}. The wire null sentinel represents absence and is
- * distinct from an unknown value.
+ * {@link UnknownValue}. In an optional field the wire null sentinel decodes to
+ * null; anywhere else it is an unknown value like any other.
  * </p>
  */
 @Documented
@@ -27,14 +28,16 @@ public @interface SbeEnum {
 	String name() default "";
 
 	/**
-	 * The named type used to encode the enum. Exactly one of this member and
-	 * {@link #primitiveType()} must be specified.
+	 * The named type used to encode the enum: an {@link SbeType} of length one over
+	 * one of the primitives {@link #primitiveType()} allows. Exactly one of this
+	 * member and {@link #primitiveType()} must be specified.
 	 */
 	Class<?> encodingType() default void.class;
 
 	/**
-	 * The primitive used to encode the enum. Exactly one of this member and
-	 * {@link #encodingType()} must be specified.
+	 * The primitive used to encode the enum: {@code char}, {@code int8},
+	 * {@code uint8}, {@code int16}, {@code uint16} or {@code int32}. Exactly one of
+	 * this member and {@link #encodingType()} must be specified.
 	 */
 	PrimitiveType primitiveType() default PrimitiveType.NONE;
 
@@ -44,8 +47,9 @@ public @interface SbeEnum {
 	 * for sbe-tool to calculate.
 	 *
 	 * <p>
-	 * To position a field or a reference to this type, use
-	 * {@link SbeField#offset()} or {@link SbeRef#offset()} instead.
+	 * On a top-level declaration the offset is still written to the schema, and
+	 * sbe-tool applies it to every reference inside a composite that sets no offset
+	 * of its own. A field is positioned by {@link SbeField#offset()}.
 	 * </p>
 	 */
 	int offset() default 0;

@@ -2,8 +2,10 @@ package net.concini.sbebuddy;
 
 /**
  * The four values required in an SBE message header. A custom header is an
- * {@link SbeComposite} record implementing this interface, with these
- * components and any additional header members.
+ * {@link SbeComposite} record implementing this interface, with {@code int}
+ * components of exactly these names, {@code uint16} on the wire as sbe-tool
+ * requires, and any additional header members; codecs do not yet support a
+ * composite among them. Nothing in a header has a {@code sinceVersion}.
  *
  * <p>
  * Select the header through {@link SbeSchema#headerType()}. Generated codecs

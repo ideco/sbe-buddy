@@ -23,16 +23,17 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * Declare a binding with {@code binding = MyBinding.class} on the component's
  * annotation. The binding must be stateless and have a no-argument constructor
- * accessible from the schema package. Each generated message codec reuses one
- * instance of each binding class it uses. Every call receives the component's
- * {@link BindingContext}.
+ * accessible from the schema package. Each codec instance holds one instance of
+ * each binding class its message uses, and a union codec one message codec per
+ * member. Every call receives the component's {@link BindingContext}.
  * </p>
  *
  * <p>
  * The codec handles absent values without invoking the binding, except for
  * optional fields whose Java wire representation has no scalar null sentinel,
- * such as composites, sets, strings and arrays. For those fields, the binding
- * receives null application values and defines their wire representation.
+ * namely composites, sets, strings and arrays. For those fields, the binding
+ * receives null application values and defines their wire representation. A
+ * group's or variable-length data's binding never receives null.
  * </p>
  *
  * <p>

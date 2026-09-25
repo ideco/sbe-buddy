@@ -7,8 +7,8 @@
  *
  * <p>
  * {@link net.concini.sbebuddy.TypeBinding} converts application values to and
- * from the Java representations used by the codecs. Types in this package are
- * non-null by default unless explicitly annotated otherwise.
+ * from the Java representations used by the codecs. Type usages in this package
+ * are non-null unless annotated {@code @Nullable}.
  * </p>
  */
 @NullMarked

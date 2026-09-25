@@ -8,8 +8,8 @@ import java.lang.annotation.Target;
 
 /**
  * Declares variable-length data in a message or group entry. The encoded value
- * consists of a length prefix followed by the payload. Data members follow
- * fixed-length fields and repeating groups.
+ * consists of a length prefix followed by the payload. Data components come
+ * after every field and group; any other order is rejected, never rearranged.
  *
  * <p>
  * Without a binding, the component is a {@link String} for text or a
@@ -29,7 +29,9 @@ public @interface SbeData {
 
 	/**
 	 * The composite describing the length prefix and payload, with members named
-	 * {@code length} and {@code varData}. The payload member has length zero.
+	 * {@code length} and {@code varData}, as sbe-tool requires; {@code length} is
+	 * {@code uint8}, {@code uint16} or {@code uint32}. The payload member is
+	 * conventionally declared with length zero.
 	 *
 	 * <p>
 	 * A {@code char} payload maps to {@link String}; other payloads map to

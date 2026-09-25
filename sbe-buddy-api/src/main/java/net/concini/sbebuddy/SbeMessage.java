@@ -20,8 +20,9 @@ import java.lang.annotation.Target;
  * </ol>
  *
  * <p>
- * Record components define the body order unless {@link #layout()} specifies it
- * explicitly. In schema-first mode, the complete declaration must match the XML
+ * Components, in declaration order or in {@link #layout()} order, must be the
+ * fields, then the groups, then the data; any other order is rejected, never
+ * rearranged. In schema-first mode, the complete declaration must match the XML
  * schema.
  * </p>
  *
@@ -49,7 +50,8 @@ public @interface SbeMessage {
 	 * <p>
 	 * Zero leaves the length unspecified for sbe-tool to calculate from the field
 	 * layout. A length larger than the fields require reserves trailing space for
-	 * alignment or future fields.
+	 * alignment or future fields; sbe-tool rejects one smaller than the fields
+	 * need.
 	 * </p>
 	 *
 	 * <p>
@@ -99,12 +101,15 @@ public @interface SbeMessage {
 
 	/**
 	 * Fields declared in the schema without corresponding record components. Each
-	 * field must specify its name and type, and appear in {@link #layout()}.
+	 * field must specify its name and its {@code type()} or
+	 * {@code primitiveType()}, and appear in {@link #layout()}. Only fields can be
+	 * unmapped, not groups or variable-length data, and codecs do not yet support
+	 * an unmapped field of a composite type.
 	 *
 	 * <p>
 	 * This allows a retired field to keep its place on the wire after its component
-	 * is removed. Encoding writes its null or empty representation; decoding skips
-	 * it.
+	 * is removed. Encoding writes its null value: in every element of an array, no
+	 * bits for a set, nothing for a constant. Decoding skips it.
 	 * </p>
 	 */
 	SbeField[] unmapped() default {};

@@ -9,7 +9,8 @@ import java.lang.annotation.Target;
 /**
  * Declares a field in the fixed-length block of a message or repeating group.
  * On a record component, it maps the component to that field. It can also
- * declare an unmapped field through {@link SbeMessage#unmapped()}.
+ * declare an unmapped field through {@link SbeMessage#unmapped()} or
+ * {@link SbeGroup#unmapped()}.
  *
  * <p>
  * The field's wire type is inferred from the record component unless
@@ -55,7 +56,10 @@ public @interface SbeField {
 	 * <p>
 	 * When neither is specified, Java numeric primitives and their boxed types use
 	 * the corresponding signed SBE type. Unsigned types and SBE's one-byte
-	 * {@code char} must be specified explicitly.
+	 * {@code char} must be specified explicitly, as must the type of a
+	 * {@code String}, an array, a Java {@code char} or {@code boolean}. Inference
+	 * reads the component's own type even when a {@link #binding()} is given, so a
+	 * bound component names its wire type.
 	 * </p>
 	 */
 	PrimitiveType primitiveType() default PrimitiveType.NONE;
@@ -64,7 +68,8 @@ public @interface SbeField {
 	 * Whether the field is required, optional or constant.
 	 *
 	 * <ul>
-	 * <li>{@link Presence#REQUIRED}: the field must have a value.</li>
+	 * <li>{@link Presence#REQUIRED}: the default, which states nothing and leaves
+	 * the field's presence to its named type.</li>
 	 * <li>{@link Presence#OPTIONAL}: the field may represent an absent value.</li>
 	 * <li>{@link Presence#CONSTANT}: the value is defined by the schema and
 	 * occupies no bytes. Decoding supplies the constant; encoding checks that the
@@ -74,13 +79,16 @@ public @interface SbeField {
 	 * <p>
 	 * The default is omitted from the generated XML. A named type's presence
 	 * therefore applies when specified on that type; otherwise the field is
-	 * required.
+	 * required. A field can make its type optional or constant, never an optional
+	 * or constant type required.
 	 * </p>
 	 *
 	 * <p>
 	 * For optional scalar and enum fields, the wire null value maps to
-	 * {@code null}. Optional sets, arrays, strings and composites require a binding
-	 * to represent {@code null}; without one, null components are rejected.
+	 * {@code null}. Optional sets, arrays, strings and composites have no null
+	 * value of their own: with a binding, the binding represents {@code null};
+	 * without one, the field compiles, decodes to a value, never {@code null}, and
+	 * encoding a {@code null} component throws {@link IllegalArgumentException}.
 	 * </p>
 	 *
 	 * <p>
@@ -104,7 +112,7 @@ public @interface SbeField {
 	 * <p>
 	 * Zero leaves the offset unspecified for sbe-tool to calculate from the
 	 * preceding fields. An explicit offset may leave padding but must not overlap a
-	 * preceding field.
+	 * preceding field, which sbe-tool checks.
 	 * </p>
 	 */
 	int offset() default 0;
@@ -128,8 +136,9 @@ public @interface SbeField {
 	 * </p>
 	 *
 	 * @deprecated SBE deprecates this attribute on fields. Retained for schemas
-	 *             written against release candidate 2; declare the unit on the type
-	 *             instead, for example on a composite member.
+	 *             written against release candidate 2. SBE 1.0 puts the unit in the
+	 *             type instead, for example as a constant member of a composite,
+	 *             which a binding reads from the record.
 	 */
 	@Deprecated
 	String timeUnit() default "";
@@ -151,7 +160,9 @@ public @interface SbeField {
 	 * When decoding a version older than this field, a nonconstant field decodes to
 	 * {@code null}. Primitive components must use their boxed types, such as
 	 * {@link Long} instead of {@code long}, if the codec accepts those older
-	 * versions.
+	 * versions; an optional field is boxed whatever its version. In a group, the
+	 * version compared is the higher of the baseline and the group's own
+	 * {@code sinceVersion}.
 	 * </p>
 	 *
 	 * @see SbeSchema#baselineVersion()

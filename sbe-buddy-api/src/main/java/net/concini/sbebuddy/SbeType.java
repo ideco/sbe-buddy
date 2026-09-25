@@ -8,9 +8,11 @@ import java.lang.annotation.Target;
 
 /**
  * Declares an SBE primitive type, fixed-length array or fixed-length string. On
- * a final class, it declares a named type for use through
- * {@link SbeField#type()} or {@link SbeRef}. On a composite's record component,
- * it declares an inline type.
+ * a class, conventionally final with a private constructor, it declares a named
+ * type for use through {@link SbeField#type()}, {@link SbeRef}, or an enum's or
+ * set's {@code encodingType}. On a composite's record component, it declares an
+ * inline type; on a message's or group's component it is not used, and
+ * {@link SbeField} describes the field.
  *
  * <p>
  * The annotated class describes the schema type; it is not the Java value
@@ -54,18 +56,22 @@ public @interface SbeType {
 
 	/**
 	 * The character encoding for text, such as {@code US-ASCII} or {@code UTF-8}.
-	 * Empty leaves the encoding unspecified in the schema.
+	 * Empty leaves the attribute out of the schema, and sbe-tool then uses
+	 * {@code US-ASCII}.
 	 *
 	 * <p>
-	 * Fixed-length strings use NUL padding. Encodings that place a zero byte inside
-	 * a character, such as UTF-16, are not supported for those strings.
+	 * Fixed-length strings use NUL padding. For an encoding that places a zero byte
+	 * inside a character, such as UTF-16, the flyweights are still generated but no
+	 * codec is.
 	 * </p>
 	 */
 	String characterEncoding() default "";
 
 	/**
 	 * Whether values of this type are required, optional or constant. A field using
-	 * this type inherits its presence unless the field overrides it.
+	 * this type takes this presence unless the field declares optional or constant
+	 * itself; since required is never written to the schema, a field cannot make an
+	 * optional or constant type required.
 	 *
 	 * <p>
 	 * Constants occupy no bytes. A constant composite member must supply
@@ -102,8 +108,13 @@ public @interface SbeType {
 	/**
 	 * The member's byte offset from the start of its containing composite. Zero
 	 * leaves the offset unspecified for sbe-tool to calculate. An explicit offset
-	 * may leave padding but must not overlap a preceding member. For a named type
-	 * used by a field, use {@link SbeField#offset()} instead.
+	 * may leave padding but must not overlap a preceding member.
+	 *
+	 * <p>
+	 * On a named type the offset is still written to the schema, and sbe-tool
+	 * applies it to every reference inside a composite that sets no offset of its
+	 * own. A field is positioned by {@link SbeField#offset()}.
+	 * </p>
 	 */
 	int offset() default 0;
 
@@ -119,7 +130,8 @@ public @interface SbeType {
 
 	/**
 	 * The schema version in which the type was introduced. On an inline composite
-	 * member, this does not make the member conditionally absent during decoding.
+	 * member it may not be above the composite's own, and it does not make the
+	 * member conditionally absent during decoding.
 	 *
 	 * @see SbeComposite
 	 */

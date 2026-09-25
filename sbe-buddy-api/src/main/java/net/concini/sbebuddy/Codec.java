@@ -5,12 +5,15 @@ import org.agrona.MutableDirectBuffer;
 
 /**
  * Encodes and decodes Java records using SBE flyweights. Implementations are
- * generated for {@link SbeMessage} records and {@link SbeUnion} interfaces.
+ * generated for {@link SbeMessage} records and {@link SbeUnion} interfaces, and
+ * only generated code implements it, so it may grow.
  *
  * <p>
  * Instances reuse mutable flyweights and must not be shared between threads.
  * Decoding creates records and their values. All offsets are byte offsets
- * pointing to the start of the message header; all lengths include the header.
+ * pointing to the start of the message header, and every length this interface
+ * returns includes the header, unlike the header's own
+ * {@link MessageHeader#blockLength()}.
  * </p>
  *
  * <p>
@@ -55,8 +58,16 @@ public interface Codec<T, H extends MessageHeader> {
 	 * same value. Validation may fail before or during writing.
 	 * </p>
 	 *
+	 * <p>
+	 * Numeric ranges are not checked: a value outside an unsigned type's range is
+	 * written as its low bits. A null entry in a group's list throws
+	 * {@link NullPointerException}.
+	 * </p>
+	 *
 	 * @throws IllegalArgumentException
-	 *             if the value is null or cannot be encoded
+	 *             if the value is null, or a component is rejected: a null required
+	 *             component, a string or array that does not fit, a value other
+	 *             than a constant's
 	 */
 	int encode(T value, MutableDirectBuffer buffer, int offset);
 
@@ -87,8 +98,9 @@ public interface Codec<T, H extends MessageHeader> {
 	 * </p>
 	 *
 	 * @throws IllegalArgumentException
-	 *             if the header identifies an unsupported schema, template or
-	 *             version, or a wire value cannot be represented
+	 *             if the header identifies another schema or template, or a version
+	 *             below the baseline, newer versions being accepted; or a wire
+	 *             value cannot be represented
 	 */
 	T decode(DirectBuffer buffer, int offset);
 
@@ -111,6 +123,9 @@ public interface Codec<T, H extends MessageHeader> {
 	 * Does not check the schema ID, template ID or version, and does not read the
 	 * message body. The bytes must use this schema's header layout.
 	 * </p>
+	 *
+	 * @throws IllegalArgumentException
+	 *             if an enum member of the header holds a value no constant maps
 	 */
 	H decodeHeader(DirectBuffer buffer, int offset);
 
@@ -130,9 +145,11 @@ public interface Codec<T, H extends MessageHeader> {
 	 * header, without constructing records or invoking bindings.
 	 *
 	 * <p>
-	 * Reads the header and traverses any groups and variable-length data. Does not
-	 * perform all checks made by {@link #decode(DirectBuffer, int)}; use it only
-	 * for messages this codec supports.
+	 * Reads the header and traverses any groups and variable-length data. A message
+	 * codec checks nothing, and over another message returns a meaningless length
+	 * or throws a buffer exception; a union codec checks the schema and template
+	 * IDs and throws {@link IllegalArgumentException} for a message it does not
+	 * cover.
 	 * </p>
 	 *
 	 * <p>

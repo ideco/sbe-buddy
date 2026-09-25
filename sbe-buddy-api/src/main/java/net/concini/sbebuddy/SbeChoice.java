@@ -17,7 +17,7 @@ public @interface SbeChoice {
 
 	/**
 	 * The zero-based bit position, not a bit mask. It must fit within the set's
-	 * encoding type and be unique within the set.
+	 * encoding type and be unique within the set; sbe-tool checks both.
 	 */
 	int value();
 

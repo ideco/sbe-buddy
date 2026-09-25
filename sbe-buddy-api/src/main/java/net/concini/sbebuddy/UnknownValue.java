@@ -18,8 +18,10 @@ import java.lang.annotation.Target;
  * </p>
  *
  * <p>
- * The wire null sentinel still decodes to null. This annotation adds no value
- * to the SBE schema.
+ * In an optional field the wire null sentinel decodes to null; in a required
+ * field, a field added in a later version, or a composite member, it is an
+ * unknown value like any other and decodes to this constant. This annotation
+ * adds no value to the SBE schema.
  * </p>
  */
 @Documented

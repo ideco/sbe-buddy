@@ -17,10 +17,11 @@ import java.lang.annotation.Target;
 public @interface SbeRef {
 
 	/**
-	 * The named SBE type referenced by this member. When unspecified, the
-	 * component's own type must be an SBE declaration. Specify the referenced type
-	 * explicitly when the component uses a different Java representation or an
-	 * application type with a binding.
+	 * The named SBE type referenced by this member. It may be left unspecified when
+	 * the component's own type is an {@link SbeEnum} or {@link SbeComposite}.
+	 * Specify it for a set, whose component is a {@code Set<E>}, for a named
+	 * {@link SbeType}, and when the component is an application type with a
+	 * binding.
 	 */
 	Class<?> value() default void.class;
 
@@ -38,8 +39,9 @@ public @interface SbeRef {
 	int offset() default 0;
 
 	/**
-	 * The schema version in which the reference was introduced. This does not make
-	 * a composite member conditionally absent during decoding.
+	 * The schema version in which the reference was introduced. It may not be above
+	 * the composite's own, and it does not make the member conditionally absent
+	 * during decoding.
 	 *
 	 * @see SbeComposite
 	 */

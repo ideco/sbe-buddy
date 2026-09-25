@@ -27,13 +27,15 @@ public @interface SbeSet {
 	String name() default "";
 
 	/**
-	 * The named type used to encode the set. Exactly one of this member and
-	 * {@link #primitiveType()} must be specified.
+	 * The named type used to encode the set: an {@link SbeType} of length one over
+	 * one of the primitives {@link #primitiveType()} allows. Exactly one of this
+	 * member and {@link #primitiveType()} must be specified.
 	 */
 	Class<?> encodingType() default void.class;
 
 	/**
-	 * The primitive used to encode the set. Exactly one of this member and
+	 * The primitive used to encode the set: {@code uint8}, {@code uint16},
+	 * {@code uint32} or {@code uint64}. Exactly one of this member and
 	 * {@link #encodingType()} must be specified.
 	 */
 	PrimitiveType primitiveType() default PrimitiveType.NONE;
@@ -44,8 +46,9 @@ public @interface SbeSet {
 	 * for sbe-tool to calculate.
 	 *
 	 * <p>
-	 * To position a field or a reference to this type, use
-	 * {@link SbeField#offset()} or {@link SbeRef#offset()} instead.
+	 * On a top-level declaration the offset is still written to the schema, and
+	 * sbe-tool applies it to every reference inside a composite that sets no offset
+	 * of its own. A field is positioned by {@link SbeField#offset()}.
 	 * </p>
 	 */
 	int offset() default 0;

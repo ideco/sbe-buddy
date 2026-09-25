@@ -72,7 +72,9 @@ public @interface SbeSchema {
 	 * When set, the schema described by the annotations must match the resource,
 	 * including every message, member, type and schema attribute. The comparison
 	 * accounts for XSD defaults and ignores the order of top-level type
-	 * declarations and messages. Other member order is preserved.
+	 * declarations and messages. Every other order must match: the members of
+	 * messages, groups and composites, and enum values and set choices. The
+	 * resource's {@code package} must be this Java package.
 	 * </p>
 	 *
 	 * <p>
