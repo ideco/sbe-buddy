@@ -1,8 +1,11 @@
 # sbe-buddy
 
-sbe-buddy describes an SBE schema with annotated Java records. From those it
-writes the schema XML, runs sbe-tool to generate the usual flyweights, and
-generates a codec per message that maps between the record and the flyweights.
+Can annotated Java provide a pleasant, faithful code-first representation of
+SBE without hiding SBE itself? sbe-buddy is an attempt at that.
+
+It describes an SBE schema with annotated Java records. From those it writes
+the schema XML, runs sbe-tool to generate the usual flyweights, and generates
+a codec per message that maps between the record and the flyweights.
 
 The flyweights work directly on the buffer. The codecs are for code that wants
 to handle a message as an immutable value, and would otherwise map to and from
@@ -16,7 +19,14 @@ codecs.
 ## An example
 
 A message from the example project, which models order entry loosely after
-FIX:
+FIX. The package declares the schema:
+
+```java
+@SbeSchema(id = 91, version = 0)
+package com.example.trading;
+```
+
+and each message is a record:
 
 ```java
 @SbeMessage(id = 4, semanticType = "8")
@@ -30,7 +40,9 @@ public record ExecutionReport(
 ```
 
 ```java
-ExecutionReport report = new ExecutionReportCodec().decode(buffer, offset);
+ExecutionReportCodec codec = new ExecutionReportCodec();
+int length = codec.encode(report, buffer, offset);
+ExecutionReport decoded = codec.decode(buffer, offset);
 ```
 
 The flyweights for the same message are generated as well:
@@ -48,10 +60,12 @@ for (ExecutionReportDecoder.FillsDecoder fill : decoder.fills()) {
 ## What the codec does
 
 The codec reads and writes the record through the flyweights. Optional fields,
-and fields an older message doesn't have, come back as `null`. Enums are the
-record's own Java enums, mapped by the values in the schema, with an optional
-fallback constant for values the enum doesn't know. Composites are records,
-groups are lists, and var-data is a `String` or a `byte[]`.
+and fields an older message doesn't have, come back as `null`. An optional
+composite, set or array has no null value on the wire, so it only comes back
+as `null` when a binding gives it one. Enums are the record's own Java enums,
+mapped by the values in the schema, with an optional fallback constant for
+values the enum doesn't know. Composites are records, groups are lists, and
+var-data is a `String` or a `byte[]`.
 
 When the Java type wanted for a field isn't the one the wire carries, a
 binding converts between the two. The example uses bindings for prices as
@@ -78,7 +92,7 @@ version the codecs read.
 ## Staying close to SBE
 
 The annotations follow the XSD rather than introducing a separate schema
-model. The parts of SBE that determine the wire layout remain explicit:
+model. What a schema states remains explicit:
 
 * layout independent of the order of the record's components;
 * explicit offsets and block lengths;
@@ -152,6 +166,7 @@ tests included, needs `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`.
 
 * [Guide](docs/guide/README.md)
 * [Type mappings](docs/type-mappings.md)
+* [Glossary](docs/glossary.md)
 * [Intent](docs/intent.md)
 * [Architecture](docs/architecture.md)
 * [Notes](docs/notes.md): verified behaviour of sbe-tool, javac and Agrona

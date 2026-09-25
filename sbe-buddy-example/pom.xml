@@ -34,7 +34,7 @@
 
   <build>
     <plugins>
-      <!-- sbe-tool's own flyweights from the trading schema, and from the
+      <!-- sbe-tool's own flyweights from the trading oracle, and from the
            quotes oracle and its frozen versions, test code only: the tests
            encode with our codecs and decode with these, and the reverse,
            across versions. -->
@@ -82,7 +82,7 @@
                 </systemProperty>
               </systemProperties>
               <arguments>
-                <argument>${project.basedir}/src/main/resources/com/example/trading/trading.xml</argument>
+                <argument>${project.basedir}/src/main/sbe/trading.xml</argument>
               </arguments>
             </configuration>
           </execution>
