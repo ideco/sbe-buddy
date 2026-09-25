@@ -66,7 +66,7 @@ record Quote(
 ```
 
 * An inline `type`, `@SbeType` on the component, as above. An optional member, `presence = OPTIONAL` with a `nullValue`, is boxed and decodes to `null` when the wire holds the null value. A constant member carries its `value` or a `valueRef`, takes no bytes, decodes to the constant and is checked on encode.
-* A `ref`, `@SbeRef` on a component whose type is a composite, enum, set or type declared at the top level, which is the only place a `ref` resolves. The component is that declaration's face: the record for a composite, the enum, a `Set` of the set's enum.
+* A `ref`, `@SbeRef` on a component whose type is a composite, enum, set or type declared at the top level, which is the only place a `ref` resolves. The component is that declaration's face: the record for a composite, the enum, a `Set` of the set's enum, the type's face for a type. `value` names the declaration, `@SbeRef(Flags.class)`, and may be left out only where the component's type is the declaration itself, an enum or a composite, as with `Decimal` above.
 * An inline enum, set or composite, a component whose type is an `@SbeEnum` or `@SbeComposite` nested in the record, or a `Set` of an `@SbeSet` nested in it. The declaration is written inside the composite in the schema, and the component is the nested type's face: the enum, the record, the `Set` of the set's enum.
 
 Members lay out in component order, with `offset` where the schema says otherwise; sbe-tool computes the offsets, and the codec never knows them. A member's `sinceVersion` describes the schema; sbe-tool's composite flyweights carry no version guard, so a member is never absent by version, and the codec follows.
