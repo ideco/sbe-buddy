@@ -1,255 +1,116 @@
 # sbe-buddy
 
-> [!IMPORTANT]
-> **Zen garden disclaimer:** This is my private playground for SBE ideas and, just as importantly, for experimenting with agentic coding workflows. Expect things to change as I learn. Stability, compatibility, and a polished roadmap are not the point.
+sbe-buddy describes an SBE schema with annotated Java records. From those it
+writes the schema XML, runs sbe-tool to generate the usual flyweights, and
+generates a codec per message that maps between the record and the flyweights.
 
-Code-first Simple Binary Encoding for Java.
+The flyweights work directly on the buffer. The codecs are for code that wants
+to handle a message as an immutable value, and would otherwise map to and from
+the flyweights by hand.
 
-Define an SBE schema as annotated Java:
+The schema is still an SBE schema. The XML is written out and packaged with
+the classes, so other tools and other languages can use it. The flyweights
+are sbe-tool's, generated the normal way, and can be used alongside the
+codecs.
+
+## An example
+
+A message from the example project, which models order entry loosely after
+FIX:
 
 ```java
-// package-info.java
-@SbeSchema(id = 100, version = 0)
-package com.example.trading;
-```
-
-```java
-@SbeMessage(id = 1)
-public record PlaceOrder(
-    @SbeField(id = 1) long accountId,
-    @SbeField(id = 2) int quantity,
-    @SbeField(id = 3, primitiveType = UINT16) int venue) {}
-```
-
-Compile it and sbe-buddy generates the normal SBE flyweights:
-
-```
-com.example.trading.sbe.PlaceOrderEncoder
-com.example.trading.sbe.PlaceOrderDecoder
-```
-
-They come from SBE's own `JavaGenerator`.
-
-For messages supported by the codec generator, it also generates a mapping
-between the Java record and those flyweights:
-
-```
-com.example.trading.PlaceOrderCodec
+@SbeMessage(id = 4, semanticType = "8")
+public record ExecutionReport(
+        @SbeField(id = 37, type = OrderId.class) String orderId,
+        @SbeField(id = 150) ExecType execType,
+        @SbeField(id = 31, type = PriceEncoding.class, presence = OPTIONAL, binding = PriceBinding.class) @Nullable BigDecimal lastPx,
+        @SbeField(id = 60, type = UtcTimestamp.class, binding = UtcTimestampBinding.class) Instant transactTime,
+        @SbeGroup(id = 1362, binding = FillsBinding.class) Map<String, Fill> fills
+        /* ... */) implements OrderEvent {}
 ```
 
 ```java
-PlaceOrderCodec codec = new PlaceOrderCodec();
-MutableDirectBuffer buffer = new UnsafeBuffer(new byte[256]);
-
-PlaceOrder order = new PlaceOrder(42, 100, 7);
-int length = codec.encode(order, buffer, 0);
-PlaceOrder decoded = codec.decode(buffer, 0);
+ExecutionReport report = new ExecutionReportCodec().decode(buffer, offset);
 ```
 
-The flyweights are still there when the lower-level API is the better fit.
-
-## What it does
-
-sbe-buddy turns the annotated Java model into an SBE XML schema and passes
-that schema to sbe-tool.
-
-From there, SBE does the usual work:
-
-```
-annotated Java
-      |
-      v
-  SBE schema
-      |
-      v
-   sbe-tool
-      |
-      +--> IR
-      |
-      +--> standard SBE flyweights
-      |
-      +--> sbe-buddy codecs
-```
-
-The generated XML is also packaged as:
-
-```
-com/example/trading/schema.xml
-```
-
-It can therefore be used with the other SBE generators as well.
-
-sbe-buddy is not another SBE implementation. It is a way to describe an SBE
-schema from Java, with an optional generated mapping layer back to the Java
-model.
-
-## Why
-
-SBE's generated flyweights are deliberately close to the wire. They operate
-directly on the encoded buffer and expose the structure of the SBE schema.
-
-That is useful at the transport boundary, but it often means describing the
-same messages again in the application's Java model:
-
-```
-trading.xml
-    |
-    +--> PlaceOrderEncoder / PlaceOrderDecoder
-
-PlaceOrder record
-    |
-    +--> hand-written mapping
-```
-
-sbe-buddy starts from the Java declaration instead:
-
-```
-PlaceOrder record
-    |
-    +--> SBE schema
-    |
-    +--> PlaceOrderEncoder / PlaceOrderDecoder
-    |
-    +--> PlaceOrderCodec
-```
-
-The record describes the message used by the application. The generated SBE
-schema remains the definition of its wire representation.
-
-## Explicit where it matters
-
-Wire details stay explicit.
+The flyweights for the same message are generated as well:
 
 ```java
-public record Order(
-    @SbeField(id = 1) long orderId,
-    @SbeField(id = 2, primitiveType = UINT16) int venue) {}
-```
+ExecutionReportDecoder decoder = new ExecutionReportDecoder()
+        .wrapAndApplyHeader(buffer, offset, new SessionHeaderDecoder());
 
-A bare Java primitive gets its corresponding signed SBE primitive type, so
-`long` becomes `int64`.
-
-Anything that changes the wire contract is written down explicitly: field
-ids, unsigned types, `char`, named types and schema versions.
-
-Enums follow the same model:
-
-```java
-@SbeEnum(primitiveType = UINT8)
-public enum Side {
-    @SbeEnumValue("0") BUY,
-    @SbeEnumValue("1") SELL
+long mantissa = decoder.lastPx().mantissa();
+for (ExecutionReportDecoder.FillsDecoder fill : decoder.fills()) {
+    // ...
 }
 ```
 
-There is no auto-numbering and no lockfile.
+## What the codec does
 
-Invalid schemas fail during compilation, preferably at the Java declaration
-that caused the problem. The generated schema is then validated by sbe-tool
-as well.
+The codec reads and writes the record through the flyweights. Optional fields,
+and fields an older message doesn't have, come back as `null`. Enums are the
+record's own Java enums, mapped by the values in the schema, with an optional
+fallback constant for values the enum doesn't know. Composites are records,
+groups are lists, and var-data is a `String` or a `byte[]`.
 
-## SBE stays SBE
+When the Java type wanted for a field isn't the one the wire carries, a
+binding converts between the two. The example uses bindings for prices as
+`BigDecimal`, timestamps as `Instant`, and a group as a `Map` keyed by fill
+id. A binding gets the field's schema attributes, such as presence, epoch and
+time unit, so one binding class can serve several fields.
 
-The Java model follows SBE's schema model rather than replacing it with a
-different one.
-
-Messages, fields, named types, composites, refs, enums, sets, groups and
-var-data map to the corresponding SBE concepts.
-
-Named types remain named types. Groups remain groups. Schema evolution
-remains SBE schema evolution.
-
-The processor produces the schema and then uses sbe-tool to parse it, build
-the IR and generate the standard Java flyweights.
-
-Offsets, block lengths, null values and the generated encoder/decoder API
-therefore remain SBE's.
-
-## Generated codecs
-
-The generated codec is an additional API for code that wants to work with
-the annotated record rather than directly with the flyweights.
+Messages can be grouped under a sealed interface. The interface gets a codec
+of its own that dispatches on the template id:
 
 ```java
-PlaceOrderCodec codec = new PlaceOrderCodec();
-
-int encodedLength = codec.encodedLength(order);
-int written = codec.encode(order, buffer, offset);
-
-PlaceOrder decoded = codec.decode(buffer, offset);
-int consumed = codec.lastDecodedLength();
-
-DefaultMessageHeader header = codec.decodeHeader(buffer, offset);
+switch (new OrderEventCodec().decode(buffer, offset)) {
+    case ExecutionReport report -> onReport(report);
+    case CancelReject reject -> onCancelReject(reject);
+    case Reject reject -> onReject(reject);
+}
 ```
 
-`decodeHeader` reads the message header without checking it. A schema with
-a header of its own names the record in `@SbeSchema(headerType = …)`, and
-`encode(order, header, buffer, offset)` writes that header's own members.
+Versioning is SBE's: `sinceVersion` on fields, appended in order. The
+declaration states it and the compiler checks it. A field an older message
+can lack is nullable in the record, and `baselineVersion` states the oldest
+version the codecs read.
 
-A codec owns its encoder and decoder flyweights and is stateful. Instances
-are intended to be reused by one thread rather than shared between threads.
+## Staying close to SBE
 
-The codec checks the SBE message header when decoding and uses the acting
-block length and version from the encoded message.
+The annotations follow the XSD rather than introducing a separate schema
+model. The parts of SBE that determine the wire layout remain explicit:
 
-A field that can be absent, because it is `presence = OPTIONAL` or was
-added in a later schema version than the message being decoded, is a boxed
-component and decodes to `null`; encoding `null` writes SBE's null value for
-an optional field and throws for a required one. The schema says which
-versions its codecs still read:
+* layout independent of the order of the record's components;
+* explicit offsets and block lengths;
+* retired fields kept on the wire as `unmapped`;
+* custom message headers and group dimension types;
+* var-data in any encoding, constants, and big-endian schemas.
 
-```java
-@SbeSchema(id = 100, version = 2, baselineVersion = 1)
-package com.example.trading;
+Ids are always written out; nothing is numbered automatically.
+
+The test suite compares the generated XML against hand-written schemas. The
+example's messages are round-tripped against flyweights that sbe-tool
+generates directly from the example's XML.
+
+sbe-tool's `JavaDtoGenerator` provides Java value objects from an existing
+schema. Here the records are written by hand, and the schema comes from them.
+
+## Existing schemas
+
+An existing XML can stay the source of truth: `@SbeSchema(resource = …)`
+names it. The records then describe the whole schema, and the compiler checks
+that they do, reporting each difference on the declaration it concerns:
+
+```
+the schema's NewOrder has a field "locateReqd" no component carries; add it, or declare it unmapped
 ```
 
-A required field added at or below the baseline is a plain primitive again,
-and a message older than the baseline is refused on decode.
-
-An `@SbeEnum` field decodes to the user's own enum constant, read raw from
-the wire and mapped by `@SbeEnumValue`; a value the schema does not know is
-an `IllegalArgumentException`, or the constant the enum marks with
-`@UnknownValue`, which has no wire form of its own. An `@SbeSet` field is a
-`Set` of the user's enum.
-
-Codec generation is still incomplete. It currently covers messages made up
-of primitive, enum and set fields, required or optional, across schema
-versions.
-
-Schemas using constructs not yet supported by the codec generator can
-disable codecs:
-
-```java
-@SbeSchema(id = 100, version = 0, codecs = false)
-package com.example.trading;
-```
-
-The schema and standard SBE flyweights are still generated.
-
-## Schema model
-
-The schema side currently covers the SBE constructs represented by
-`sbe.xsd`, including:
-
-* primitives, unsigned types and `char`
-* fixed-length arrays and named types
-* composites and refs
-* enums and sets
-* groups and var-data
-* constants and optional presence
-* `sinceVersion`, `deprecated` and `semanticVersion`
-* byte order and custom header types
-
-The generated XML is checked against hand-written reference schemas in the
-test suite and is then parsed by sbe-tool.
-
-Codec support is deliberately narrower than schema support for now.
+A schema sbe-buddy wrote can also be checked in and used as the resource.
+Removing `resource` later goes back to generating it.
 
 ## Setup
 
-Requires JDK 21 or newer.
-
-Nothing is published yet, so install it locally first:
+JDK 21 or newer. Nothing is published yet, so build and install it first:
 
 ```
 git clone --recurse-submodules https://github.com/ideco/sbe-buddy.git
@@ -257,7 +118,7 @@ cd sbe-buddy
 ./mvnw install
 ```
 
-Add `sbe-buddy-api` to the compile classpath:
+`sbe-buddy-api` goes on the compile classpath:
 
 ```xml
 <dependency>
@@ -267,7 +128,7 @@ Add `sbe-buddy-api` to the compile classpath:
 </dependency>
 ```
 
-and `sbe-buddy-processor` to javac's annotation processor path:
+and `sbe-buddy-processor` on the annotation processor path:
 
 ```xml
 <plugin>
@@ -284,32 +145,15 @@ and `sbe-buddy-processor` to javac's annotation processor path:
 </plugin>
 ```
 
-Compilation requires no additional JVM flags.
-
-Code that uses Agrona buffers requires:
-
-```
---add-opens java.base/jdk.internal.misc=ALL-UNNAMED
-```
-
-That includes test JVMs.
-
-## Building
-
-```
-git clone --recurse-submodules https://github.com/ideco/sbe-buddy.git
-cd sbe-buddy
-./mvnw verify
-```
-
-JDK 21 is enough. The Maven wrapper handles Maven itself.
+Compiling needs no JVM flags. Code that uses Agrona's buffers at runtime,
+tests included, needs `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`.
 
 ## Documentation
 
 * [Guide](docs/guide/README.md)
-* [Intent](docs/intent.md): direction and scope
-* [Type mappings](docs/type-mappings.md): Java representation of the SBE schema model
-* [Architecture](docs/architecture.md): modules and processor pipeline
+* [Type mappings](docs/type-mappings.md)
+* [Intent](docs/intent.md)
+* [Architecture](docs/architecture.md)
 * [Notes](docs/notes.md): verified behaviour of sbe-tool, javac and Agrona
 
 ## License
