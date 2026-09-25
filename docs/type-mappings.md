@@ -138,7 +138,9 @@ null there is a binding's choice, SBE's being a composite whose first
 element is null: the codec hands a `null` component to `toWire` as it is and
 returns whatever `fromWire` makes of what it reads. Without a binding such a
 field is written and read as its face, and a `null` component is refused,
-`price has no null value on the wire; a binding may write one`. A
+`price has no null value on the wire; a binding may write one`. Appended
+above the baseline, such a field is still `null` in the record when the
+message predates it, bound or not, without calling the binding. A
 composite's inline `type` member may be optional, with a `nullValue`, and
 decodes to `null` as a field's would, while a
 member's `sinceVersion` describes the schema and never makes the member

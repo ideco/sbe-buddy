@@ -231,11 +231,17 @@ record CodecModel(
 		ADDED,
 
 		/**
-		 * Optional on a face with no null value of its own, a composite, a set or an
-		 * array: the binding writes and reads what represents null, and without one
-		 * null is refused.
+		 * Optional on a face with no null value of its own, a composite, a set, an
+		 * array or a string: the binding writes and reads what represents null, and
+		 * without one null is refused.
 		 */
-		NO_NULL_VALUE
+		NO_NULL_VALUE,
+
+		/**
+		 * Both of the last two: written as {@link #NO_NULL_VALUE}, and read as
+		 * {@link #ADDED}, null when the message predates it.
+		 */
+		ADDED_NO_NULL_VALUE
 	}
 
 	/** A method the codec declares once, however many members call it. */

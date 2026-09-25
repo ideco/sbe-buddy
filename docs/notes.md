@@ -66,6 +66,17 @@ alternatives considered.
   for `B`; `PrimitiveValue.parse("B", CHAR)` is the value to compare with,
   and refuses more than one character. (`PrimitiveValue.java`, read
   2026-09-24, and `AnnotationMistakesTest`.)
+* Below a field's `sinceVersion` the message decoder's getters return what
+  stands for absence in each shape: `null` from a composite's and a set's
+  getter, `""` from a `char` array's `String` getter, and the element's null
+  value from an array's indexed getter; a scalar's returns its null value. A
+  field whose face has no null value is therefore read behind its own
+  `<field>SinceVersion()` guard, as a required field appended above the
+  baseline is. (Generated flyweights of `corpus.addedfaces`, read 2026-09-25.)
+* The XSD's `symbolicName_t`, the type of every `name`, is
+  `([A-Z]|[a-z]|_)([0-9]|[A-Z]|[a-z]|_)*`: no name holds a `$`, which is why
+  the codec joins the segments of a member's path with it. (`sbe.xsd`, read
+  2026-09-25.)
 * sbe-tool's group decoders have `sbeSkip()`, which passes over an entry's
   nested groups and var-data, and every var-data member has `skip<Name>()`,
   version-guarded, and a static `<name>HeaderLength()`; group encoders have
