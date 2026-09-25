@@ -1,9 +1,9 @@
 package net.concini.sbebuddy;
 
 /**
- * The primitive encodings supported by SBE.
- * Unsigned encodings may use a wider Java primitive; {@link #NONE} indicates
- * that an annotation member is unspecified.
+ * The primitive encodings supported by SBE. Unsigned encodings may use a wider
+ * Java primitive; {@link #NONE} indicates that an annotation member is
+ * unspecified.
  */
 public enum PrimitiveType {
 	/**

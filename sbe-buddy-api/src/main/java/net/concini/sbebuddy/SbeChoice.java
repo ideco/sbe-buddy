@@ -7,8 +7,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Declares a bit position for a constant in an {@link SbeSet} enum.
- * A set containing that constant sets the corresponding bit on the wire.
+ * Declares a bit position for a constant in an {@link SbeSet} enum. A set
+ * containing that constant sets the corresponding bit on the wire.
  */
 @Documented
 @Retention(RetentionPolicy.CLASS)
@@ -16,20 +16,19 @@ import java.lang.annotation.Target;
 public @interface SbeChoice {
 
 	/**
-	 * The zero-based bit position, not a bit mask.
-	 * It must fit within the set's encoding type and be unique within the set.
+	 * The zero-based bit position, not a bit mask. It must fit within the set's
+	 * encoding type and be unique within the set.
 	 */
 	int value();
 
 	/**
-	 * The choice name in the schema.
-	 * An empty value uses the Java enum constant's name.
+	 * The choice name in the schema. An empty value uses the Java enum constant's
+	 * name.
 	 */
 	String name() default "";
 
 	/**
-	 * A description of the choice.
-	 * Empty means unspecified.
+	 * A description of the choice. Empty means unspecified.
 	 */
 	String description() default "";
 
@@ -39,8 +38,8 @@ public @interface SbeChoice {
 	int sinceVersion() default 0;
 
 	/**
-	 * The schema version in which the choice was deprecated.
-	 * Zero means unspecified. Deprecation does not remove the choice.
+	 * The schema version in which the choice was deprecated. Zero means
+	 * unspecified. Deprecation does not remove the choice.
 	 */
 	int deprecated() default 0;
 }

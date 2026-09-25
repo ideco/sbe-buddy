@@ -7,15 +7,20 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks the fallback constant in an {@link SbeEnum} enum for unknown wire values.
- * At most one constant may carry this annotation, in place of {@link SbeEnumValue}.
+ * Marks the fallback constant in an {@link SbeEnum} enum for unknown wire
+ * values. At most one constant may carry this annotation, in place of
+ * {@link SbeEnumValue}.
  *
- * <p>Decoding maps unknown values to this constant without retaining the original
+ * <p>
+ * Decoding maps unknown values to this constant without retaining the original
  * wire value. Encoding the constant throws {@link IllegalArgumentException}
- * because it has no wire representation.</p>
+ * because it has no wire representation.
+ * </p>
  *
- * <p>The wire null sentinel still decodes to null. This annotation adds no value
- * to the SBE schema.</p>
+ * <p>
+ * The wire null sentinel still decodes to null. This annotation adds no value
+ * to the SBE schema.
+ * </p>
  */
 @Documented
 @Retention(RetentionPolicy.CLASS)
