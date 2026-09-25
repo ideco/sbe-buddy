@@ -144,3 +144,38 @@ to determine which members the writer's schema contained.
 A value unavailable because an optional field contains its null sentinel
 or because the encoded schema version predates the member. Codecs decode
 absence to Java null. An empty group, string or array is a present value.
+
+## Named type
+
+A type declared by name in the SBE schema and reusable by fields or composite
+members. Its Java declaration describes the schema type; a record component
+uses the corresponding Java representation or an application type with a binding.
+
+## Composite
+
+An ordered collection of members forming one SBE type, represented by a Java
+record. Members may be inline declarations or references to named types.
+An ordinary composite's members are not conditionally decoded by acting version.
+
+## Variable-length data
+
+A length prefix followed by a payload, declared by an SBE data element.
+The prefix counts payload bytes. Data members follow fields and repeating groups
+in a message or group entry.
+
+## Null sentinel
+
+A reserved wire value indicating absence for an optional scalar or enum field.
+It is distinct from Java null, which is the value exposed by the codec.
+
+## Unknown value
+
+An enum wire value that is neither a declared value nor the null sentinel.
+Decoding rejects it unless the Java enum declares an UnknownValue constant.
+That constant does not retain the original wire value and cannot be encoded.
+
+## Message union
+
+A sealed Java interface grouping messages from one schema. Its generated codec
+encodes by record type and decodes by template ID. The union adds no new wire
+representation or SBE schema declaration.
