@@ -1,13 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project root="true" xmlns="http://maven.apache.org/POM/4.1.0"
+<project root="true" child.project.url.inherit.append.path="false" xmlns="http://maven.apache.org/POM/4.1.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
   <modelVersion>4.1.0</modelVersion>
 
   <groupId>net.concini</groupId>
   <artifactId>sbe-buddy-parent</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.2.0</version>
   <packaging>pom</packaging>
+
+  <name>sbe-buddy</name>
+  <description>Code-first SBE for Java: annotated records become an SBE XML schema, sbe-tool's flyweights and a record codec.</description>
+  <url>https://github.com/ideco/sbe-buddy</url>
+  <inceptionYear>2026</inceptionYear>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/license/mit</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>ideco</id>
+      <name>Ivo de Concini</name>
+      <url>https://github.com/ideco</url>
+    </developer>
+  </developers>
+
+  <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
+    <connection>scm:git:https://github.com/ideco/sbe-buddy.git</connection>
+    <developerConnection>scm:git:git@github.com:ideco/sbe-buddy.git</developerConnection>
+    <url>https://github.com/ideco/sbe-buddy</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/ideco/sbe-buddy/issues</url>
+  </issueManagement>
 
   <subprojects>
     <subproject>sbe-buddy-generator</subproject>
@@ -30,6 +63,9 @@
     <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
     <maven-clean-plugin.version>3.4.0</maven-clean-plugin.version>
     <maven-install-plugin.version>3.2.0</maven-install-plugin.version>
+    <maven-deploy-plugin.version>3.2.0</maven-deploy-plugin.version>
+    <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
+    <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
     <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
     <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
     <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
@@ -106,6 +142,10 @@
           <version>${maven-install-plugin.version}</version>
         </plugin>
         <plugin>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>${maven-deploy-plugin.version}</version>
+        </plugin>
+        <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>exec-maven-plugin</artifactId>
           <version>${exec-maven-plugin.version}</version>
@@ -119,6 +159,15 @@
     </pluginManagement>
 
     <plugins>
+      <!-- The deployed POMs are flattened (.mvn/maven.config), so none names
+           this one as its parent and it is not deployed itself. -->
+      <plugin>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <inherited>false</inherited>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>${maven-compiler-plugin.version}</version>
@@ -181,4 +230,48 @@
       </plugin>
     </plugins>
   </build>
+
+  <!-- A release: the sources and javadoc jars Central requires beside every
+       jar, and a deploy into a directory rather than to a server, so that what
+       is signed and uploaded is what Maven wrote, consumer POMs included.
+       .github/workflows/release.yml runs it and hands the directory to
+       .github/central-publish.sh. -->
+  <profiles>
+    <profile>
+      <id>release</id>
+      <properties>
+        <altDeploymentRepository>staging::file:${session.rootDirectory}/target/staging</altDeploymentRepository>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${maven-source-plugin.version}</version>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${maven-javadoc-plugin.version}</version>
+            <!-- The API is documented in prose, not in @param and @return. -->
+            <configuration>
+              <doclint>all,-missing</doclint>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

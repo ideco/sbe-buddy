@@ -10,6 +10,8 @@
   </parent>
 
   <artifactId>sbe-buddy-example</artifactId>
+  <name>sbe-buddy example</name>
+  <description>A realistic annotated schema with its oracle; not deployed.</description>
 
   <!-- The api is all a user compiles against. The processor reaches the sources
        through annotationProcessorPaths alone, so neither it, the generator nor
@@ -303,6 +305,8 @@
   </build>
 
   <properties>
+    <!-- Proof, not product: never deployed. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
     <module.name>com.example.trading</module.name>
     <reference.flyweights>${project.build.directory}/generated-test-sources/sbe</reference.flyweights>
   </properties>

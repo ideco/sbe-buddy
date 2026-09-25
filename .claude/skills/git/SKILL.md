@@ -50,4 +50,10 @@ There are no merge commits, ever.
 
 ## Releases
 
-- A release is an annotated tag `vX.Y.Z` on `main`. Nothing else.
+- A release is an annotated tag `vX.Y.Z` on `main`, whose root POM carries
+  `X.Y.Z`. Pushing the tag runs `.github/workflows/release.yml`, which
+  checks both, builds, and publishes the api, the generator and the
+  processor to Maven Central.
+- The version lands on `main` in a pull request of its own, or with the
+  change it releases; the pull request after the release moves the root
+  POM to the next `-SNAPSHOT`.

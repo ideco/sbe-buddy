@@ -10,6 +10,8 @@
   </parent>
 
   <artifactId>sbe-buddy-processor</artifactId>
+  <name>sbe-buddy processor</name>
+  <description>The annotation processor that turns an annotated package into its SBE schema, sbe-tool's flyweights and a record codec.</description>
 
   <dependencies>
     <dependency>

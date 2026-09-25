@@ -130,13 +130,7 @@ Removing `resource` later goes back to generating it.
 
 ## Setup
 
-JDK 21 or newer. Nothing is published yet, so build and install it first:
-
-```
-git clone --recurse-submodules https://github.com/ideco/sbe-buddy.git
-cd sbe-buddy
-./mvnw install
-```
+JDK 21 or newer. Releases are on Maven Central under `net.concini`.
 
 `sbe-buddy-api` goes on the compile classpath:
 
@@ -144,7 +138,7 @@ cd sbe-buddy
 <dependency>
     <groupId>net.concini</groupId>
     <artifactId>sbe-buddy-api</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -158,7 +152,7 @@ and `sbe-buddy-processor` on the annotation processor path:
             <path>
                 <groupId>net.concini</groupId>
                 <artifactId>sbe-buddy-processor</artifactId>
-                <version>0.2.0-SNAPSHOT</version>
+                <version>0.2.0</version>
             </path>
         </annotationProcessorPaths>
     </configuration>
