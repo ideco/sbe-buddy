@@ -57,10 +57,10 @@ component carries. It can also specify bindings for value conversion.
 
 ## Binding
 
-A user-supplied conversion between a component's application type and the Java
-value used by the codec for its wire representation. For example, a binding
-can convert between `BigDecimal` and a composite record containing a mantissa
-and exponent. The binding does not define the schema's wire layout.
+A conversion between an application type and the Java representation
+expected by the codec for a wire value. For example, a binding can convert
+between BigDecimal and a composite record containing a mantissa and
+exponent. A binding does not change the schema.
 
 ## Unmapped member
 
@@ -122,3 +122,25 @@ The order of members in the encoded message or composite. For messages and
 group entries, fields precede groups, followed by variable-length data. Wire
 order can differ from record component order when an explicit `layout` is
 declared.
+
+## Repeating group
+
+A sequence of entries with the same schema. A dimension header precedes
+the entries and carries their count and fixed-length block size.
+
+## Group entry
+
+One element of a repeating group, represented by a Java record. Each entry
+contains fixed-length fields, followed by nested groups and variable-length
+data.
+
+## Acting version
+
+The schema version carried in the message being decoded. Readers use it
+to determine which members the writer's schema contained.
+
+## Absent value
+
+A value unavailable because an optional field contains its null sentinel
+or because the encoded schema version predates the member. Codecs decode
+absence to Java null. An empty group, string or array is a present value.

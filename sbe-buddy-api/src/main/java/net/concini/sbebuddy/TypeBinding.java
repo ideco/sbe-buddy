@@ -3,81 +3,165 @@ package net.concini.sbebuddy;
 import org.jspecify.annotations.Nullable;
 
 /**
- * How a record holds a component as a type of its own: {@code J} is the
- * component's type, {@code W} the face of its wire type. The face decides the
- * interface: a reference face, a {@code String}, an array, an enum, a
- * {@code Set} of a set's enum, a composite's record or a group's {@code List},
- * takes this one, and a primitive face takes its specialization, {@link OfLong}
- * for {@code int64}, {@code uint64} and {@code uint32}, {@link OfInt} for
- * {@code int32} and {@code uint16}, {@link OfShort} for {@code int16} and
- * {@code uint8}, {@link OfByte} for {@code int8} and {@code char},
- * {@link OfFloat} and {@link OfDouble}, so no primitive is ever boxed on the
- * way. Every call is handed the {@link BindingContext} of its component, which
- * tells, among others, which of those wire types the face stands for. A binding
- * is stateless, has a no-arg constructor the schema package can call, public
- * when the class lives elsewhere, and is named by the component,
- * {@code binding = X.class} on its annotation. The codec hands it {@code null}
- * only on an optional field whose face has no null value of its own, a
- * composite, a set or an array, where the binding chooses what represents null
- * on the wire and reads it back as {@code null}; everywhere else absence passes
- * through as {@code null} on both sides without calling it. Whatever a binding
- * throws passes through the codec unwrapped. The Java side; contributes nothing
- * to the schema.
+ * Converts between an application type and the Java representation of an SBE
+ * wire value without changing the schema.
+ *
+ * <p>Use this interface for reference representations such as strings, arrays,
+ * enums, sets, composite records and lists of group entries. For primitive
+ * representations, use the corresponding specialization to avoid boxing:</p>
+ * <ul>
+ *   <li>{@link OfByte}: {@code int8} and {@code char}.</li>
+ *   <li>{@link OfShort}: {@code int16} and {@code uint8}.</li>
+ *   <li>{@link OfInt}: {@code int32} and {@code uint16}.</li>
+ *   <li>{@link OfLong}: {@code int64}, {@code uint64} and {@code uint32}.</li>
+ *   <li>{@link OfFloat}: {@code float}.</li>
+ *   <li>{@link OfDouble}: {@code double}.</li>
+ * </ul>
+ *
+ * <p>Declare a binding with {@code binding = MyBinding.class} on the component's
+ * annotation. The binding must be stateless and have a no-argument constructor
+ * accessible from the schema package. Each generated message codec reuses one
+ * instance of each binding class it uses. Every call receives the component's
+ * {@link BindingContext}.</p>
+ *
+ * <p>The codec handles absent values without invoking the binding, except for
+ * optional fields whose Java wire representation has no scalar null sentinel,
+ * such as composites, sets, strings and arrays. For those fields, the binding
+ * receives null application values and defines their wire representation.</p>
+ *
+ * <p>Exceptions thrown by a binding propagate unchanged through the codec.
+ * These requirements also apply to the primitive specializations.</p>
+ *
+ * @param <J> the application type
+ * @param <W> the Java representation of the wire value
  */
 public interface TypeBinding<J extends @Nullable Object, W> {
 
+	/**
+	 * Converts an application value to the Java representation expected by
+	 * the codec for encoding.
+	 *
+	 * <p>For an optional field whose null representation is defined by this
+	 * binding, a null input must produce a non-null wire representation.</p>
+	 */
 	W toWire(J value, BindingContext context);
 
+	/**
+	 * Converts a decoded wire value to the application type.
+	 *
+	 * <p>For an optional field whose null representation is defined by this
+	 * binding, that representation may be converted to null.</p>
+	 */
 	J fromWire(W wire, BindingContext context);
 
-	/** Over a {@code byte} face: {@code int8} and {@code char}. */
+	/**
+	 * A binding using {@code byte} for SBE {@code int8} or {@code char}.
+	 *
+	 * @param <J> the application type
+	 */
 	interface OfByte<J extends @Nullable Object> {
 
+		/**
+		 * Converts an application value to its wire value.
+		 */
 		byte toWire(J value, BindingContext context);
 
+		/**
+		 * Converts a decoded wire value to the application type.
+		 */
 		J fromWire(byte wire, BindingContext context);
 	}
 
-	/** Over a {@code short} face: {@code int16} and {@code uint8}. */
+	/**
+	 * A binding using {@code short} for SBE {@code int16} or {@code uint8}.
+	 *
+	 * @param <J> the application type
+	 */
 	interface OfShort<J extends @Nullable Object> {
 
+		/**
+		 * Converts an application value to its wire value.
+		 */
 		short toWire(J value, BindingContext context);
 
+		/**
+		 * Converts a decoded wire value to the application type.
+		 */
 		J fromWire(short wire, BindingContext context);
 	}
 
-	/** Over an {@code int} face: {@code int32} and {@code uint16}. */
+	/**
+	 * A binding using {@code int} for SBE {@code int32} or {@code uint16}.
+	 *
+	 * @param <J> the application type
+	 */
 	interface OfInt<J extends @Nullable Object> {
 
+		/**
+		 * Converts an application value to its wire value.
+		 */
 		int toWire(J value, BindingContext context);
 
+		/**
+		 * Converts a decoded wire value to the application type.
+		 */
 		J fromWire(int wire, BindingContext context);
 	}
 
 	/**
-	 * Over a {@code long} face: {@code int64}, {@code uint64} and {@code uint32}; a
-	 * {@code uint64} is its bit pattern, as the face is.
+	 * A binding using {@code long} for SBE {@code int64}, {@code uint64}
+	 * or {@code uint32}.
+	 *
+	 * <p>For {@code uint64}, the long carries the unsigned value's bit pattern.</p>
+	 *
+	 * @param <J> the application type
 	 */
 	interface OfLong<J extends @Nullable Object> {
 
+		/**
+		 * Converts an application value to its wire value.
+		 */
 		long toWire(J value, BindingContext context);
 
+		/**
+		 * Converts a decoded wire value to the application type.
+		 */
 		J fromWire(long wire, BindingContext context);
 	}
 
-	/** Over a {@code float} face. */
+	/**
+	 * A binding using {@code float} for SBE {@code float}.
+	 *
+	 * @param <J> the application type
+	 */
 	interface OfFloat<J extends @Nullable Object> {
 
+		/**
+		 * Converts an application value to its wire value.
+		 */
 		float toWire(J value, BindingContext context);
 
+		/**
+		 * Converts a decoded wire value to the application type.
+		 */
 		J fromWire(float wire, BindingContext context);
 	}
 
-	/** Over a {@code double} face. */
+	/**
+	 * A binding using {@code double} for SBE {@code double}.
+	 *
+	 * @param <J> the application type
+	 */
 	interface OfDouble<J extends @Nullable Object> {
 
+		/**
+		 * Converts an application value to its wire value.
+		 */
 		double toWire(J value, BindingContext context);
 
+		/**
+		 * Converts a decoded wire value to the application type.
+		 */
 		J fromWire(double wire, BindingContext context);
 	}
 }
