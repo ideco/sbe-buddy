@@ -1,20 +1,27 @@
 # sbe-buddy
 
-Can annotated Java provide a pleasant, faithful code-first representation of
-SBE without hiding SBE itself? sbe-buddy is an attempt at that.
+Can annotated Java provide a faithful code-first representation of SBE without
+hiding SBE itself? sbe-buddy is an attempt at that.
 
 It describes an SBE schema with annotated Java records. From those it writes
 the schema XML, runs sbe-tool to generate the usual flyweights, and generates
 a codec per message that maps between the record and the flyweights.
 
+The aim is that any SBE schema can be written this way. The annotations follow
+the SBE XSD element for element. The test suite checks that every XSD element
+and attribute used by sbe-tool is represented by the schemas it compiles.
+
+The same holds in the other direction. An existing XML schema can be mapped as
+it is rather than rewritten into a shape the annotations prefer, and the
+compiler checks that the records and XML describe the same schema.
+
 The flyweights work directly on the buffer. The codecs are for code that wants
-to handle a message as an immutable value, and would otherwise map to and from
+to handle a message as an immutable value and would otherwise map to and from
 the flyweights by hand.
 
-The schema is still an SBE schema. The XML is written out and packaged with
-the classes, so other tools and other languages can use it. The flyweights
-are sbe-tool's, generated the normal way, and can be used alongside the
-codecs.
+The XML is written out and packaged with the classes, so other tools and other
+languages can use it. The flyweights are sbe-tool's, generated in the normal
+way, and remain available alongside the codecs.
 
 ## An example
 
@@ -91,8 +98,7 @@ version the codecs read.
 
 ## Staying close to SBE
 
-The annotations follow the XSD rather than introducing a separate schema
-model. What a schema states remains explicit:
+What a schema states remains explicit:
 
 * layout independent of the order of the record's components;
 * explicit offsets and block lengths;

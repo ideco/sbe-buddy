@@ -53,7 +53,7 @@ The generated schema is byte for byte what it was, with the deprecation added:
 
 ## What the codec does with it
 
-Encoding writes the field's null value, `4294967295` for a `uint32`, `NaN` for a `double`, `NULL_VAL` for an enum, an empty set for a set. Every reader that knows the field sees a value it can recognise as no value. Decoding skips the field, whatever a writer of any version put there.
+Encoding writes the field's null value, `4294967295` for a `uint32`, `NaN` for a `double`, `NULL_VAL` for an enum, an empty set for a set. Every reader that knows the field sees a value it can recognise as no value. Decoding skips the field, whatever a writer of any version put there. A field of a composite type has no codec yet when it is unmapped: the compiler says so, naming the message, and `codecs = false` on `@SbeSchema` keeps the schema and the flyweights.
 
 A message written by a version 3 writer, with a real trade count in it, decodes to the same `Quote` as one written today:
 
