@@ -8,8 +8,8 @@ Javadoc is reviewed.
 
 An SBE definition of messages, their types and their wire representation. In
 code-first mode, sbe-buddy generates its XML from annotated Java. In schema-
-first mode, the complete Java declaration must match an existing XML resource,
-which supplies the schema for generation.
+first mode, the Java declaration must match an existing XML resource, which
+supplies the schema for generation.
 
 ## Code-first
 
@@ -23,7 +23,8 @@ The mode selected by `SbeSchema.resource`, in which an existing XML schema is
 checked against the complete schema declared in Java, then used for
 generation. The comparison accounts for XSD defaults and ignores the order of
 top-level type declarations and messages. It checks schema equivalence, not
-just wire compatibility; partial schema declarations are not supported.
+just wire compatibility. With `SbeSchema.partial`, the Java declaration may
+cover only some of the resource's messages, each of them whole.
 
 ## Message
 

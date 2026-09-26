@@ -20,6 +20,7 @@ package com.example.trading;
 | `codecs` | `true` | Whether a codec is generated per message; contributes nothing to the schema |
 | `baseline` | none | A released version's XML on the class path, which the schema must stay compatible with and whose version is the oldest the codecs decode; see [The baseline](#the-baseline). Contributes nothing to the schema |
 | `resource` | none | The schema's XML on the class path, frozen: the records are checked against it and nothing is written; see [Schema-first](schema-first.md) |
+| `partial` | `false` | Whether the records map only some of the resource's messages; see [Mapping some messages](schema-first.md#mapping-some-messages) |
 
 The package is the schema's `package`, and the flyweights go to `<package>.sbe`.
 

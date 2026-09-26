@@ -54,4 +54,5 @@ FilerOutputManager   Agrona's DynamicPackageOutputManager over Filer
   the schemas the first run wrote, and expects the same generated sources
   and, for the spliced packages, their resource written back equivalent:
   the proof that the switch loses nothing in either direction, over every
-  construct the repository has.
+  construct the repository has. A partial package reads its resource in
+  both runs, since its records cannot write it.

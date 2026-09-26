@@ -24,7 +24,8 @@ against the flyweights and codecs the processor generated for it.
   and names it `resource = "schema.xml"`, so the check that the schema in
   the jar is the oracle holds for it as for any case. `schemafirst` is
   `bigendian`'s records over `bigendian`'s schema and asserts the generated
-  sources are the twin's.
+  sources are the twin's. `partialmapping` maps one message of three and
+  `flyweightsonly` none; their tests reach the rest through the flyweights.
 
 ## The oracle
 

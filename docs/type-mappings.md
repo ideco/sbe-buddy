@@ -40,7 +40,7 @@ memory.
 
 | XSD | Java | Members |
 | --- | --- | --- |
-| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baseline` (empty; the released schema's XML on the class path that this one stays compatible with, whose version is the oldest the codecs decode, below), `resource` (empty; the schema's XML on the class path when the schema exists already, below) |
+| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baseline` (empty; the released schema's XML on the class path that this one stays compatible with, whose version is the oldest the codecs decode, below), `resource` (empty; the schema's XML on the class path when the schema exists already, below), `partial` (`false`; the records map only some of the resource's messages, below) |
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` (the body in wire order, by name; empty for declaration order), `unmapped` (complete `@SbeField`s no component carries) |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit` (`@Deprecated`, as the XSD deprecates it), `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `binding` |
 | `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message, and `binding` |
@@ -392,6 +392,15 @@ resolve relative to the resource. Then:
   "schema.xml"` switches the package from code-first to schema-first with no
   other change and the same generated code, and dropping the member
   switches it back, writing the document it read.
+* `partial = true` lets the records map only some of the resource's
+  messages, none included. A message the records leave out, and a
+  declaration no record reaches, are not differences; everything the
+  annotations say is compared as above, and a message a record maps is
+  mapped whole. The flyweights are sbe-tool's for every message, the codecs
+  only for the mapped ones. A baseline is held against the resource itself.
+  A partial package cannot go back to code-first without losing what it
+  leaves out; a baseline turns that loss into errors. `partial` without a
+  resource is an error.
 
 ## Running example, complete
 
