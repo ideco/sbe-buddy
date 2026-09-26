@@ -64,7 +64,7 @@ package com.example.venue;
 
 The baseline is held against the whole resource, the messages no record maps included; a difference on one of those lands on the package.
 
-The flyweights go to `com.example.venue.sbe`, so `com.example.venue` itself holds only its `package-info.java`. The `javadoc` tool refuses such a package with `No source files for package`; a build that publishes Javadoc excludes it, with `excludePackageNames` in Maven.
+The flyweights go to `com.example.venue.sbe`, and the typed readers and writers of every message to `com.example.venue` itself, beside its `package-info.java`.
 
 A partial package cannot go back to code-first: the records would write a schema without the messages they leave out. A baseline turns that into errors, one per message it has and the schema lacks.
 

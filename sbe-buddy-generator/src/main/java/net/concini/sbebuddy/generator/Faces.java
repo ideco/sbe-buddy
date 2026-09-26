@@ -8,8 +8,9 @@ import org.jspecify.annotations.Nullable;
  * What a component is on the wire, one leaf at a time: the shape of the
  * flyweight call, how the field may be absent, the binding in front of it, and
  * the helper methods the shape calls. {@link Join} decides it for every field
- * and member a record maps; {@link FaceWriter} renders it for whoever declares
- * the methods. Class names are qualified as the generated code writes them.
+ * and member a record maps; {@link FaceWriter} renders it for the codec and the
+ * flyweights' bound stages alike. Class names are qualified as the generated
+ * code writes them.
  */
 final class Faces {
 

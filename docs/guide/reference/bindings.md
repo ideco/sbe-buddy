@@ -26,6 +26,8 @@ public interface TypeBinding<J extends @Nullable Object, W> {
 
 A binding is stateless and has a no-arg constructor the schema package can call, public when the class lives elsewhere; the codec holds one instance of each binding class it uses.
 
+A binding applies on the [typed flyweights](flyweights.md) too: a reader's bound stage runs `fromWire` on every call to the component's accessor, and a writer's bound step runs `toWire`, each handed the same context the codec hands it, so a component reads and writes as the same type through either. A binding over a whole group, a `Map` of its entries, is the codec's alone: the stages meet the entries one by one, and bind each entry's components.
+
 ## The context
 
 Every call hands the binding the `BindingContext` of the component it stands for, so one binding class serves every component it fits, reading from the schema what it would otherwise hard-code:

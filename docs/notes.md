@@ -518,6 +518,13 @@ alternatives considered.
   `Diagnostic.Kind.MANDATORY_WARNING`, reported only when javac compiles,
   not under `-proc:only`, and once for each place javac copies a record
   component's annotation to. (The processor's snippet test, JDK 21.)
+* `TypeMirror.toString()` of a record component's declared type writes a
+  type-use annotation where source puts it on a qualified name,
+  `java.math.@org.jspecify.annotations.Nullable BigDecimal`, and generics
+  in full, `java.util.Map<java.lang.Integer,corpus.bindings.Leg>`: valid
+  source, which the bound stages declare as the component's type as
+  `Annotated.Other` holds it. (The corpus's `addedfaces` and `bindings`
+  readers and writers, compiled by javac 21, 2026-09-26.)
 * No annotation processor runs after an error: a negative compile test sees
   only the diagnostics of the round that failed. (Spike, 2026-09.)
 * `Filer.createSourceFile` throws `FilerException` for a name already

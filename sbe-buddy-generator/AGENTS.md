@@ -14,9 +14,9 @@ SchemaEvolution  whether a schema still reads its baseline, and where it breaks 
 Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
 Join             one message's IR joined with its record, or with nothing: a tree of nodes and their leaves
 Faces            the leaf: what a component is on the wire, its shape, absence, binding and helpers
-FaceWriter       a Faces leaf to source: its read, write, null write, null test and helpers
-FaceTemplates    the text of a leaf: read, write, null write, absence, binding
-FaceHelperTemplates the text of the helpers the leaves call: checks, array pairs, enum and set mappings
+FaceWriter       a Faces leaf to source, for a codec or a flyweight: its read and write with absence and binding, null write, var-data, helpers
+FaceTemplates    the text of a leaf: read, write, null write, absence, binding, var-data
+FaceHelperTemplates the text of the helpers the leaves call: checks, array pairs, enum and set mappings, composite pairs, var-data methods
 CodecWalk        a Join to a CodecModel: bodies, wire and constructor order, the methods collected
 CodecModel       what a codec is made of around its leaves
 CodecWriter      a CodecModel to source, each leaf through FaceWriter
@@ -24,16 +24,16 @@ CodecTemplates   the text of a codec around its leaves: the class, the header, l
 UnionModel       what a union's codec is made of: its members' codecs
 FlyweightWalk    a Join to a FlyweightModel: a reader's stages, positions and steps in wire order, and the names it takes
 FlyweightModel   what a message's reader is made of
-ReaderWriter     a FlyweightModel to source
+ReaderWriter     a FlyweightModel to source, bound stages through FaceWriter
 ReaderTemplates  the text of a reader: the class, its control, the methods that arrive at each stage, the steps
-ReaderStageTemplates the text of a reader's stages and the accessors they delegate
+ReaderStageTemplates the text of a reader's stages, the accessors they delegate, and their bound stages
 WriterWalk       a Join to a WriterModel: a writer's stages, their objects and positions in wire order, the names it takes; the sub-chains
 WriterModel      what a message's writer is made of, and a composite's or a set's sub-chain
-WriterWriter     a WriterModel to source, null values through FaceWriter
+WriterWriter     a WriterModel to source, null values and bound steps through FaceWriter
 WriterTemplates  the text of a writer: the class, its stages, the objects behind them, the null values
 WriterStepTemplates the text of a writer's steps: guard, delegation to the encoder, how each hands on
 SubWriterTemplates the text of a composite's and a set's sub-chain
-FlyweightEmitter a reader and a writer for every message of the IR, the sub-chains, then the output
+FlyweightEmitter a reader and a writer for every message of the IR, the sub-chains, then the output, beside the codecs
 UnionWriter      a UnionModel to source
 Template         a text block with named placeholders
 CodecEmitter     the walk and the writer per message, a union's codec over them, then the output
@@ -104,9 +104,13 @@ Problem          a mistake on a node of either model
   uses it; `CodecEmitter` reports each of its problems once.
 - A new construct is a shape in `Faces`, its templates in `FaceTemplates`
   (a helper's in `FaceHelperTemplates`), and a case in `FaceWriter`; the
-  codec and the flyweights both read it. What surrounds the leaves, a
-  block, a group, var-data, is a node in `Join` and `CodecModel`, with its
-  templates in `CodecTemplates`.
+  codec and the flyweights' bound stages both write it there, naming the
+  variable holding the flyweight and the expression of the value, so a
+  component is on the wire what one leaf says. `Join` collects the helpers a
+  leaf calls, a composite's pair after its members', a var-data's methods
+  after its checks. What surrounds the leaves, a block, a group, var-data,
+  is a node in `Join` and `CodecModel`, with its templates in
+  `CodecTemplates`.
 - Templates hold no conditionals and no loops. What varies is decided in Java
   and filled in; no code is assembled by concatenation.
 - A binding stands in front of any member's write and behind its read, and
@@ -134,9 +138,11 @@ Problem          a mistake on a node of either model
 ## Readers
 
 - Every message of the IR gets a reader, `ir.messages()` in template id
-  order, a record or not. `FlyweightEmitter` runs after `CodecEmitter`, and
-  only when it reported no error: the reader joins each message with its
-  record the same way, and the join's problems are the codec emitter's.
+  order, a record or not, in the schema's package beside the codecs: its
+  bound stages name the records' types, which may be package-private.
+  `FlyweightEmitter` runs after `CodecEmitter`, and only when it reported no
+  error: the reader joins each message with its record the same way, and
+  the join's problems are the codec emitter's.
 - The reader's order is `OtfMessageDecoder`'s: each position of the `At`
   enum has one step, the level's next present group or var-data, else the
   next entry of the group the level is an entry of, else what follows that
@@ -147,6 +153,11 @@ Problem          a mistake on a node of either model
   new kind of field is a case in `FlyweightWalk.accessors`.
 - Every name the reader declares comes from the model. A group, var-data or
   field that would take one the reader has is a `Problem`, never a rename.
+- Where a record maps the message, each block carrying a component and each
+  var-data has a bound stage reading every component through its leaf,
+  `FaceWriter.read` over the stage's flyweight; the helpers it calls are the
+  read halves of the leaves' helpers, called through the reader's class,
+  since a stage may declare a method of a helper's name.
 - `GroupsReader.java` is checked in as a golden in sbe-buddy-tests; a change
   to the reader's text shows there, and `-Dgolden.update=true` rewrites it.
 
@@ -170,6 +181,11 @@ Problem          a mistake on a node of either model
 - Every name the writer declares comes from the model; a field, group or
   var-data that would take one the writer has, a class or a method of an
   object, is a `Problem`, never a rename.
+- Where a record maps the message, every stage that takes a component has a
+  twin writing it through its leaf, `FaceWriter.write` with the parameter as
+  the value, one bound object per block; a step returns the next twin, else
+  the next wire stage, and a field no component carries has no step there.
+  The write halves of the helpers are declared in the writer.
 - `GroupsWriter.java` and `QuoteWriter.java` are goldens in sbe-buddy-tests,
   beside `GroupsReader.java`.
 

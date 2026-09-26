@@ -26,9 +26,9 @@ incomplete, do not compile.
 ## The shape
 
 The wire is the default. Every message of the schema gets a reader and a
-writer over sbe-tool's own flyweights, records or not, generated beside
-them in `<package>.sbe`, schema-shaped, with sbe-tool's names and faces, so
-anyone who knows SBE recognises every method. The reader takes the message
+writer over sbe-tool's own flyweights, records or not, generated beside the
+codecs in the schema's package, schema-shaped, with sbe-tool's names and
+faces, so anyone who knows SBE recognises every method. The reader takes the message
 as a flat sequence of stages, as a pull parser reads a document: the root
 block, each group's header, each of its entries, each var-data. Nesting is
 the order the stages come in. The stages are a sealed interface, so a read
@@ -143,7 +143,7 @@ Everything is named from the schema, since a record may not exist:
 sbe-tool's `formatClassName` of the schema name, as its flyweights do. The
 reader is `<Message>Reader`, the writer `<Message>Writer`, a union's
 reader `<Union>Reader`; sbe-tool's `Decoder` and `Encoder` are taken, and
-they sit in the same package. The root block is `RootBlock`, sbe-tool's
+the codec's `Codec`, which they sit beside. The root block is `RootBlock`, sbe-tool's
 own term (`HeaderStructure`, `OtfHeaderDecoder`, `sbe.xsd`'s "root level
 of message"); a group's header is the group's name, `Fills`, and its entry
 `FillsEntry`, since the wire has no singular and one borrowed from a

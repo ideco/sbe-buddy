@@ -14,11 +14,10 @@ import net.concini.sbebuddy.generator.CodecModel.Member;
 
 /**
  * A {@link CodecModel} as Java source, through {@link CodecTemplates}, each
- * leaf through {@link FaceWriter}. Each question has one switch: how a member's
- * absence wraps its leaf, how a body is written and read, and what each of its
- * methods declares; a binding stands in front of the write and behind the read.
- * A template is filled from the model node it writes, and the names the node
- * does not hold are given beside it.
+ * leaf, its absence and its binding through {@link FaceWriter}. Each question
+ * has one switch: how a body is written and read, and what each of its methods
+ * declares. A template is filled from the model node it writes, and the names
+ * the node does not hold are given beside it.
  */
 final class CodecWriter {
 

@@ -28,8 +28,9 @@ memory.
   `maxValue`, constant `value`) are `String` members parsed exactly as
   sbe-tool parses them.
 * A schema is a package. Declared types may live in any package; the
-  schema references them by class. Flyweights are generated into
-  `<package>.sbe`.
+  schema references them by class. sbe-tool's flyweights are generated into
+  `<package>.sbe`; the codecs and the typed flyweights, which name the
+  records' types, into `<package>` itself.
 * The generator's model mirrors the same XSD nodes with the same names
   (`Schema.Field` for `field`, one component per attribute, `null` for
   absent), and `SchemaXml` writes one element per node and only the
@@ -404,10 +405,10 @@ resolve relative to the resource. Then:
 
 ## Typed flyweights: the reader
 
-Every message of the schema gets `<Message>Reader` in `<schema package>.sbe`,
-beside sbe-tool's flyweights and over them, whether or not a record maps it:
-a partial package's other messages and a package with no record at all get
-one too. It is named by `JavaUtil.formatClassName` of the message's name, as
+Every message of the schema gets `<Message>Reader` in the schema's package,
+beside the codecs, over sbe-tool's flyweights in `<schema package>.sbe`,
+whether or not a record maps it: a partial package's other messages and a
+package with no record at all get one too. It is named by `JavaUtil.formatClassName` of the message's name, as
 the flyweights are, and so is everything in it.
 
 * **The message as a sequence of stages.** A reader is `Iterable` and its
@@ -529,6 +530,49 @@ wrong order, or left incomplete, does not compile.
   `IllegalStateException` and the classes behind its stages,
   `RootBlockStage`, `<Group>Stage` and `<Group>EntryStage`; a sub-chain's
   are `N`, `Chain`, its own and the same from java.lang.
+
+## Typed flyweights: bound stages
+
+Where a record maps a message, its reader's and writer's stages have
+`bound()`: the record's view of the stage, each component under its Java
+name and with its Java type, through the same leaf the codec reads and
+writes it by, so what a component is on the wire is decided once. A message
+no record maps has no `bound()` anywhere.
+
+* **The reader's.** A block that carries a component has `<Stage>Bound`,
+  `RootBlockBound` or `PartiesEntryBound`: an accessor per component of the
+  record the block carries, constants included, in the order the record
+  declares them, an entry's with `index()` first, and `wire()` back to the
+  stage. A var-data has `<Data>Bound` with `value()`, the component read
+  where the var-data lies, the limit restored whatever the binding does. A
+  group's header has none: a binding over the whole group has nothing to
+  apply to one entry at a time. One object per bound stage, as per stage.
+* **Every call reads and binds.** An accessor reads the wire and runs the
+  binding on each call; nothing is cached. Enums, sets and composites map to
+  the record's types through the codec's own helpers, declared in the reader.
+* **Absence is `null`.** The null value of an optional field reads `null`,
+  and so does a field above the acting version, decided on the version and
+  never on the null value, as the codec decides it; a primitive that may be
+  absent is the record's box. An optional composite, set, array or string is
+  its binding's to read.
+* **The writer's.** Every stage that takes a component has a twin
+  `<Stage>Bound`, reached by `bound()` and left by `wire()`, one object per
+  block implementing the block's twins: a required field's step, the
+  optional fields and first var-data of the block complete, the var-data of
+  a stage `After<Name>`. A step takes the component as the record holds it
+  and writes it as the codec does, refusing what the codec refuses with the
+  codec's message; a composite and a set are one step. A step returns the
+  next twin where there is one, else the next wire stage: a group's
+  `entry()` and `end()` take no component and have no twin.
+* **What no component carries is passed over.** A field an `unmapped` entry
+  declares has no step on the twins: `bound()` from its stage, or the step
+  before it, goes past it, and it keeps the null value its block was filled
+  with. A constant has a step on neither chain.
+* **Names bound stages take.** `<Stage>Bound` for every stage that has one
+  and, on the writer, `<Block>BoundStage` for the objects behind them join
+  the names a group, var-data or field may not take. A component named
+  `wire`, or on an entry `index`, is an error, `the component "wire" clashes
+  with the reader's RootBlockBound.wire(); rename it`, on the component.
 
 ## Running example, complete
 

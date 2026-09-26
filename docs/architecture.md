@@ -37,8 +37,8 @@ One compilation of an `@SbeSchema` package runs:
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
 7  Ir ⋈ Annotated ──► codec sources   ours      the join: Join with FaceRules, then CodecWalk, CodecModel, CodecWriter over FaceWriter, UnionWriter
-   Ir ⋈ Annotated ──► readers         ours      the same join per message of the IR, then FlyweightWalk, FlyweightModel, ReaderWriter
-   Ir ⋈ Annotated ──► writers         ours      the same join again, then WriterWalk, WriterModel, WriterWriter over FaceWriter's null writers
+   Ir ⋈ Annotated ──► readers         ours      the same join per message of the IR, then FlyweightWalk, FlyweightModel, ReaderWriter over FaceWriter
+   Ir ⋈ Annotated ──► writers         ours      the same join again, then WriterWalk, WriterModel, WriterWriter over FaceWriter
 8  the document ──► schema.xml        ours      the schema ships in the jar               code-first
 ```
 
@@ -79,18 +79,21 @@ Closed grammars, each one file of nested records.
   order the record's constructor takes them. A message without a record
   joins with nothing but tokens and names.
 * **`Faces`** is the leaf, what a component is on the wire: a shape, an
-  absence and a binding, and the helper methods the shape calls. The codec
-  reads it, and so will the flyweights' bound stages.
+  absence and a binding, and the helper methods the shape calls, a
+  composite's pair and a var-data's methods among them. The codec and the
+  flyweights' bound stages both write their leaves through `FaceWriter`.
 * **`CodecModel`** is what a codec is made of: bodies of members in wire and
   constructor order, each field a `Faces` leaf, and the methods they call.
 * **`FlyweightModel`** is what a message's reader is made of: its stages,
   the accessors each delegates to sbe-tool's flyweights, the positions the
   reader passes through in wire order and the step that moves it on from
-  each.
+  each, and where a record maps the message the leaves its bound stages
+  read.
 * **`WriterModel`** is what a message's writer is made of: its stages as
   interfaces in chain order, the objects implementing them and their
   methods, the positions the writer passes through, and the null values
-  each block is filled with; and the sub-chain of a composite or a set.
+  each block is filled with, and the bound twins writing leaves; and the
+  sub-chain of a composite or a set.
 
 Models carry no positions. Discovery maps each `Annotated` node to its javac
 `Element` and `AnnotationMirror`, Mapping each `Schema` node to the
@@ -130,7 +133,8 @@ Three layers, in the order a mistake meets them.
   calls what sbe-tool generated and holds no wire numbers. A union's codec
   is a `UnionModel` over its members' models.
 * **Readers** are generated for every message of the IR, a record or not,
-  into `<schema package>.sbe` beside the flyweights they delegate to: the
+  into the schema's package beside the codecs, since their bound stages
+  name the records' types, over the flyweights they delegate to: the
   message joined as the codec joins it, laid out as a `FlyweightModel` in
   the order `OtfMessageDecoder` walks a message, and written from it. They
   run after the codecs, whose join reports the problems a record has.
@@ -139,6 +143,10 @@ Three layers, in the order a mistake meets them.
   per group and per what follows it, and written from it, the null values
   through `FaceWriter` as the codec writes an unmapped field. Each composite
   and set a writer's step opens gets its sub-chain once per package.
+* **Bound stages** are the readers' and writers' view of a message a record
+  maps: each component through the leaf the join made of it, written by
+  `FaceWriter` as the codec's is, its helpers, bindings and contexts
+  declared in the reader or writer that calls them.
 
 ## The codec contract
 

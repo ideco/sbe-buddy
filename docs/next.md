@@ -169,6 +169,47 @@ Step 3 decided, where the plan named no shape:
   are `GroupsWriter.java` and `QuoteWriter.java`, a composite's sub-chain
   with nested composites, a ref and a set.
 
+Step 4 decided, where the plan named no shape:
+
+- **Readers, writers and sub-chains live in the schema's package,** beside
+  the codecs, over sbe-tool's flyweights in `<package>.sbe`, where steps 2
+  and 3 put them in `.sbe`: the bound stages name the records, enums,
+  bindings and entry records, which the corpus declares package-private, as
+  a user may. The goldens moved with them, to `golden/corpus/<case>/`, and
+  `ReaderSequenceTest` finds a reader as `<package>.<Message>Reader`.
+- **One `FaceWriter` for the codec and the flyweights.** `Faces.Face.Mapped`
+  is the leaf, the component with its property, its type as code names it,
+  its shape, absence, binding and context; `FaceWriter.read` and `write`
+  take the variable holding the flyweight and the expression of the value,
+  and own the absence switches the codec had. A composite's pair and a
+  var-data's methods are `Faces.Helper`s the join collects after the
+  helpers their members call. Every codec and every sbe-tool flyweight the
+  corpus and the example generate is byte for byte what it was.
+- **Helpers are called through the class:** `<Reader>.decodeSide(...)`,
+  and a composite's pair, which may call a binding field,
+  `<Reader>.this.readPrice(...)`, since a stage may declare a method of a
+  helper's name. A reader declares the read halves of the helpers its bound
+  stages call, a writer the write halves, and each only the bindings and
+  contexts it uses.
+- **A reader's bound stage exists where it carries something:** a block with
+  a component, its accessors in the record's declaration order, an entry's
+  `index()` first and `wire()` last; a var-data, with `value()` restoring the
+  limit in a `finally`. A group's header has none.
+- **A writer's twins mirror the stages that take a component:** a required
+  field a component maps, the block complete where it has an optional
+  component or var-data first, and an `After<Name>` before var-data. A step
+  returns the next twin, else the next wire stage, so a block complete with
+  nothing optional, a group's `entry()` and `end()` stay the wire's. A field
+  no component carries has no step on the twins, and `bound()` from its
+  stage goes past it, leaving its null value: the chain takes what the
+  record holds, as the codec writes it. A constant has a step on neither
+  chain; step 5 decides where the codec checks a constant component.
+- **Names:** `<Stage>Bound`, and on the writer `<Block>BoundStage`, are
+  taken where a record maps the message. A component named `wire`, or on an
+  entry `index`, is `the component "wire" clashes with the reader's
+  RootBlockBound.wire(); rename it`; one whose wire accessor has already
+  clashed is reported once.
+
 ### The successor of each stage
 
 The reader's whole control is this table, generated per message. "Level"
@@ -597,7 +638,7 @@ sharing what the interface declares.
 - Corpus `UnionsTest`: the same over `corpus.unions`, including a nested
   union and a shared group if the case has one; if not, add one shared
   group to the case's records and oracle in this step.
-- Golden: `corpus/unions/sbe/<Union>Reader.java`.
+- Golden: `corpus/unions/<Union>Reader.java`.
 - Processor: a declared method that is a field on one member and a
   var-data on another compiles clean and the union reader lacks it
   (asserted on the output text in `AnnotationMistakesTest`'s style).
@@ -645,7 +686,8 @@ increment 27's.
 ## Criteria
 
 - Every message of every corpus case and the example has a reader and a
-  writer in `<package>.sbe`; every mapped message's stages have `bound()`.
+  writer in its schema's package; every mapped message's stages have
+  `bound()`.
 - `ReaderSequenceTest` agrees with `OtfMessageDecoder` over the whole
   corpus, every frozen version included.
 - The corpus round trips are unchanged and green with the codecs written

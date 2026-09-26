@@ -127,7 +127,13 @@ int length = writer.wrap(buffer, offset)
 ```
 
 Readers and writers need no record, so a message the records leave out gets
-them too.
+them too. Where a record maps the message, each stage also offers
+`bound()`, the record's view of it: its components with their Java types,
+bindings applied, as the codec reads and writes them.
+
+```java
+case ExecutionReportReader.FillsEntry fill -> notional = notional.add(fill.bound().fillPx());
+```
 
 ## Staying close to SBE
 
