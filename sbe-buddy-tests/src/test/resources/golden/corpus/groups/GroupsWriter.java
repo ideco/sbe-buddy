@@ -191,17 +191,21 @@ public final class GroupsWriter {
 	}
 
 	private static void nulls(corpus.groups.sbe.GroupsEncoder encoder) {
+		encoder.orderId(corpus.groups.sbe.GroupsEncoder.orderIdNullValue());
 	}
 
 	private static void nulls(corpus.groups.sbe.GroupsEncoder.LegsEncoder encoder) {
+		encoder.legId(corpus.groups.sbe.GroupsEncoder.LegsEncoder.legIdNullValue());
 		encoder.legRatio(corpus.groups.sbe.GroupsEncoder.LegsEncoder.legRatioNullValue());
 	}
 
 	private static void nulls(corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder encoder) {
+		encoder.account(corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder.accountNullValue());
 		encoder.share(corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder.shareNullValue());
 	}
 
 	private static void nulls(corpus.groups.sbe.GroupsEncoder.FillsEncoder encoder) {
+		encoder.price(corpus.groups.sbe.GroupsEncoder.FillsEncoder.priceNullValue());
 	}
 
 	private final class RootBlockStage implements RootBlockOrderId, RootBlock, AfterLegs, AfterFills {
