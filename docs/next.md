@@ -460,7 +460,7 @@ the record.
 - The codec holds one reader and one writer as fields, as it held the
   flyweights.
 - `FaceWriter`'s remaining codec-only callers go; if a template in
-  `FaceTemplates` has no caller left, delete it.
+  `FaceTemplates` or `FaceHelperTemplates` has no caller left, delete it.
 - A new module `sbe-buddy-benchmarks`, not deployed, JMH (`jmh-core` and
   `jmh-generator-annprocess` on its processor path, versions in the root
   pom), depending on `sbe-buddy-example`: one benchmark class,

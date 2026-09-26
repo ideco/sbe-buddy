@@ -6,16 +6,21 @@ out. No javac here; the processor is the only front-end.
 ```
 Annotated        the api's annotations as data, plus what javac knows
 Mapping          Annotated to Schema, and the rules one node decides
-FaceRules        a component's Java type against the face its token hands it, applied by the walk
+FaceRules        a component's Java type against the face its token hands it, applied by Join
 Schema           sbe.xsd as records
 SchemaXml        Schema to XML, exactly what the model holds
 SchemaEquivalence whether two documents are one schema, and where they differ
 SchemaEvolution  whether a schema still reads its baseline, and where it breaks it
 Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
-CodecWalk        the IR and Annotated to a CodecModel
-CodecModel       what a codec is made of
-CodecWriter      a CodecModel to source
-CodecTemplates   the text blocks the writers fill
+Join             one message's IR joined with its record, or with nothing: a tree of nodes and their leaves
+Faces            the leaf: what a component is on the wire, its shape, absence, binding and helpers
+FaceWriter       a Faces leaf to source: its read, write, null write, null test and helpers
+FaceTemplates    the text of a leaf: read, write, null write, absence, binding
+FaceHelperTemplates the text of the helpers the leaves call: checks, array pairs, enum and set mappings
+CodecWalk        a Join to a CodecModel: bodies, wire and constructor order, the methods collected
+CodecModel       what a codec is made of around its leaves
+CodecWriter      a CodecModel to source, each leaf through FaceWriter
+CodecTemplates   the text of a codec around its leaves: the class, the header, lengths, groups, var-data, the union
 UnionModel       what a union's codec is made of: its members' codecs
 UnionWriter      a UnionModel to source
 Template         a text block with named placeholders
@@ -39,15 +44,15 @@ Problem          a mistake on a node of either model
 - `Annotated` has a record per annotation and a component per member, with
   references to other declarations by identity, never by `Class`.
 - `Schema` and `Annotated` nodes are used qualified, `Schema.Field`. The
-  codec's files import `CodecModel`'s interfaces and read each leaf through
-  them, `Shape.Enum`.
+  codec's and the leaves' files import the interfaces of `CodecModel` and
+  `Faces` and read each leaf through them, `Shape.Enum`.
 
 ## Where a rule goes
 
 - Only javac can see it: `Discovery`, in the processor.
 - One node decides it: `Mapping`.
 - It compares nodes (duplicates, versions, append-only): `Generator.validate`.
-- It ties a component's Java type to its face: `FaceRules`, which the walk
+- It ties a component's Java type to its face: `FaceRules`, which `Join`
   applies to every token it meets with an annotation, fields, groups,
   var-data, composite members and refs, reading the face from the token so
   the rule and the codec never disagree. It runs with `codecs = false` too.
@@ -71,7 +76,7 @@ Problem          a mistake on a node of either model
 
 ## Codecs
 
-- The walk goes through the IR as `JavaGenerator` does and names every
+- `Join` goes through the IR as `JavaGenerator` does and names every
   flyweight member through `JavaUtil`. Never compute an offset, a null value
   or a method name.
 - Generated code holds no wire numbers; lengths come from the flyweights'
@@ -85,8 +90,11 @@ Problem          a mistake on a node of either model
   reported only when codecs are wanted, and the message gets no model.
   Nothing is skipped silently. A composite is walked by every message that
   uses it; `CodecEmitter` reports each of its problems once.
-- A new construct is a node in `CodecModel`, a case in the writer's switches
-  and its templates in `CodecTemplates`.
+- A new construct is a shape in `Faces`, its templates in `FaceTemplates`
+  (a helper's in `FaceHelperTemplates`), and a case in `FaceWriter`; the
+  codec and the flyweights both read it. What surrounds the leaves, a
+  block, a group, var-data, is a node in `Join` and `CodecModel`, with its
+  templates in `CodecTemplates`.
 - Templates hold no conditionals and no loops. What varies is decided in Java
   and filled in; no code is assembled by concatenation.
 - A binding stands in front of any member's write and behind its read, and
@@ -116,8 +124,9 @@ Problem          a mistake on a node of either model
 - A rule a user can break is tested in the processor, as source. Codec
   behaviour is tested in sbe-buddy-tests, against compiled generated code.
 - Here: `GeneratorTest` for the rules that compare nodes, the all-or-nothing
-  pipeline and the constructs the codec refuses; `MappingTest`,
-  `TemplateTest`, and `SchemaXmlAssert` with its own test.
+  pipeline and the constructs the codec refuses; `JoinTest` for the join
+  with and without a record; `MappingTest`, `TemplateTest`, and
+  `SchemaXmlAssert` with its own test.
 - `SchemaXmlAssert` is the assertion every module uses over
   `SchemaEquivalence`, shipped in the test jar: the XSD's defaults filled,
   `type`, `composite`, `enum`, `set` and `message` matched by name and
