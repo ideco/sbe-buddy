@@ -93,11 +93,13 @@ schema version in their header so readers can interpret their layout.
 An optional descriptive version label on the schema, independent of its
 numeric schema version. It does not control encoding or decoding.
 
-## Baseline version
+## Baseline
 
-The oldest schema version accepted by a generated codec. Messages below this
-version are rejected. This is a sbe-buddy setting, not an SBE schema
-attribute.
+The XML of a released schema version, checked in and named by
+`@SbeSchema(baseline = …)`. The compiler checks that the schema stays
+compatible with it, and its version is the oldest a generated codec accepts:
+messages below it are rejected. This is a sbe-buddy setting, not an SBE
+schema attribute.
 
 ## Template ID
 

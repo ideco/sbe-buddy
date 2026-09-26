@@ -71,7 +71,7 @@ The Java representation does not define the valid SBE value range. Reserved null
 
 ## Absence
 
-A field is absent when it is optional and holds the null value, or when it was introduced above the schema’s `baselineVersion` and the message being decoded predates it. Absence decodes to `null`, so a field that can be absent takes a boxed component.
+A field is absent when it is optional and holds the null value, or when it was introduced above the version of the schema’s `baseline` and the message being decoded predates it. Absence decodes to `null`, so a field that can be absent takes a boxed component.
 
 Declare optional fields with `presence = OPTIONAL` and a boxed component type.
 

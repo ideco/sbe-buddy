@@ -70,7 +70,7 @@ Reordering Java constants does not change their encoded values.
 
 ## Absence
 
-A field is absent when it is optional and holds the null value, or when it was introduced above the schema’s `baselineVersion` and the message being decoded predates it. Absence decodes to `null`.
+A field is absent when it is optional and holds the null value, or when it was introduced above the version of the schema’s `baseline` and the message being decoded predates it. Absence decodes to `null`.
 
 Enum fields are required by default. To allow `null`, declare the field with `@SbeField(id = 2, presence = Presence.OPTIONAL)`.
 

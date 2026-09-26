@@ -40,7 +40,7 @@ memory.
 
 | XSD | Java | Members |
 | --- | --- | --- |
-| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baselineVersion` (`0`, the oldest version the codecs still decode, at most `version`), `resource` (empty; the schema's XML on the class path when the schema exists already, below) |
+| `messageSchema` | `@SbeSchema` on `package-info.java` | `id`, `version`, `semanticVersion`, `description`, `byteOrder` (`LITTLE_ENDIAN`), `headerType` (a `@SbeComposite` record that implements `MessageHeader`; default `DefaultMessageHeader`, the standard `messageHeader` of four `uint16`, provided by the api; always written); and the Java side, contributing nothing to the schema: `codecs` (`true`), `baseline` (empty; the released schema's XML on the class path that this one stays compatible with, whose version is the oldest the codecs decode, below), `resource` (empty; the schema's XML on the class path when the schema exists already, below) |
 | `message` | `@SbeMessage` on a record; components are the fields, groups and data in declaration order, which must be fields, then groups, then data | `id`, `name`, `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `layout` (the body in wire order, by name; empty for declaration order), `unmapped` (complete `@SbeField`s no component carries) |
 | `field` | `@SbeField` on a record component | `id`, `name`, `type` / `primitiveType`, `presence` (`REQUIRED`, `OPTIONAL`, `CONSTANT`), `valueRef`, `offset`, `epoch`, `timeUnit` (`@Deprecated`, as the XSD deprecates it), `semanticType`, `description`, `sinceVersion`, `deprecated`; and the Java side, contributing nothing to the schema: `binding` |
 | `group` | `@SbeGroup` on a `List<E>` component, `E` a record whose components are the group's fields, groups and data | `id`, `name`, `dimensionType` (a `@SbeComposite` class; default the standard `groupSizeEncoding`, provided by the api), `blockLength`, `semanticType`, `description`, `sinceVersion`, `deprecated`; and `layout` and `unmapped` for `E`'s body, as on a message, and `binding` |
@@ -150,7 +150,7 @@ the acting version like any other.
 
 A field *can be absent* when it is optional, or when its `sinceVersion` is
 above its body's baseline and it is not a constant. A message's baseline is
-the schema's `baselineVersion`; inside a group it is the group's own
+the version of the schema's `baseline`, 0 without one; inside a group it is the group's own
 `sinceVersion` where that is higher, and a nested group's the higher of its
 parent's and its own, because an entry exists only in a message whose
 version carries the group, so a field at its group's version is never absent
@@ -322,7 +322,23 @@ members is a construct the codec lacks.
   var-data appended inside an entry, which is SBE's limit.
 * Decoding takes acting block length and acting version from the header;
   encoding always writes the schema's current version. A header version
-  below `baselineVersion` is refused.
+  below the baseline's is refused.
+* `baseline` names the XML of a released version, on the class path as
+  `resource` is, and the compiler holds the schema against it, XML against
+  XML with the XSD's defaults filled, each difference an error on the node
+  it is on. Nothing is matched by name: messages by `id`; in each message
+  and group the baseline's fields, groups and var-data by position, each
+  keeping its `id`, which is its identity, its type, `sinceVersion`,
+  `offset`, `semanticType`, `epoch`, `timeUnit` and a constant's value;
+  types by structure, a primitive and a named `type` of it being one, a
+  composite member for member, an enum's values by value and a set's
+  choices by bit. The schema keeps the baseline's `id`, `byteOrder` and
+  header, and its `version` is no lower. Whatever the baseline lacks,
+  message, member, value or choice, has a `sinceVersion` above its version;
+  whatever it has stays, `unmapped` or `deprecated` if it is retired. A
+  `blockLength` the baseline states only grows. Free are `name`,
+  `description` and `deprecated`, and `presence` between `REQUIRED` and
+  `OPTIONAL`; a constant stays one, since it takes no space in the block.
 * `byteOrder` applies to every encoding of the schema.
 
 ## Unions

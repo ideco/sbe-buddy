@@ -93,8 +93,9 @@ switch (new OrderEventCodec().decode(buffer, offset)) {
 
 Versioning is SBE's: `sinceVersion` on fields, appended in order. The
 declaration states it and the compiler checks it. A field an older message
-can lack is nullable in the record, and `baselineVersion` states the oldest
-version the codecs read.
+can lack is nullable in the record. A released version's XML can be checked
+in and named as the `baseline`: the compiler holds the schema against it
+under SBE's extension rules, and the codecs read from its version.
 
 ## Staying close to SBE
 

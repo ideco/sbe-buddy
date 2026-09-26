@@ -228,9 +228,11 @@ A field introduced in a later schema version can also be absent when decoding an
 For example:
 
 ```java
-@SbeSchema(id = 100, version = 2, baselineVersion = 1)
+@SbeSchema(id = 100, version = 2, baseline = "trading-v1.xml")
 package com.example.trading;
 ```
+
+`trading-v1.xml` is version 1 of the schema as it was released, checked in beside the package under `src/main/resources`. The codecs decode from that version on, and the compiler checks that version 2 still reads it; see [Schemas](reference/schemas.md#the-baseline).
 
 ```java
 @SbeMessage(id = 1)

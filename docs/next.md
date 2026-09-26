@@ -74,9 +74,10 @@ an appended field, a renamed one or a new enum value, compiles.
   difference lands on its node through `Generator.node`. A baseline node
   with no counterpart lands on its nearest parent: a removed field on its
   message, a removed message on the package. `Generator.generate` takes the
-  baseline, resolves its XIncludes, and runs the comparison before sbe-tool
-  sees the document. With no difference, the baseline's version goes to
-  the codec walk. `Mapping` loses its baseline and its range check, and
+  baseline, resolves its XIncludes, and runs the comparison once sbe-tool
+  has accepted the document, so what sbe.xsd refuses there is the
+  baseline's, and before the codecs. With no difference, the baseline's
+  version goes to the codec walk. `Mapping` loses its baseline and its range check, and
   `Annotated` carries the baseline's name.
 - **The rules, each a difference:**
   - the schema: the same `id` and `byteOrder`, a `version` at or above the
@@ -96,7 +97,7 @@ an appended field, a renamed one or a new enum value, compiles.
     `sinceVersion` above the baseline's version, and one it has stays.
 
   The errors read as the fix. Examples:
-  `the baseline has id 44 here, not 99; a field that means something else is a new field, appended`,
+  `the baseline has a field "price" (id 44) here, not id 99; the id is its identity, and a field that means something else is appended as a new one`,
   `the baseline's Order has a field "price" (id 5) the schema lacks; a field stays, unmapped if the record retires it`,
   `a field the baseline lacks needs a sinceVersion above the baseline's version 1`.
 - **The codecs** are unchanged: a message below the baseline is refused,

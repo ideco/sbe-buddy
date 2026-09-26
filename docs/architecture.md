@@ -50,7 +50,10 @@ be one schema, the XSD's defaults filled, declarations and messages matched
 by name and everything else in sequence, and each difference is a problem
 on the node it is on. With none, the resource is the document steps 4 to 7
 take, and nothing is written to the class output: the resource is the
-schema and ships from where the user put it. The unit of work is the package: every annotated element
+schema and ships from where the user put it. A baseline `@SbeSchema` names
+is read the same way in either mode and, once sbe-tool accepts the
+document, held against it by `SchemaEvolution` before step 7, whose codecs
+read from the baseline's version. The unit of work is the package: every annotated element
 brings its package, which is generated once, in the first round that shows
 it. Discovery orders the top level by id and qualified name, never by
 javac's order, so the same sources give the same output however they were
@@ -90,6 +93,8 @@ Three layers, in the order a mistake meets them.
   the codec reads it. Schema-first, `SchemaEquivalence` holds the rendered
   document against the resource, the one comparison the oracles' tests
   apply too, so that the annotations and the document never drift apart.
+  `SchemaEvolution` holds the document against the baseline, XML against
+  XML, so that a schema never breaks the version it names.
 * **sbe-tool, as backstop.** The document is validated against `sbe.xsd`
   and parsed with warnings fatal; anything reported lands on the package
   with sbe-tool's text. A rule that matters to users graduates to ours.

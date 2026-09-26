@@ -114,7 +114,7 @@ if (orders.canDecode(buffer, offset)) {
 }
 ```
 
-It reads the header alone and throws nothing of its own, though a header that lies outside the buffer is the buffer's exception: the schema id must be the schema's, the template id one of the codec's messages, and the version at or above the schema's `baselineVersion`. `decode` checks the same and throws `IllegalArgumentException` on a message that is not its own, naming the union's templates: `not a OrderCommand: schemaId 6, templateId 3; its templates are 1, 2`.
+It reads the header alone and throws nothing of its own, though a header that lies outside the buffer is the buffer's exception: the schema id must be the schema's, the template id one of the codec's messages, and the version at or above its baseline's. `decode` checks the same and throws `IllegalArgumentException` on a message that is not its own, naming the union's templates: `not a OrderCommand: schemaId 6, templateId 3; its templates are 1, 2`.
 
 No codec skips a message it cannot read. A message with groups or var-data has a length only its own codec can compute, so stepping over a stranger is the transport's job, which knows the length of what it delivered.
 

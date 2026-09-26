@@ -61,8 +61,8 @@ the scope above is complete, and nothing built may preclude them.
    schema is its oracle: the written schema must equal it; it grows with the
    records in the same change and is never edited to make a test pass.
 2. **Nothing is inferred.** Schema id, version, template ids, field ids,
-   unsigned types, named types, `sinceVersion`, the baseline version a
-   schema still reads: all written by hand in annotations. The only default is the same-width signed primitive for a
+   unsigned types, named types, `sinceVersion`, the baseline a
+   schema stays compatible with: all written by hand in annotations. The only default is the same-width signed primitive for a
    bare Java primitive.
 3. **Annotations mirror `sbe.xsd`.** One annotation per XSD element, one
    member per attribute, same names and defaults, on the node the XSD puts it
@@ -151,6 +151,10 @@ user's binding's to decide. No built-in bindings.
 * [x] 22. Schema-first mapping: `@SbeSchema` names an XML resource on the class path, sbe-tool generates every message's flyweights from it, and the records map the messages they choose to with the same annotations, each written member checked against the XML; nothing is written. First the join: the face rules run over the IR where each token meets its annotation, so the pipeline is one flow from the document down
 * [x] 23. Schema-first without drift: the annotations describe the whole document, every message, member and type, and the compiler proves the document rendered from them and the resource are one schema, each difference an error on the node it is on; partial mapping goes, and views are parked. A package goes code-first, freezes its schema, reads it, and back, losing nothing either way
 
+**Evolution, checked.**
+
+* [x] 24. A checked-in baseline: `@SbeSchema(baseline = …)` names the released schema's XML in place of `baselineVersion`, the compiler holds the schema against it under SBE's extension rules, XML against XML, messages by id, members by position and id, types by structure, names free, and the codecs read from its version
+
 **The API pass.**
 
-* [ ] 24. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
+* [ ] 25. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
