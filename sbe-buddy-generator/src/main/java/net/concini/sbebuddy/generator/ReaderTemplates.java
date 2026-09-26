@@ -13,7 +13,7 @@ final class ReaderTemplates {
 
 	static final Template READER = Template.of(
 			"""
-					package {flyweights};
+					package {packageName};
 
 					/**
 					 * The message {@code {messageName}} as the sequence of its stages over sbe-tool's
@@ -33,10 +33,13 @@ final class ReaderTemplates {
 							{positions}
 						}
 
+						{contexts}
 						private final {flyweights}.{headerClass}Decoder header = new {flyweights}.{headerClass}Decoder();
 						private final {flyweights}.{message}Decoder decoder = new {flyweights}.{message}Decoder();
 						private final {flyweights}.{message}Decoder measure = new {flyweights}.{message}Decoder();
+						{bindings}
 						private final RootBlock rootBlockStage = new RootBlock();
+						{rootBlockBound}
 						{fields}
 						private At at = At.BEFORE_ROOT_BLOCK;
 
@@ -124,6 +127,7 @@ final class ReaderTemplates {
 						}
 
 						{stages}
+						{helpers}
 					}
 					"""
 	);
@@ -135,11 +139,13 @@ final class ReaderTemplates {
 	static final Template GROUP_FIELDS = Template.of("""
 			private final {name} {property}Stage = new {name}();
 			private final {entry} {property}EntryStage = new {entry}();
+			{bound}
 			private {decoder} {property}Decoder;
 			private int {property}Index;""");
 
 	static final Template DATA_FIELDS = Template.of("""
 			private final {name} {property}Stage = new {name}();
+			{bound}
 			private int {property}Start;
 			private int {property}Length;""");
 
@@ -181,6 +187,9 @@ final class ReaderTemplates {
 				at = At.{position};
 				return {property}Stage;
 			}""");
+
+	/** A bound stage, one object per reader. */
+	static final Template BOUND_FIELD = Template.of("private final {name} {field} = new {name}();");
 
 	// ---- the steps: what next() does, and what hasNext() asks
 

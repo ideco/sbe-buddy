@@ -201,7 +201,7 @@ final class GeneratorTest {
 		assertThat(generate(annotated, output)).isEmpty();
 		assertThat(output.getSources().keySet()).containsExactlyInAnyOrder(
 				"p.sbe.package-info", "p.sbe.MessageHeaderEncoder", "p.sbe.MessageHeaderDecoder", "p.sbe.MEncoder",
-				"p.sbe.MDecoder", "p.sbe.MetaAttribute", "p.sbe.MReader", "p.sbe.MWriter", "p.MCodec"
+				"p.sbe.MDecoder", "p.sbe.MetaAttribute", "p.MReader", "p.MWriter", "p.MCodec"
 		);
 	}
 

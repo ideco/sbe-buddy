@@ -68,7 +68,7 @@ final class JoinTest {
 		assertThat(block.data()).singleElement().satisfies(data -> {
 			assertThat(data.property()).isEqualTo("note");
 			assertThat(data.component()).isNull();
-			assertThat(data.content()).isNull();
+			assertThat(data.leaf()).isNull();
 			assertThat(data.helpers()).isEmpty();
 		});
 		assertThat(block.constructorOrder()).isEmpty();
@@ -86,7 +86,7 @@ final class JoinTest {
 		Join.Block block = joined.block();
 		Join.Field qty = block.fields().get(0);
 		assertThat(qty.face()).isEqualTo(
-				new Faces.Face.Mapped("qty", new Faces.Shape.Scalar(null), Faces.Absence.NONE, null)
+				new Faces.Face.Mapped("qty", "qty", "int", new Faces.Shape.Scalar(null), Faces.Absence.NONE, null, null)
 		);
 		Join.Group fills = block.groups().get(0);
 		assertThat(fills.component()).isSameAs(FILLS);
@@ -95,8 +95,10 @@ final class JoinTest {
 				.satisfies(price -> assertThat(price.face()).isInstanceOf(Faces.Face.Mapped.class));
 		Join.Data note = block.data().get(0);
 		assertThat(note.component()).isSameAs(NOTE);
-		assertThat(note.content()).isEqualTo(Faces.Content.UTF_8);
-		assertThat(note.helpers()).containsExactly(new Faces.Helper.Utf8());
+		assertThat(note.leaf()).isNotNull()
+				.satisfies(leaf -> assertThat(leaf.content()).isEqualTo(Faces.Content.UTF_8));
+		assertThat(note.type()).isEqualTo("String");
+		assertThat(note.helpers()).containsExactly(new Faces.Helper.Utf8(), note.leaf());
 		assertThat(block.constructorOrder()).containsExactly(qty, fills, note);
 	}
 
@@ -115,7 +117,6 @@ final class JoinTest {
 	private static void assertJoinedWithNothing(Join.Field field) {
 		assertThat(field.face()).isNull();
 		assertThat(field.helpers()).isEmpty();
-		assertThat(field.composite()).isNull();
 	}
 
 	/**

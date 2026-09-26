@@ -300,14 +300,6 @@ final class CodecTemplates {
 	// ---- a binding: the component mapped before the flyweight and after it,
 	// handed the component's context
 
-	/**
-	 * A group's or var-data's view, whose null the method it goes to refuses: the
-	 * binding is never handed null.
-	 */
-	static final Template NULLABLE_BOUND_SOURCE = Template.of(
-			"value.{component}() == null ? null : {binding}.toWire(value.{component}(), {context})"
-	);
-
 	/** A group or var-data read into its local, handed to the record as it is. */
 	static final Template LOCAL = Template.of("{component}");
 
@@ -317,24 +309,6 @@ final class CodecTemplates {
 	/** Absent from an older message, it stays null past the binding. */
 	static final Template BOUND_ADDED_LOCAL = Template
 			.of("{component} == null ? null : {binding}.fromWire({component}, {context})");
-
-	// ---- a composite: a pair per composite type, over its own flyweights
-
-	/**
-	 * The pair's parameters bear the message's names, so every field shape serves a
-	 * member as it is.
-	 */
-	static final Template WRITE_COMPOSITE = Template.of("""
-			private void write{compositeClass}({record} value, {encoder} encoder) {
-				{members}
-			}""");
-
-	static final Template READ_COMPOSITE = Template.of("""
-			private {record} read{compositeClass}({decoder} decoder) {
-				return new {record}(
-						{members}
-				);
-			}""");
 
 	// ---- a group: three methods per group, keyed by its path, over its own
 	// classes
@@ -405,73 +379,12 @@ final class CodecTemplates {
 	// ---- var-data: methods per data member, keyed by its path, over its body's
 	// classes; its bytes counted without encoding
 
-	static final Template ENCODE_DATA_FIELD = Template.of("write{path}({source}, encoder);");
-
 	static final Template DECODE_DATA = Template.of("{face} {component} = {read};");
 
 	/** Absent below the acting version, as a group is. */
 	static final Template DECODE_ADDED_DATA = Template.of(
 			"{face} {component} = decoder.actingVersion() < {decoder}.{addedSince}() ? null : {read};"
 	);
-
-	static final Template DECODE_TEXT = Template.of("decoder.{property}()");
-
-	static final Template DECODE_BYTES = Template.of("read{path}(decoder)");
-
-	/**
-	 * The length and the data, checked as the content needs; null has no wire form.
-	 */
-	static final Template DATA_LENGTH = Template.of("""
-			private static int {length}({face} value) {
-				if (value == null) {
-					throw new IllegalArgumentException("{component} is required");
-				}
-				return {encoder}.{property}HeaderLength() + {count};
-			}""");
-
-	static final Template COUNT_ASCII = Template
-			.of("ascii(value, {lengthEncoder}.lengthMaxValue(), \"{component}\").length()");
-
-	static final Template COUNT_UTF_8 = Template.of("utf8(value, {lengthEncoder}.lengthMaxValue(), \"{component}\")");
-
-	static final Template COUNT_ENCODED = Template
-			.of("encoded(value, {charset}, {lengthEncoder}.lengthMaxValue(), \"{component}\").length");
-
-	static final Template COUNT_BYTES = Template
-			.of("bytes(value, {lengthEncoder}.lengthMaxValue(), \"{component}\")");
-
-	/**
-	 * The length method refuses what the flyweight would refuse with its own
-	 * exception, or write as something else.
-	 */
-	static final Template WRITE_TEXT = Template.of("""
-			private static void write{path}(String value, {encoder} encoder) {
-				{length}(value);
-				encoder.{property}(value);
-			}""");
-
-	/** Encoded once, for the write; its length method encodes it to count. */
-	static final Template WRITE_ENCODED_TEXT = Template.of("""
-			private static void write{path}(String value, {encoder} encoder) {
-				if (value == null) {
-					throw new IllegalArgumentException("{component} is required");
-				}
-				byte[] bytes = encoded(value, {charset}, {lengthEncoder}.lengthMaxValue(), "{component}");
-				encoder.put{bulk}(bytes, 0, bytes.length);
-			}""");
-
-	static final Template WRITE_DATA_BYTES = Template.of("""
-			private static void write{path}(byte[] value, {encoder} encoder) {
-				{length}(value);
-				encoder.put{bulk}(value, 0, value.length);
-			}""");
-
-	static final Template READ_DATA_BYTES = Template.of("""
-			private static byte[] read{path}({decoder} decoder) {
-				byte[] value = new byte[decoder.{property}Length()];
-				decoder.get{bulk}(value, 0, value.length);
-				return value;
-			}""");
 
 	// ---- the shapes over them
 

@@ -15,7 +15,7 @@ final class SubWriterTemplates {
 	/** A composite whose members after the first are stages of their own. */
 	static final Template COMPOSITE = Template.of(
 			"""
-					package {flyweights};
+					package {packageName};
 
 					/**
 					 * The composite {@code {compositeName}} as a step of a writer's chain: every member
@@ -50,7 +50,7 @@ final class SubWriterTemplates {
 	/** A composite of one member, which hands back the caller's stage itself. */
 	static final Template SHORT_COMPOSITE = Template.of(
 			"""
-					package {flyweights};
+					package {packageName};
 
 					/**
 					 * The composite {@code {compositeName}} as a step of a writer's chain: its one member
@@ -82,7 +82,7 @@ final class SubWriterTemplates {
 
 	static final Template SET = Template.of(
 			"""
-					package {flyweights};
+					package {packageName};
 
 					/**
 					 * The set {@code {setName}} as a step of a writer's chain: its choices over sbe-tool's

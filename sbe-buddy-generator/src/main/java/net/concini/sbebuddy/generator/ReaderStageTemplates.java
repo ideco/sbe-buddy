@@ -22,6 +22,7 @@ final class ReaderStageTemplates {
 				private RootBlock() {
 				}
 				{accessors}
+				{bound}
 
 				/** The rest of the message: iteration ends. */
 				@Override
@@ -75,6 +76,7 @@ final class ReaderStageTemplates {
 					return {property}Index;
 				}
 				{accessors}
+				{bound}
 
 				/** What the entry holds past its block: its groups and var-data never come. */
 				@Override
@@ -129,6 +131,7 @@ final class ReaderStageTemplates {
 					{owner}.wrap{bulk}(window);
 					decoder.limit(limit);
 				}
+				{bound}
 
 				/** Nothing to prune. */
 				@Override
@@ -152,4 +155,77 @@ final class ReaderStageTemplates {
 			}""");
 
 	static final Template PARAMETER = Template.of("{type} {name}");
+
+	// ---- the bound stages: the record's view, bindings applied on every call
+
+	static final Template BOUND = Template.of("""
+
+			/** The record's view of this stage. */
+			public {name} bound() {
+				{reader}.this.open(At.{first}, At.{last}, "{stage}");
+				return {field};
+			}""");
+
+	static final Template BOUND_BLOCK = Template.of("""
+			/**
+			 * The components of {@code {record}} in {subject}, each read and
+			 * bound on every call, never cached: null where absent, and above the acting
+			 * version.
+			 */
+			public final class {name} {
+
+				private {name}() {
+				}
+				{accessors}
+
+				/** The stage this is the view of. */
+				public {stage} wire() {
+					{reader}.this.open(At.{first}, At.{last}, "{stage}");
+					return {stageField};
+				}
+			}""");
+
+	static final Template BOUND_INDEX = Template.of("""
+
+			/** Which entry of the group this is, from 0. */
+			public int index() {
+				{reader}.this.open(At.{first}, At.{last}, "{stage}");
+				return {property}Index;
+			}""");
+
+	static final Template BOUND_GETTER = Template.of("""
+
+			public {type} {component}() {
+				{reader}.this.open(At.{first}, At.{last}, "{stage}");
+				return {read};
+			}""");
+
+	/** Read where it lies, its limit restored whatever the binding does. */
+	static final Template BOUND_DATA = Template.of("""
+			/**
+			 * The record's value of the var-data {@code {path}}, read and bound on every
+			 * call, never cached.
+			 */
+			public final class {name} {
+
+				private {name}() {
+				}
+
+				public {type} value() {
+					{reader}.this.open(At.{position}, At.{position}, "{stage}");
+					int limit = decoder.limit();
+					decoder.limit({property}Start);
+					try {
+						return {read};
+					} finally {
+						decoder.limit(limit);
+					}
+				}
+
+				/** The stage this is the view of. */
+				public {stage} wire() {
+					{reader}.this.open(At.{position}, At.{position}, "{stage}");
+					return {stageField};
+				}
+			}""");
 }

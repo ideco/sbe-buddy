@@ -1,5 +1,6 @@
 package corpus.addedfields;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -113,5 +114,35 @@ final class AddedFieldsTest implements SchemaCase {
 		assertThatThrownBy(() -> codec.decode(buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("not a AddedFields: schemaId 1, templateId 2");
+	}
+
+	@Test
+	void theBoundStageReadsACurrentMessage() {
+		assertReadsTheValue(new AddedFieldsCodec(), new AddedFields(1L, 10, 5, null), (buffer, offset) -> {
+			AddedFieldsReader.RootBlockBound block = ((AddedFieldsReader.RootBlock) new AddedFieldsReader()
+					.wrap(buffer, offset).next()).bound();
+			return new AddedFields(block.orderId(), block.quantity(), block.filled(), block.ratio());
+		});
+	}
+
+	/**
+	 * Above the acting version a required field is null on the bound stage, where
+	 * the wire stage reads sbe-tool's null value.
+	 */
+	@Test
+	void aFieldAboveTheActingVersionIsNullOnTheBoundStage() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+		new AddedFieldsCodec().encode(new AddedFields(1L, 10, 5, 3.5f), buffer, OFFSET);
+		new MessageHeaderEncoder().wrap(buffer, OFFSET)
+				.version(1)
+				.blockLength(AddedFieldsEncoder.filledEncodingOffset());
+
+		AddedFieldsReader.RootBlock block = (AddedFieldsReader.RootBlock) new AddedFieldsReader()
+				.wrap(buffer, OFFSET).next();
+
+		assertThat(block.bound().quantity()).isEqualTo(10);
+		assertThat(block.bound().filled()).isNull();
+		assertThat(block.bound().ratio()).isNull();
+		assertThat(block.filled()).isEqualTo(AddedFieldsEncoder.filledNullValue());
 	}
 }

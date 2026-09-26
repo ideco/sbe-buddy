@@ -1,5 +1,6 @@
 package corpus.bindings;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -326,5 +327,39 @@ final class BindingsTest implements SchemaCase {
 		assertThatThrownBy(() -> codec.decode(buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("not a Bindings: schemaId 1, templateId 2");
+	}
+
+	@Test
+	void theBoundStageReadsEveryComponentThroughItsBinding() {
+		assertReadsTheValue(new BindingsCodec(), new Bindings(PRICE, FEE, null, SYMBOL, COLOUR), (buffer, offset) -> {
+			BindingsReader.RootBlockBound block = ((BindingsReader.RootBlock) new BindingsReader().wrap(buffer, offset)
+					.next()).bound();
+			return new Bindings(block.price(), block.fee(), block.rebate(), block.symbol(), block.colour());
+		});
+	}
+
+	/**
+	 * The group's binding over the whole map has nothing to apply to on a stage;
+	 * each entry's components are read, and the map is the reader's to build.
+	 */
+	@Test
+	void theBoundStagesReadEveryKindBoundTheConstantAndTheBoundVarData() {
+		assertReadsTheValue(
+				new EverywhereCodec(), everywhere(null, new BigInteger("-5"), UINT64_MAX), (buffer, offset) -> {
+					EverywhereReader reader = new EverywhereReader().wrap(buffer, offset);
+					EverywhereReader.RootBlockBound block = ((EverywhereReader.RootBlock) reader.next()).bound();
+					EverywhereReader.Legs header = (EverywhereReader.Legs) reader.next();
+					Map<Integer, Leg> legs = new LinkedHashMap<>();
+					for (int i = 0; i < header.count(); i++) {
+						EverywhereReader.LegsEntryBound leg = ((EverywhereReader.LegsEntry) reader.next()).bound();
+						legs.put(leg.legId(), new Leg(leg.legId(), leg.ratio()));
+					}
+					Note note = ((EverywhereReader.Note) reader.next()).bound().value();
+					return new Everywhere(
+							block.urgent(), block.acknowledged(), block.live(), block.access(), block.quote(),
+							block.signedCount(), block.unsignedCount(), block.sentAt(), block.stampedAt(), legs, note
+					);
+				}
+		);
 	}
 }

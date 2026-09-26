@@ -91,6 +91,14 @@ entries, or a var-data. A stage answers while the reader is inside it, and
 next: a block's required field, the block complete, a group between its
 entries, or what follows a group or var-data.
 
+## Bound stage
+
+The record's view of a stage, `bound()` on it where a record maps the
+message: on a reader, the components the stage carries under their Java
+names and types, each read and bound on every call, `null` where absent; on
+a writer, a twin whose steps take the components as the record holds them,
+left by `wire()`.
+
 ## Writer
 
 Generated code over sbe-tool's encoder that writes one message as a chain of
