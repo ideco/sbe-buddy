@@ -227,7 +227,11 @@ final class WriterWalk {
 		List<Join.Field> checked = new ArrayList<>();
 		List<NullWrite> writes = new ArrayList<>();
 		for (Join.Field field : block.fields()) {
-			if (!isConstant(field.token())) {
+			// A required field every chain writes whole is never left for the fill; the
+			// bound chain passes over one no component maps, which keeps its null value.
+			boolean written = place(ir, field) == Place.REQUIRED && whole(ir, field.type())
+					&& (!mapped || leaf(field) != null);
+			if (!isConstant(field.token()) && !written) {
 				NullWrite write = nullWrite(field.type(), field.property());
 				if (write != null) {
 					writes.add(write);
@@ -1020,6 +1024,22 @@ final class WriterWalk {
 			case BEGIN_COMPOSITE -> members(ir, type.applicableTypeName()).stream()
 					.anyMatch(member -> !isConstant(member) && writable(ir, member));
 			default -> true;
+		};
+	}
+
+	/**
+	 * Whether every step of a field writes all of it: a scalar, an enum, a set,
+	 * whose step clears it first, a char array, whose steps pad or copy its whole
+	 * length, and a composite of such members. An array of another type is not: its
+	 * {@code put} step takes a length and writes that much.
+	 */
+	private static boolean whole(Ir ir, Token type) {
+		return switch (type.signal()) {
+			case ENCODING -> type.arrayLength() == 1 || type.encoding().primitiveType() == PrimitiveType.CHAR;
+			case BEGIN_ENUM, BEGIN_SET -> true;
+			case BEGIN_COMPOSITE -> members(ir, type.applicableTypeName()).stream()
+					.allMatch(member -> isConstant(member) || whole(ir, member));
+			default -> throw new IllegalStateException("a field of " + type.signal());
 		};
 	}
 

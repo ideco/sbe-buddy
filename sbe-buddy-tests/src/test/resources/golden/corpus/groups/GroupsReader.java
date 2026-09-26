@@ -214,14 +214,20 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 		throw new java.util.NoSuchElementException();
 	}
 
+	/**
+	 * Whether the stage checks run, read once from {@code sbebuddy.checks}; on
+	 * unless it says {@code false}, as sbe-tool's bounds checks are switched.
+	 */
+	private static final boolean CHECKS = !"false".equals(System.getProperty("sbebuddy.checks"));
+
 	private void open(At first, At last, String stage) {
-		if (at.compareTo(first) < 0 || at.compareTo(last) > 0) {
+		if (CHECKS && (at.compareTo(first) < 0 || at.compareTo(last) > 0)) {
 			throw new IllegalStateException(stage + " is not open");
 		}
 	}
 
 	private void current(At expected, String stage) {
-		if (at != expected) {
+		if (CHECKS && at != expected) {
 			throw new IllegalStateException(stage + " is not the current stage");
 		}
 	}
