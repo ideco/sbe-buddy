@@ -36,7 +36,7 @@ One compilation of an `@SbeSchema` package runs:
 4  the document ──► MessageSchema     sbe-tool  XmlSchemaParser, after sbe.xsd
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
-7  Ir ⋈ Annotated ──► codec sources   ours      the join: CodecWalk with FaceRules, CodecModel, CodecWriter, UnionWriter
+7  Ir ⋈ Annotated ──► codec sources   ours      the join: Join with FaceRules, then CodecWalk, CodecModel, CodecWriter over FaceWriter, UnionWriter
 8  the document ──► schema.xml        ours      the schema ships in the jar               code-first
 ```
 
@@ -62,7 +62,7 @@ compiled.
 
 ## The models
 
-Three closed grammars, each one file of nested records.
+Closed grammars, each one file of nested records.
 
 * **`Schema`** is `sbe.xsd`: a record per element, a component per
   attribute with the XSD's name, `@Nullable` where the XSD makes it
@@ -71,9 +71,16 @@ Three closed grammars, each one file of nested records.
   annotation, a component per member, plus what javac knows and an
   annotation cannot say: the Java name, the Java type, declarations by
   identity.
+* **`Join`** is one message's IR joined with its record: a tree of blocks,
+  groups, var-data and fields in wire order, each with its token and its
+  name and, where a component maps it, its leaf, with the nodes in the
+  order the record's constructor takes them. A message without a record
+  joins with nothing but tokens and names.
+* **`Faces`** is the leaf, what a component is on the wire: a shape, an
+  absence and a binding, and the helper methods the shape calls. The codec
+  reads it, and so will the flyweights' bound stages.
 * **`CodecModel`** is what a codec is made of: bodies of members in wire and
-  constructor order, each field a shape, an absence and a binding, and the
-  helper methods they call.
+  constructor order, each field a `Faces` leaf, and the methods they call.
 
 Models carry no positions. Discovery maps each `Annotated` node to its javac
 `Element` and `AnnotationMirror`, Mapping each `Schema` node to the
@@ -108,9 +115,10 @@ Three layers, in the order a mistake meets them.
 * **Flyweights** come from `JavaGenerator` with sbe-tool's default
   configuration into `<schema package>.sbe`; the schema goes into the jar as
   `<schema package>/schema.xml`.
-* **Codecs** are walked from the IR into a `CodecModel` and written from it,
-  so a codec calls what sbe-tool generated and holds no wire numbers. A
-  union's codec is a `UnionModel` over its members' models.
+* **Codecs** are the IR joined with the annotations, a `Join`, built into a
+  `CodecModel` and written from it, each leaf by `FaceWriter`, so a codec
+  calls what sbe-tool generated and holds no wire numbers. A union's codec
+  is a `UnionModel` over its members' models.
 
 ## The codec contract
 

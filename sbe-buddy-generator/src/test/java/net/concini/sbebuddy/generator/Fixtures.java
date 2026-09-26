@@ -139,6 +139,13 @@ public final class Fixtures {
 		return field(javaName, id, javaType, type, null, 0, null);
 	}
 
+	/** A field of the primitive type it names with {@code primitiveType}. */
+	public static Annotated.Field annotatedField(
+			String javaName, int id, Annotated.JavaType javaType, PrimitiveType primitiveType
+	) {
+		return field(javaName, id, javaType, null, primitiveType, 0, null);
+	}
+
 	/**
 	 * A field of a primitive type, bound to the component's type by a binding over
 	 * the wire's.

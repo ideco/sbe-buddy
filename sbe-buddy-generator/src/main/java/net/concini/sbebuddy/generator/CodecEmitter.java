@@ -18,14 +18,14 @@ import uk.co.real_logic.sbe.ir.Ir;
 
 /**
  * Step 7 of the pipeline, the join of the IR with the annotations: every
- * message walked by {@link CodecWalk}, which applies the face rules to each
- * token it meets, into a {@link CodecModel} written by {@link CodecWriter} as
- * {@code <Msg>Codec}, then one {@code <Union>Codec} per union, composed from
- * its members' codecs and written by {@link UnionWriter}. The walk runs whether
- * or not the schema wants codecs, for the rules; the codecs are written only
- * when it does. A construct the codec does not cover yet is a problem naming
- * the message; nothing is skipped silently, and nothing is written while an
- * error stands.
+ * message walked by {@link CodecWalk}, which {@link Join joins} it, applying
+ * the face rules to each token it meets, into a {@link CodecModel} written by
+ * {@link CodecWriter} as {@code <Msg>Codec}, then one {@code <Union>Codec} per
+ * union, composed from its members' codecs and written by {@link UnionWriter}.
+ * The walk runs whether or not the schema wants codecs, for the rules; the
+ * codecs are written only when it does. A construct the codec does not cover
+ * yet is a problem naming the message; nothing is skipped silently, and nothing
+ * is written while an error stands.
  */
 public final class CodecEmitter {
 
