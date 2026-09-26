@@ -1445,6 +1445,14 @@ final class AnnotationMistakesTest {
 	}
 
 	@Test
+	void aComponentNamedAsTheBoundStagesWireIsAProblem() {
+		assertErrors(
+				inMessage("@SbeField(id = 1) long wire"),
+				error("long wire", "the component \"wire\" clashes with the reader's RootBlockBound.wire(); rename it")
+		);
+	}
+
+	@Test
 	void aClashInAMessageNoRecordMapsIsAProblemOnTheSchema() {
 		Javac.Result result = compile(
 				"""

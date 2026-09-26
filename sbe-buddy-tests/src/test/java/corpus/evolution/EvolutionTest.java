@@ -15,8 +15,6 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.evolution.Order.Allocation;
 import corpus.evolution.Order.Fill;
 import corpus.evolution.Order.Leg;
-import corpus.evolution.sbe.OrderReader;
-import corpus.evolution.sbe.OrderWriter;
 
 /**
  * The evolution schema at version 2, crossed with the packages holding its

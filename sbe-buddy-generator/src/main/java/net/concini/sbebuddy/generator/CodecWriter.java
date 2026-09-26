@@ -27,7 +27,7 @@ final class CodecWriter {
 
 	private CodecWriter(CodecModel model) {
 		this.model = model;
-		this.faces = new FaceWriter(model.flyweights(), "");
+		this.faces = new FaceWriter(model.flyweights(), "", "");
 	}
 
 	static String write(CodecModel model) {

@@ -16,7 +16,6 @@ import corpus.partialmapping.sbe.MessageHeaderDecoder;
 import corpus.partialmapping.sbe.MessageHeaderEncoder;
 import corpus.partialmapping.sbe.QuoteDecoder;
 import corpus.partialmapping.sbe.QuoteEncoder;
-import corpus.partialmapping.sbe.QuoteReader;
 
 /**
  * A schema mapped in part: the one message with a record goes through its

@@ -1,4 +1,4 @@
-package corpus.composites.sbe;
+package corpus.composites;
 
 /**
  * The composite {@code Quote} as a step of a writer's chain: every member
@@ -11,7 +11,7 @@ public final class QuoteWriter<N> {
 
 	/** Before the member {@code Quote.ask}: its step is the one way on. */
 	public interface Ask<N> {
-		corpus.composites.sbe.DecimalWriter<Side<N>> ask();
+		corpus.composites.DecimalWriter<Side<N>> ask();
 	}
 
 	/** Before the member {@code Quote.side}: its step is the one way on. */
@@ -21,19 +21,19 @@ public final class QuoteWriter<N> {
 
 	/** Before the member {@code Quote.flags}: its step is the one way on. */
 	public interface Flags<N> {
-		corpus.composites.sbe.FlagsWriter<Stamp<N>> flags();
+		corpus.composites.FlagsWriter<Stamp<N>> flags();
 	}
 
 	/** Before the member {@code Quote.stamp}: its step is the one way on. */
 	public interface Stamp<N> {
-		corpus.composites.sbe.StampWriter<N> stamp();
+		corpus.composites.StampWriter<N> stamp();
 	}
 
 	private final Chain chain = new Chain();
-	private final corpus.composites.sbe.DecimalWriter<Ask<N>> bidWriter = new corpus.composites.sbe.DecimalWriter<>();
-	private final corpus.composites.sbe.DecimalWriter<Side<N>> askWriter = new corpus.composites.sbe.DecimalWriter<>();
-	private final corpus.composites.sbe.FlagsWriter<Stamp<N>> flagsWriter = new corpus.composites.sbe.FlagsWriter<>();
-	private final corpus.composites.sbe.StampWriter<N> stampWriter = new corpus.composites.sbe.StampWriter<>();
+	private final corpus.composites.DecimalWriter<Ask<N>> bidWriter = new corpus.composites.DecimalWriter<>();
+	private final corpus.composites.DecimalWriter<Side<N>> askWriter = new corpus.composites.DecimalWriter<>();
+	private final corpus.composites.FlagsWriter<Stamp<N>> flagsWriter = new corpus.composites.FlagsWriter<>();
+	private final corpus.composites.StampWriter<N> stampWriter = new corpus.composites.StampWriter<>();
 	private corpus.composites.sbe.QuoteEncoder encoder;
 	private N next;
 
@@ -43,7 +43,7 @@ public final class QuoteWriter<N> {
 		return this;
 	}
 
-	public corpus.composites.sbe.DecimalWriter<Ask<N>> bid() {
+	public corpus.composites.DecimalWriter<Ask<N>> bid() {
 		if (next == null) {
 			throw new IllegalStateException("QuoteWriter has ended");
 		}
@@ -53,7 +53,7 @@ public final class QuoteWriter<N> {
 	private final class Chain implements Ask<N>, Side<N>, Flags<N>, Stamp<N> {
 
 		@Override
-		public corpus.composites.sbe.DecimalWriter<Side<N>> ask() {
+		public corpus.composites.DecimalWriter<Side<N>> ask() {
 			if (next == null) {
 				throw new IllegalStateException("QuoteWriter has ended");
 			}
@@ -70,7 +70,7 @@ public final class QuoteWriter<N> {
 		}
 
 		@Override
-		public corpus.composites.sbe.FlagsWriter<Stamp<N>> flags() {
+		public corpus.composites.FlagsWriter<Stamp<N>> flags() {
 			if (next == null) {
 				throw new IllegalStateException("QuoteWriter has ended");
 			}
@@ -78,7 +78,7 @@ public final class QuoteWriter<N> {
 		}
 
 		@Override
-		public corpus.composites.sbe.StampWriter<N> stamp() {
+		public corpus.composites.StampWriter<N> stamp() {
 			if (next == null) {
 				throw new IllegalStateException("QuoteWriter has ended");
 			}

@@ -16,7 +16,6 @@ import corpus.groups.Groups.Fill;
 import corpus.groups.Groups.Leg;
 import corpus.groups.Groups.Leg.Allocation;
 import corpus.groups.sbe.GroupsEncoder.LegsEncoder;
-import corpus.groups.sbe.GroupsWriter;
 import corpus.groups.sbe.MessageHeaderEncoder;
 
 /**

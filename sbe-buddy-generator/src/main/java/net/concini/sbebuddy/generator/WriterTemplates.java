@@ -13,7 +13,7 @@ final class WriterTemplates {
 
 	static final Template WRITER = Template.of(
 			"""
-					package {flyweights};
+					package {packageName};
 
 					/**
 					 * The message {@code {messageName}} written over sbe-tool's {@code {message}Encoder} as

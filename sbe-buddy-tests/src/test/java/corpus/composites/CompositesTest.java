@@ -17,7 +17,6 @@ import corpus.composites.Quote.Flags;
 import corpus.composites.Quote.Side;
 import corpus.composites.Quote.Stamp;
 import corpus.composites.sbe.CompositesEncoder;
-import corpus.composites.sbe.CompositesWriter;
 import corpus.composites.sbe.MessageHeaderEncoder;
 import corpus.composites.sbe.QuoteEncoder;
 

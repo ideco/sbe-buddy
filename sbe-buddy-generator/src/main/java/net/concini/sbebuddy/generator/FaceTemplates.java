@@ -6,9 +6,11 @@ package net.concini.sbebuddy.generator;
  * how a binding stands in front of it. {@link FaceWriter} fills most of them
  * from a {@link Faces} shape; a template's names in braces are the only values
  * it takes. {@code flyweight} is the variable holding the flyweight,
- * {@code value} the expression of the component's value, and {@code qualifier}
- * what a helper is called through, empty in a codec and the class with its dot
- * in a reader or writer, whose stages may declare a method of a helper's name.
+ * {@code value} the expression of the component's value, {@code qualifier} what
+ * a static helper is called through, empty in a codec and the class with its
+ * dot in a reader or writer, whose stages may declare a method of a helper's
+ * name, and {@code instance} the same for a composite's pair, which may call a
+ * binding: the class's {@code this} in a reader or writer.
  */
 final class FaceTemplates {
 
@@ -134,10 +136,10 @@ final class FaceTemplates {
 	// ---- a composite: a pair per composite type, over its own flyweights
 
 	static final Template ENCODE_COMPOSITE_FIELD = Template
-			.of("{qualifier}write{compositeClass}({source}, {flyweight}.{property}());");
+			.of("{instance}write{compositeClass}({source}, {flyweight}.{property}());");
 
 	static final Template DECODE_COMPOSITE_FIELD = Template
-			.of("{qualifier}read{compositeClass}({flyweight}.{property}())");
+			.of("{instance}read{compositeClass}({flyweight}.{property}())");
 
 	// ---- the shapes over them
 

@@ -2,6 +2,7 @@ package net.concini.sbebuddy.generator;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -14,6 +15,7 @@ import uk.co.real_logic.sbe.generation.java.JavaUtil;
 import uk.co.real_logic.sbe.ir.Ir;
 import uk.co.real_logic.sbe.ir.Token;
 
+import net.concini.sbebuddy.generator.Faces.Face;
 import net.concini.sbebuddy.generator.FlyweightModel.Accessor;
 import net.concini.sbebuddy.generator.FlyweightModel.Parameter;
 import net.concini.sbebuddy.generator.FlyweightModel.Part;
@@ -26,10 +28,13 @@ import net.concini.sbebuddy.generator.FlyweightModel.Step;
  * off the block that holds it: the level's next present group or var-data, else
  * the next entry of the group the level is an entry of, else what follows that
  * group, else nothing, as {@code OtfMessageDecoder} walks a message. A group or
- * var-data added after version 0 is passed over below its version. A group or
- * var-data whose stage would take a name the reader already has, and a field
- * whose accessor would take one of its stage's own, is a problem, on its
- * component where a record maps the message and on the package otherwise.
+ * var-data added after version 0 is passed over below its version. Where a
+ * record maps the message, each block that carries a component and each
+ * var-data has a bound stage, which reads the components through the leaves the
+ * join made of them. A group or var-data whose stage would take a name the
+ * reader already has, and a field whose accessor would take one of its stage's
+ * own, is a problem, on its component where a record maps the message and on
+ * the package otherwise.
  */
 final class FlyweightWalk {
 
@@ -38,6 +43,8 @@ final class FlyweightWalk {
 	private static final String BEFORE_ROOT_BLOCK = "BEFORE_ROOT_BLOCK";
 
 	private static final String END = "END";
+
+	private static final String BOUND = "Bound";
 
 	/**
 	 * Names a stage cannot take: the reader's own types, and those it uses from
@@ -60,10 +67,15 @@ final class FlyweightWalk {
 	private final Set<String> constants = new HashSet<>();
 	private final List<Part> parts = new ArrayList<>();
 	private final List<Position> positions = new ArrayList<>();
+	private final boolean mapped;
+	private final Set<Faces.Helper> helpers = new LinkedHashSet<>();
+	private final Set<String> bindings = new HashSet<>();
+	private final Set<String> contexts = new HashSet<>();
 
-	private FlyweightWalk(String flyweights, Object node, List<Problem> problems) {
+	private FlyweightWalk(String flyweights, Object node, boolean mapped, List<Problem> problems) {
 		this.flyweights = flyweights;
 		this.node = node;
+		this.mapped = mapped;
 		this.problems = problems;
 	}
 
@@ -82,9 +94,14 @@ final class FlyweightWalk {
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		String reader = messageClass + "Reader";
 		List<Problem> found = new ArrayList<>();
-		FlyweightWalk walk = new FlyweightWalk(ir.applicableNamespace(), message == null ? schema : message, found);
+		FlyweightWalk walk = new FlyweightWalk(
+				ir.applicableNamespace(), message == null ? schema : message, message != null, found
+		);
 		walk.classes.add(reader);
 		walk.classes.add(ROOT_BLOCK);
+		if (message != null) {
+			walk.classes.add(ROOT_BLOCK + BOUND);
+		}
 		walk.classes.addAll(RESERVED);
 		walk.constants.addAll(List.of(BEFORE_ROOT_BLOCK, constant(ROOT_BLOCK), END));
 		Join.Block block = joined.block();
@@ -94,6 +111,10 @@ final class FlyweightWalk {
 				block, message == null ? List.of() : message.components(),
 				message == null ? List.of() : message.unmapped(), ROOT_BLOCK, false
 		);
+		FlyweightModel.Bound bound = walk.bound(
+				block, ROOT_BLOCK, "rootBlockBound", message == null ? null : message.qualifiedName(),
+				message == null ? List.of() : message.components()
+		);
 		walk.level(block, "decoder", "", new Step.End());
 		walk.positions.add(new Position(END, new Step.End()));
 		problems.addAll(found);
@@ -102,8 +123,11 @@ final class FlyweightWalk {
 		}
 		String headerClass = JavaUtil.formatClassName(ir.headerStructure().tokens().get(0).name());
 		return new FlyweightModel(
-				walk.flyweights, tokens.get(0).name(), messageClass, reader, headerClass,
-				new FlyweightModel.RootBlock(constant(ROOT_BLOCK), END, accessors), walk.parts, walk.positions
+				annotated.packageName(), walk.flyweights, tokens.get(0).name(), messageClass, reader, headerClass,
+				new FlyweightModel.RootBlock(constant(ROOT_BLOCK), END, accessors, bound), walk.parts, walk.positions,
+				joined.bindings().stream().filter(binding -> walk.bindings.contains(binding.name())).toList(),
+				joined.contexts().stream().filter(context -> walk.contexts.contains(context.name())).toList(),
+				List.copyOf(walk.helpers)
 		);
 	}
 
@@ -122,7 +146,8 @@ final class FlyweightWalk {
 			String name = JavaUtil.formatClassName(wireName);
 			String entry = name + "Entry";
 			Object node = group.component() == null ? this.node : group.component();
-			if (!claim(node, "group", wireName, List.of(name, entry))
+			List<String> classNames = mapped ? List.of(name, entry, entry + BOUND) : List.of(name, entry);
+			if (!claim(node, "group", wireName, classNames)
 					|| !claim(node, "group", wireName, constant(name), constant(entry), after(name))) {
 				continue;
 			}
@@ -136,6 +161,10 @@ final class FlyweightWalk {
 									group.entry(),
 									group.component() == null ? List.of() : group.component().components(),
 									group.component() == null ? List.of() : group.component().unmapped(), entry, true
+							),
+							bound(
+									group.entry(), entry, group.property() + "EntryBound", group.record(),
+									group.component() == null ? List.of() : group.component().components()
 							)
 					)
 			);
@@ -152,13 +181,14 @@ final class FlyweightWalk {
 			Object node = one.component() == null ? this.node : one.component();
 			boolean lastOfEntry = end instanceof Step.Rest && i == data.size() - 1;
 			String[] taken = lastOfEntry ? new String[]{constant(name), after(name)} : new String[]{constant(name)};
-			if (!claim(node, "data", wireName, List.of(name)) || !claim(node, "data", wireName, taken)) {
+			List<String> classNames = mapped ? List.of(name, name + BOUND) : List.of(name);
+			if (!claim(node, "data", wireName, classNames) || !claim(node, "data", wireName, taken)) {
 				continue;
 			}
 			parts.add(
 					new FlyweightModel.Data(
 							prefix + wireName, name, one.property(), Generators.toUpperFirstChar(one.property()), owner,
-							constant(name)
+							constant(name), bound(one, name)
 					)
 			);
 			positions.add(new Position(constant(name), from(block, groups.size() + i + 1, end)));
@@ -240,6 +270,93 @@ final class FlyweightWalk {
 		return new Problem(
 				node, "the " + kind + " \"" + wireName + "\" clashes with the reader's " + name + "; rename it"
 		);
+	}
+
+	// ---- the bound stages
+
+	/**
+	 * The bound stage of the block of {@code stage}, where {@code record} maps it
+	 * and it carries a component; a component whose accessor would be one of the
+	 * bound stage's own is a problem on it.
+	 */
+	private FlyweightModel.@Nullable Bound bound(
+			Join.Block block, String stage, String field, @Nullable String record,
+			List<Annotated.Component> components
+	) {
+		if (record == null) {
+			return null;
+		}
+		String name = stage + BOUND;
+		List<String> own = stage.equals(ROOT_BLOCK) ? List.of("wire") : List.of("wire", "index");
+		List<Face.Mapped> mapped = new ArrayList<>();
+		for (Join.Node joined : block.constructorOrder()) {
+			if (joined instanceof Join.Field carried && carried.face() instanceof Face.Mapped leaf) {
+				Object carrier = component(leaf.component(), components);
+				// A field named as its accessor has had its stage's clash reported.
+				if (own.contains(leaf.component())
+						&& problems.stream().noneMatch(problem -> problem.node() == carrier)) {
+					problems.add(
+							new Problem(
+									carrier,
+									"the component \"" + leaf.component() + "\" clashes with the reader's " + name + "."
+											+ leaf.component() + "(); rename it"
+							)
+					);
+				}
+				mapped.add(leaf);
+				use(carried.helpers(), leaf.binding(), leaf.context());
+			}
+		}
+		return mapped.isEmpty() ? null : new FlyweightModel.Bound(name, field, record, block.decoder(), mapped);
+	}
+
+	/** The bound stage of var-data {@code name}, where a record maps it. */
+	private FlyweightModel.@Nullable BoundData bound(Join.Data data, String name) {
+		Faces.Helper.Data leaf = data.leaf();
+		String type = data.type();
+		if (leaf == null || type == null) {
+			return null;
+		}
+		Faces.Bound bound = data.bound();
+		String binding = bound == null ? null : bound.binding();
+		String context = bound == null ? null : bound.context();
+		use(data.helpers(), binding, context);
+		return new FlyweightModel.BoundData(name + BOUND, data.property() + BOUND, type, leaf, binding, context);
+	}
+
+	/**
+	 * What a bound stage reads through: its helpers, its binding and context, and
+	 * those of the members of the composites it reads.
+	 */
+	private void use(List<Faces.Helper> used, @Nullable String binding, @Nullable String context) {
+		helpers.addAll(used);
+		use(binding, context);
+		for (Faces.Helper helper : used) {
+			if (helper instanceof Faces.Helper.CompositePair pair) {
+				for (Face.Mapped member : pair.constructorOrder()) {
+					use(member.binding(), member.context());
+				}
+			}
+		}
+	}
+
+	private void use(@Nullable String binding, @Nullable String context) {
+		if (binding != null) {
+			bindings.add(binding);
+		}
+		if (context != null) {
+			contexts.add(context);
+		}
+	}
+
+	/** The component of the Java name, or else the node the reader is for. */
+	private Object component(String javaName, List<Annotated.Component> components) {
+		for (Annotated.Component component : components) {
+			if (component instanceof Annotated.Field field && field.javaName().equals(javaName)) {
+				return field;
+			}
+		}
+		return node;
 	}
 
 	// ---- sbe-tool's accessors of a block's fields

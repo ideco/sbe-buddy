@@ -27,14 +27,18 @@ final class FaceWriter {
 
 	private final String flyweights;
 	private final String qualifier;
+	private final String instance;
 
 	/**
-	 * Over the flyweights of the package {@code flyweights}, calling the helpers
-	 * through {@code qualifier}: nothing, or a class and its dot.
+	 * Over the flyweights of the package {@code flyweights}, calling the static
+	 * helpers through {@code qualifier}, nothing or a class and its dot, and a
+	 * composite's pair through {@code instance}, nothing or the class's
+	 * {@code this} and its dot.
 	 */
-	FaceWriter(String flyweights, String qualifier) {
+	FaceWriter(String flyweights, String qualifier, String instance) {
 		this.flyweights = flyweights;
 		this.qualifier = qualifier;
+		this.instance = instance;
 	}
 
 	// ---- a field or member
@@ -102,7 +106,7 @@ final class FaceWriter {
 					leaf, "qualifier", qualifier, "setClass", set.setClass(), "source", source, "flyweight", flyweight
 			);
 			case Shape.Composite composite -> ENCODE_COMPOSITE_FIELD.fill(
-					leaf, "qualifier", qualifier, "compositeClass", composite.compositeClass(), "source", source,
+					leaf, "instance", instance, "compositeClass", composite.compositeClass(), "source", source,
 					"flyweight", flyweight
 			);
 			case Shape.Constant constant -> switch (constant.read()) {
@@ -153,7 +157,7 @@ final class FaceWriter {
 			case Shape.Set set -> DECODE_SET_FIELD
 					.fill(set, "qualifier", qualifier, "flyweight", flyweight, "property", leaf.property());
 			case Shape.Composite composite -> DECODE_COMPOSITE_FIELD.fill(
-					composite, "qualifier", qualifier, "flyweight", flyweight, "property", leaf.property()
+					composite, "instance", instance, "flyweight", flyweight, "property", leaf.property()
 			);
 			case Shape.Constant constant -> read(leaf, constant.read(), flyweight);
 		};

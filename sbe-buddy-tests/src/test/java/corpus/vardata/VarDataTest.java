@@ -15,7 +15,6 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.vardata.VarData.Attachment;
 import corpus.vardata.sbe.MessageHeaderDecoder;
 import corpus.vardata.sbe.VarDataDecoder;
-import corpus.vardata.sbe.VarDataWriter;
 
 /**
  * Variable-length data: text with a character encoding, opaque bytes without

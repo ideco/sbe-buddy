@@ -91,7 +91,7 @@ final class ReaderSequenceTest {
 		assertThat(tokens).as("the schema's message %d", templateId).isNotNull();
 
 		Object reader = Class.forName(
-				aCase.getClass().getPackageName() + ".sbe." + JavaUtil.formatClassName(tokens.get(0).name())
+				aCase.getClass().getPackageName() + "." + JavaUtil.formatClassName(tokens.get(0).name())
 						+ "Reader"
 		).getConstructor().newInstance();
 		invoke(reader, "wrap", new Class<?>[]{DirectBuffer.class, int.class}, buffer, OFFSET);

@@ -14,7 +14,6 @@ import net.concini.sbebuddy.tests.SchemaCase;
 
 import corpus.bigendian.BigEndian.Fill;
 import corpus.bigendian.sbe.BigEndianDecoder;
-import corpus.bigendian.sbe.BigEndianWriter;
 import corpus.bigendian.sbe.GroupSizeEncodingDecoder;
 import corpus.bigendian.sbe.MessageHeaderDecoder;
 import corpus.bigendian.sbe.PriceDecoder;

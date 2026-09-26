@@ -68,6 +68,7 @@ final class WriterWalk {
 	private static final Parameter LENGTH = new Parameter("int", "length");
 
 	private final Ir ir;
+	private final String packageName;
 	private final String flyweights;
 	private final String writer;
 	private final Object node;
@@ -84,9 +85,11 @@ final class WriterWalk {
 	private final Map<String, Nulls> nulls = new LinkedHashMap<>();
 
 	private WriterWalk(
-			Ir ir, String writer, Object node, List<Problem> problems, Set<String> composites, Set<String> sets
+			Ir ir, String packageName, String writer, Object node, List<Problem> problems, Set<String> composites,
+			Set<String> sets
 	) {
 		this.ir = ir;
+		this.packageName = packageName;
 		this.flyweights = ir.applicableNamespace();
 		this.writer = writer;
 		this.node = node;
@@ -110,7 +113,8 @@ final class WriterWalk {
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		List<Problem> found = new ArrayList<>();
 		WriterWalk walk = new WriterWalk(
-				ir, messageClass + "Writer", message == null ? schema : message, found, composites, sets
+				ir, annotated.packageName(), messageClass + "Writer", message == null ? schema : message, found,
+				composites, sets
 		);
 		walk.classes.add(walk.writer);
 		walk.classes.addAll(RESERVED);
@@ -140,7 +144,7 @@ final class WriterWalk {
 				)
 		);
 		return new WriterModel.Message(
-				walk.flyweights, tokens.get(0).name(), messageClass, walk.writer,
+				walk.packageName, walk.flyweights, tokens.get(0).name(), messageClass, walk.writer,
 				JavaUtil.formatClassName(ir.headerStructure().tokens().get(0).name()), first.stage(), stages,
 				walk.positions, walk.implementations.stream().map(Builder::build).toList(), walk.encoders, header,
 				List.copyOf(walk.nulls.values())
@@ -521,7 +525,7 @@ final class WriterWalk {
 			case BEGIN_SET, BEGIN_COMPOSITE -> {
 				String typeName = type.applicableTypeName();
 				(type.signal() == Signal.BEGIN_SET ? sets : composites).add(typeName);
-				String sub = flyweights + "." + JavaUtil.formatClassName(typeName) + "Writer";
+				String sub = packageName + "." + JavaUtil.formatClassName(typeName) + "Writer";
 				String site = property + "Writer";
 				implementation.sites.add(new Site(sub, returns, site));
 				methods.add(
@@ -662,7 +666,9 @@ final class WriterWalk {
 		String compositeClass = JavaUtil.formatClassName(typeName);
 		String writer = compositeClass + "Writer";
 		List<Problem> found = new ArrayList<>();
-		WriterWalk walk = new WriterWalk(ir, writer, declaration(annotated, typeName, schema), found, composites, sets);
+		WriterWalk walk = new WriterWalk(
+				ir, annotated.packageName(), writer, declaration(annotated, typeName, schema), found, composites, sets
+		);
 		walk.classes.add(writer);
 		walk.classes.addAll(SUB_RESERVED);
 		String encoder = walk.flyweights + "." + compositeClass + "Encoder";
@@ -705,7 +711,7 @@ final class WriterWalk {
 		List<Site> sites = new ArrayList<>(head.sites);
 		sites.addAll(chain.sites);
 		return new WriterModel.Composite(
-				walk.flyweights, typeName, writer, encoder, stages, sites, head.methods,
+				walk.packageName, walk.flyweights, typeName, writer, encoder, stages, sites, head.methods,
 				names.stream().map(name -> name + "<N>").toList(), chain.methods
 		);
 	}
@@ -713,7 +719,7 @@ final class WriterWalk {
 	/**
 	 * The sub-chain of the set {@code typeName}: its choices, then {@code end()}.
 	 */
-	static WriterModel.Set set(Ir ir, String typeName) {
+	static WriterModel.Set set(Ir ir, String packageName, String typeName) {
 		String setClass = JavaUtil.formatClassName(typeName);
 		List<String> choices = new ArrayList<>();
 		for (Token token : ir.getType(typeName)) {
@@ -722,7 +728,7 @@ final class WriterWalk {
 			}
 		}
 		return new WriterModel.Set(
-				ir.applicableNamespace(), typeName, setClass + "Writer",
+				packageName, ir.applicableNamespace(), typeName, setClass + "Writer",
 				ir.applicableNamespace() + "." + setClass + "Encoder", choices
 		);
 	}

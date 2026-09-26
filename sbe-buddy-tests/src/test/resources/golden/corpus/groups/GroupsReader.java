@@ -1,4 +1,4 @@
-package corpus.groups.sbe;
+package corpus.groups;
 
 /**
  * The message {@code Groups} as the sequence of its stages over sbe-tool's
@@ -29,20 +29,26 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 		END,
 	}
 
+	private static final net.concini.sbebuddy.BindingContext fills$PriceContext = new net.concini.sbebuddy.BindingContext("price", net.concini.sbebuddy.PrimitiveType.INT64, null, null, null, net.concini.sbebuddy.Presence.REQUIRED);
 	private final corpus.groups.sbe.MessageHeaderDecoder header = new corpus.groups.sbe.MessageHeaderDecoder();
 	private final corpus.groups.sbe.GroupsDecoder decoder = new corpus.groups.sbe.GroupsDecoder();
 	private final corpus.groups.sbe.GroupsDecoder measure = new corpus.groups.sbe.GroupsDecoder();
+	private final corpus.groups.CentsBinding centsBinding = new corpus.groups.CentsBinding();
 	private final RootBlock rootBlockStage = new RootBlock();
+	private final RootBlockBound rootBlockBound = new RootBlockBound();
 	private final Legs legsStage = new Legs();
 	private final LegsEntry legsEntryStage = new LegsEntry();
+	private final LegsEntryBound legsEntryBound = new LegsEntryBound();
 	private corpus.groups.sbe.GroupsDecoder.LegsDecoder legsDecoder;
 	private int legsIndex;
 	private final Allocations allocationsStage = new Allocations();
 	private final AllocationsEntry allocationsEntryStage = new AllocationsEntry();
+	private final AllocationsEntryBound allocationsEntryBound = new AllocationsEntryBound();
 	private corpus.groups.sbe.GroupsDecoder.LegsDecoder.AllocationsDecoder allocationsDecoder;
 	private int allocationsIndex;
 	private final Fills fillsStage = new Fills();
 	private final FillsEntry fillsEntryStage = new FillsEntry();
+	private final FillsEntryBound fillsEntryBound = new FillsEntryBound();
 	private corpus.groups.sbe.GroupsDecoder.FillsDecoder fillsDecoder;
 	private int fillsIndex;
 	private At at = At.BEFORE_ROOT_BLOCK;
@@ -234,12 +240,40 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 			return decoder.orderId();
 		}
 
+		/** The record's view of this stage. */
+		public RootBlockBound bound() {
+			GroupsReader.this.open(At.ROOT_BLOCK, At.END, "RootBlock");
+			return rootBlockBound;
+		}
+
 		/** The rest of the message: iteration ends. */
 		@Override
 		public void skip() {
 			GroupsReader.this.current(At.ROOT_BLOCK, "RootBlock");
 			decoder.sbeSkip();
 			at = At.END;
+		}
+	}
+
+	/**
+	 * The components of {@code corpus.groups.Groups} in the root block, each read and
+	 * bound on every call, never cached: null where absent, and above the acting
+	 * version.
+	 */
+	public final class RootBlockBound {
+
+		private RootBlockBound() {
+		}
+
+		public long orderId() {
+			GroupsReader.this.open(At.ROOT_BLOCK, At.END, "RootBlock");
+			return decoder.orderId();
+		}
+
+		/** The stage this is the view of. */
+		public RootBlock wire() {
+			GroupsReader.this.open(At.ROOT_BLOCK, At.END, "RootBlock");
+			return rootBlockStage;
 		}
 	}
 
@@ -294,12 +328,46 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 			return legsDecoder.legRatio();
 		}
 
+		/** The record's view of this stage. */
+		public LegsEntryBound bound() {
+			GroupsReader.this.open(At.LEGS_ENTRY, At.AFTER_ALLOCATIONS, "LegsEntry");
+			return legsEntryBound;
+		}
+
 		/** What the entry holds past its block: its groups and var-data never come. */
 		@Override
 		public void skip() {
 			GroupsReader.this.current(At.LEGS_ENTRY, "LegsEntry");
 			legsDecoder.sbeSkip();
 			at = At.AFTER_ALLOCATIONS;
+		}
+	}
+
+	/**
+	 * The components of {@code corpus.groups.Groups.Leg} in an entry of {@code legs}, each read and
+	 * bound on every call, never cached: null where absent, and above the acting
+	 * version.
+	 */
+	public final class LegsEntryBound {
+
+		private LegsEntryBound() {
+		}
+
+		/** Which entry of the group this is, from 0. */
+		public int index() {
+			GroupsReader.this.open(At.LEGS_ENTRY, At.AFTER_ALLOCATIONS, "LegsEntry");
+			return legsIndex;
+		}
+
+		public int legId() {
+			GroupsReader.this.open(At.LEGS_ENTRY, At.AFTER_ALLOCATIONS, "LegsEntry");
+			return legsDecoder.legId();
+		}
+
+		/** The stage this is the view of. */
+		public LegsEntry wire() {
+			GroupsReader.this.open(At.LEGS_ENTRY, At.AFTER_ALLOCATIONS, "LegsEntry");
+			return legsEntryStage;
 		}
 	}
 
@@ -354,12 +422,51 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 			return allocationsDecoder.share();
 		}
 
+		/** The record's view of this stage. */
+		public AllocationsEntryBound bound() {
+			GroupsReader.this.open(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsEntryBound;
+		}
+
 		/** What the entry holds past its block: its groups and var-data never come. */
 		@Override
 		public void skip() {
 			GroupsReader.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsDecoder.sbeSkip();
 			at = At.ALLOCATIONS_ENTRY;
+		}
+	}
+
+	/**
+	 * The components of {@code corpus.groups.Groups.Leg.Allocation} in an entry of {@code legs.allocations}, each read and
+	 * bound on every call, never cached: null where absent, and above the acting
+	 * version.
+	 */
+	public final class AllocationsEntryBound {
+
+		private AllocationsEntryBound() {
+		}
+
+		/** Which entry of the group this is, from 0. */
+		public int index() {
+			GroupsReader.this.open(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsIndex;
+		}
+
+		public int account() {
+			GroupsReader.this.open(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsDecoder.account();
+		}
+
+		public java.lang.Integer share() {
+			GroupsReader.this.open(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsDecoder.share() == corpus.groups.sbe.GroupsDecoder.LegsDecoder.AllocationsDecoder.shareNullValue() ? null : allocationsDecoder.share();
+		}
+
+		/** The stage this is the view of. */
+		public AllocationsEntry wire() {
+			GroupsReader.this.open(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsEntryStage;
 		}
 	}
 
@@ -409,12 +516,46 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 			return fillsDecoder.price();
 		}
 
+		/** The record's view of this stage. */
+		public FillsEntryBound bound() {
+			GroupsReader.this.open(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			return fillsEntryBound;
+		}
+
 		/** What the entry holds past its block: its groups and var-data never come. */
 		@Override
 		public void skip() {
 			GroupsReader.this.current(At.FILLS_ENTRY, "FillsEntry");
 			fillsDecoder.sbeSkip();
 			at = At.FILLS_ENTRY;
+		}
+	}
+
+	/**
+	 * The components of {@code corpus.groups.Groups.Fill} in an entry of {@code fills}, each read and
+	 * bound on every call, never cached: null where absent, and above the acting
+	 * version.
+	 */
+	public final class FillsEntryBound {
+
+		private FillsEntryBound() {
+		}
+
+		/** Which entry of the group this is, from 0. */
+		public int index() {
+			GroupsReader.this.open(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			return fillsIndex;
+		}
+
+		public java.math.BigDecimal price() {
+			GroupsReader.this.open(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			return centsBinding.fromWire(fillsDecoder.price(), fills$PriceContext);
+		}
+
+		/** The stage this is the view of. */
+		public FillsEntry wire() {
+			GroupsReader.this.open(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			return fillsEntryStage;
 		}
 	}
 }

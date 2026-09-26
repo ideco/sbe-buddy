@@ -1,4 +1,4 @@
-package corpus.groups.sbe;
+package corpus.groups;
 
 /**
  * The message {@code Groups} written over sbe-tool's {@code GroupsEncoder} as

@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import net.concini.sbebuddy.tests.SchemaCase;
 
 import corpus.optionalfields.sbe.MessageHeaderEncoder;
-import corpus.optionalfields.sbe.OptionalFieldsWriter;
 
 /**
  * Presence declared on the field itself rather than on a named type; the

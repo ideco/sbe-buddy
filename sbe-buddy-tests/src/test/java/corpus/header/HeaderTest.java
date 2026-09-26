@@ -14,7 +14,6 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.header.sbe.ApplicationHeaderDecoder;
 import corpus.header.sbe.ApplicationHeaderEncoder;
 import corpus.header.sbe.HeaderEncoder;
-import corpus.header.sbe.HeaderWriter;
 
 /**
  * A header of the schema's own naming and shape: the four standard members

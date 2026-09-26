@@ -24,6 +24,7 @@ final class WriterModel {
 	 * out; {@code header} the header's own members, written as their null values.
 	 */
 	record Message(
+			String packageName,
 			String flyweights,
 			String messageName,
 			String message,
@@ -54,6 +55,7 @@ final class WriterModel {
 	 * the last returning the stage the caller continues with.
 	 */
 	record Composite(
+			String packageName,
 			String flyweights,
 			String compositeName,
 			String writer,
@@ -78,7 +80,9 @@ final class WriterModel {
 	 * A set's sub-chain, {@code writer}: its choices in any order, then
 	 * {@code end()}.
 	 */
-	record Set(String flyweights, String setName, String writer, String encoder, List<String> choices) {
+	record Set(
+			String packageName, String flyweights, String setName, String writer, String encoder, List<String> choices
+	) {
 
 		Set {
 			choices = List.copyOf(choices);

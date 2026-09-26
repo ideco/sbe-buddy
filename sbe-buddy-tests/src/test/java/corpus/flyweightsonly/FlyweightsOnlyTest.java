@@ -14,9 +14,7 @@ import corpus.flyweightsonly.sbe.MessageHeaderDecoder;
 import corpus.flyweightsonly.sbe.MessageHeaderEncoder;
 import corpus.flyweightsonly.sbe.PingDecoder;
 import corpus.flyweightsonly.sbe.PingEncoder;
-import corpus.flyweightsonly.sbe.PingReader;
 import corpus.flyweightsonly.sbe.PongEncoder;
-import corpus.flyweightsonly.sbe.PongReader;
 
 /**
  * A schema with no record: its package is a {@code package-info.java} naming

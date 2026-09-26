@@ -19,12 +19,13 @@ import uk.co.real_logic.sbe.ir.Ir;
 import uk.co.real_logic.sbe.ir.Token;
 
 /**
- * The typed flyweights beside sbe-tool's: a {@code <Message>Reader} and a
+ * The typed flyweights over sbe-tool's: a {@code <Message>Reader} and a
  * {@code <Message>Writer} for every message of the IR, in template id order,
  * walked by {@link FlyweightWalk} and {@link WriterWalk} and written by
- * {@link ReaderWriter} and {@link WriterWriter} into the flyweights' package,
- * then a sub-chain for every composite and set the writers open. A message
- * needs no record to have them. Nothing is written while an error stands.
+ * {@link ReaderWriter} and {@link WriterWriter} into the schema's package,
+ * beside the codecs and the records their bound stages name, then a sub-chain
+ * for every composite and set the writers open. A message needs no record to
+ * have them. Nothing is written while an error stands.
  */
 public final class FlyweightEmitter {
 
@@ -74,7 +75,7 @@ public final class FlyweightEmitter {
 			}
 		}
 		for (String typeName : sets) {
-			WriterModel.Set set = WriterWalk.set(ir, typeName);
+			WriterModel.Set set = WriterWalk.set(ir, annotated.packageName(), typeName);
 			sources.put(set.writer(), WriterWriter.write(set));
 		}
 		if (problems.stream().anyMatch(Problem::isError)) {
@@ -83,7 +84,7 @@ public final class FlyweightEmitter {
 		for (Map.Entry<String, String> source : sources.entrySet()) {
 			// Before every file: Agrona's manager falls back to the first package it
 			// was given when a writer closes.
-			output.setPackageName(ir.applicableNamespace());
+			output.setPackageName(annotated.packageName());
 			try (Writer writer = output.createOutput(source.getKey())) {
 				writer.write(source.getValue());
 			} catch (IOException e) {
