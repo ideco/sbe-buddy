@@ -146,6 +146,12 @@ case OrderView.Fill fill -> {
   generated type of ours rather than sbe-tool's decoder handed out.
 - **It is the garbage-free path** where a binding allocates, a
   `BigDecimal` or an `Instant`.
+- **Bindings are lazy.** A bound accessor runs its binding when it is
+  called, never when the stage arrives: arriving reads only what finding
+  the stage needs, so a stage the `switch` passes by, or reads through
+  `wire()` alone, runs no binding. Nothing is cached, as for var-data: two
+  calls to `price()` run `PriceBinding` twice. The binding gets the same
+  `BindingContext` constant the codec hands it.
 - A var-data stage needs no `wire()`: its offsets, `copyTo` and `wrap` are
   the raw access, `value()` the component's type.
 
