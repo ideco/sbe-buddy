@@ -1,6 +1,6 @@
 # Typed flyweights: the sketch
 
-Increment 27 in `intent.md`, after views. Nobody builds from this file
+Increment 27 in `intent.md`. Nobody builds from this file
 yet; it holds the shape as it was sketched, so the increment's `next.md`
 starts from it. Agents do not read it unless asked to.
 
@@ -17,8 +17,9 @@ is nothing in between: flyweight speed with record safety.
 
 ## The shape
 
-A view over sbe-tool's flyweights, generated from a record or a view, never
-from the schema alone. The view owns the control: it is wrapped over a
+A view over sbe-tool's flyweights for every message: shaped by the record
+where one maps the message, by the schema where none does. The view owns
+the control: it is wrapped over a
 message, iterated, rewound, and knows the message's length. The message
 reads as one flat sequence of stages, as a pull parser reads a document:
 the root block, each group's header, each of its entries, each var-data.
@@ -140,7 +141,7 @@ case OrderView.Fill fill -> {
   because both the record and the schema have it.
 - **`wire()` is the whole block,** not only what the record maps: a fixed
   field sits at a known offset, so any of them is safe to read, and it is
-  how a field a view leaves out, or one declared `unmapped`, is reached.
+  how a field the record declares `unmapped` is reached.
 - **`wire()` stops at the block.** It has no group or var-data accessor, so
   it cannot move the limit behind the view's back; that is why it is a
   generated type of ours rather than sbe-tool's decoder handed out.
@@ -154,6 +155,106 @@ case OrderView.Fill fill -> {
   `BindingContext` constant the codec hands it.
 - A var-data stage needs no `wire()`: its offsets, `copyTo` and `wrap` are
   the raw access, `value()` the component's type.
+
+## Messages without a record
+
+A partial package's unmapped messages, and every message of a package
+that is a `package-info.java` alone, get a view as well, shaped by the
+schema: its stages' methods are the schema's fields as sbe-tool's
+flyweight hands them over, under the schema's names, since there is no
+record's view to set apart from `wire()`. Records for the messages a
+package owns, a safe read in place for all the others.
+
+This may leave views, `intent.md`'s increment 26, without a use of their
+own. What a view was for, reading a few fields of a large message someone
+else owns, the schema-shaped flyweight does without a record to declare
+and without allocating. What a view would still add is a value detached
+from the buffer, which is a few lines of the user's own over the
+flyweight, in the user's own types.
+
+## Unions
+
+A union gets a view of its own beside its codec, over the members' views;
+unions are a Java layer over records, and so is their view. Its `Stage` is
+sealed over the members' `Stage` interfaces, and its `Root` over the
+members' roots, carrying every method they share:
+
+```java
+public final class OrderEventView implements Iterable<OrderEventView.Stage>, Iterator<OrderEventView.Stage> {
+
+    public sealed interface Stage
+            permits ExecutionReportView.Stage, CancelRejectView.Stage, RejectView.Stage {}
+
+    /** The first stage of every member, and the methods all of them share. */
+    public sealed interface Root extends Stage
+            permits ExecutionReportView.Root, CancelRejectView.Root, RejectView.Root {
+        long senderId();
+        String clOrdId();
+    }
+
+    public OrderEventView wrap(DirectBuffer buffer, int offset) { ... }  // header read, member picked by template id
+    public boolean canWrap(DirectBuffer buffer, int offset) { ... }      // as canDecode: the header alone
+    public Root root() { ... }                                           // the first stage, without advancing
+    ...
+}
+
+// in each member's view
+public sealed interface Stage extends OrderEventView.Stage permits Root, Fills, Fill, ... {}
+public static final class Root implements Stage, OrderEventView.Root { ... }
+```
+
+A dispatcher routes on the shared root without a `case`:
+
+```java
+OrderEventView.Root root = events.wrap(buffer, offset).root();
+sessions.get(root.senderId()).onMessage(events);
+```
+
+and a read goes flat across messages, a whole message in one case or one
+part of another:
+
+```java
+for (OrderEventView.Stage stage : events.wrap(buffer, offset)) {
+    switch (stage) {
+        case ExecutionReportView.Fill fill -> filled += fill.quantity();
+        case ExecutionReportView.Stage other -> {}
+        case CancelRejectView.Root reject -> onCancelReject(reject.orderId());
+        case CancelRejectView.Stage other -> {}
+        case RejectView.Stage reject -> {}
+    }
+}
+```
+
+- **Dispatch as the codec's.** `wrap` picks the member by template id into
+  views the union view preallocated; an id outside the union is the codec's
+  `IllegalArgumentException`, and `canWrap` tells it without throwing.
+- **Shared by signature, not by id.** A method every member's root stage
+  has with the same signature, the component's name and its Java type
+  after the binding, is on the union's `Root`, and each member's root
+  implements it its own way: one reads `senderId` through a binding,
+  another as a plain `long`, each where its own block has it. Nothing on
+  the wire is compared; the union never looks at it.
+- **Only the root, and only the stage's own methods.** The root is the one
+  stage every member begins with, at a place known without walking;
+  `wire()` is the schema's view and stays each member's.
+- **Change surfaces at compile time.** A member added without `senderId()`,
+  or one record renaming its component, takes the method off the union's
+  `Root`, and every dispatcher routing on it stops compiling; a member
+  added at all adds a permit, and every `switch` over the union's `Stage`
+  stops compiling until it is handled.
+- **Several unions, nested unions.** A record in two unions has its view's
+  `Stage` and `Root` extend both unions'. A nested union's `Root` shares
+  what its members share; the outer union's shares what all the leaf
+  messages share, and the inner `Root` extends it.
+- **The records' own interfaces stay on the records.** Where every member
+  implements a `HasSenderId`, the union's `Root` has `senderId()` by the
+  intersection, but it does not claim to be one: whoever holds a
+  `HasSenderId` expects a value that lasts, and a stage stops answering
+  once the view moves on.
+- **A schema-shaped view is in no union.** Unions are declared over
+  records, where the user wrote them.
+- **A header field is shared already.** Every message of the schema has
+  the same header, so a routing field there reads before any dispatch.
 
 ## Settled in the sketch
 
@@ -207,11 +308,10 @@ case OrderView.Fill fill -> {
 - **Garbage-free.** Every stage and every `wire()` is a preallocated field
   of the view, an entry the same object advanced; the view is its own
   iterator.
-- **Shaped by a record or a view.** Only the components mapped appear as
-  the stage's methods; what the view leaves out is skipped, and reachable
-  through `wire()` where it is a fixed field. Absence follows the codec's
-  rules, decided once in `CodecWalk`: a sealed `Present | Absent` where the
-  codec would return `null`.
+- **Shaped by the record.** A stage's methods are its record's
+  components. Absence follows the codec's rules, decided once in
+  `CodecWalk`: a sealed `Present | Absent` where the codec would return
+  `null`.
 - **Composites need nothing new.** Fixed size at a known offset, no order
   inside: the stage returns the bound value or the record, `wire()`
   sbe-tool's composite flyweight.
@@ -227,6 +327,8 @@ case OrderView.Fill fill -> {
   iterator's `next()`; `wire()` over `face()`, the project's own word for
   what sbe-tool's flyweight hands back, because it reads better at the
   call site.
+- **Views.** Whether increment 26 is still wanted, with the
+  schema-shaped flyweight reading any message a record does not map.
 - **Indexes.** Recorded offsets want a way back in, `view.at(offset)`, to
   read an entry found earlier without walking to it again.
 - **Encoding.** A group's count is written before its entries: the types
