@@ -81,16 +81,25 @@ final class FaceWriter {
 	 * {@code encoder} class of its body.
 	 */
 	String writeNull(String encoder, Member.Unmapped unmapped) {
-		return switch (unmapped.shape()) {
-			case Shape.Scalar scalar -> ENCODE_UNMAPPED_FIELD.fill(unmapped, "encoder", encoder);
+		return writeNull(encoder, unmapped.property(), unmapped.shape());
+	}
+
+	/**
+	 * The field or member {@code property} of the flyweight {@code encoder} holds,
+	 * written as its null value: a composite through the {@code nulls} overload of
+	 * its own flyweight, which only the writers declare.
+	 */
+	String writeNull(String encoder, String property, Shape shape) {
+		return switch (shape) {
+			case Shape.Scalar scalar -> ENCODE_UNMAPPED_FIELD.fill("property", property, "encoder", encoder);
 			case Shape.Enum enumeration -> ENCODE_UNMAPPED_ENUM_FIELD.fill(
-					unmapped, "flyweights", flyweights, "enumClass", enumeration.enumClass()
+					"property", property, "flyweights", flyweights, "enumClass", enumeration.enumClass()
 			);
-			case Shape.Set set -> ENCODE_UNMAPPED_SET_FIELD.fill(unmapped);
-			case Shape.Text text -> throw noNullValue(unmapped.property());
-			case Shape.Array array -> ENCODE_UNMAPPED_ARRAY_FIELD.fill(unmapped, "encoder", encoder);
-			case Shape.Composite composite -> throw noNullValue(unmapped.property());
-			case Shape.Constant constant -> throw noNullValue(unmapped.property());
+			case Shape.Set set -> ENCODE_UNMAPPED_SET_FIELD.fill("property", property);
+			case Shape.Text text -> throw noNullValue(property);
+			case Shape.Array array -> ENCODE_UNMAPPED_ARRAY_FIELD.fill("property", property, "encoder", encoder);
+			case Shape.Composite composite -> ENCODE_UNMAPPED_COMPOSITE_FIELD.fill("property", property);
+			case Shape.Constant constant -> throw noNullValue(property);
 		};
 	}
 

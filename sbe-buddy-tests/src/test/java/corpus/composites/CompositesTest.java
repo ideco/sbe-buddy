@@ -1,5 +1,6 @@
 package corpus.composites;
 
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -16,6 +17,7 @@ import corpus.composites.Quote.Flags;
 import corpus.composites.Quote.Side;
 import corpus.composites.Quote.Stamp;
 import corpus.composites.sbe.CompositesEncoder;
+import corpus.composites.sbe.CompositesWriter;
 import corpus.composites.sbe.MessageHeaderEncoder;
 import corpus.composites.sbe.QuoteEncoder;
 
@@ -207,5 +209,45 @@ final class CompositesTest implements SchemaCase {
 	private static int memberOffset(int memberEncodingOffset) {
 		return OFFSET + MessageHeaderEncoder.ENCODED_LENGTH + CompositesEncoder.quoteEncodingOffset()
 				+ memberEncodingOffset;
+	}
+
+	/**
+	 * A composite is a chain of its members, a ref's and a nested composite's their
+	 * own, the constant left out; the set its choices, then its end.
+	 */
+	@Test
+	void theWriterWritesTheCodecsBytesThroughEveryMember() {
+		assertWritesTheCodecsBytes(
+				new CompositesCodec(), new Composites(QUOTE, LAST),
+				(buffer, offset) -> new CompositesWriter().wrap(buffer, offset)
+						.quote()
+						.bid().mantissa(10_125).exponent((byte) -2)
+						.ask().mantissa(10_150).exponent((byte) -2)
+						.side(corpus.composites.sbe.Side.Buy)
+						.flags().firm(true).end()
+						.stamp().time(1_700_000_000_000L).precision((short) 3)
+						.last().mantissa(10_125).exponent((byte) -2)
+						.length()
+		);
+	}
+
+	@Test
+	void anOptionalMemberIsSetNullByItsOwnStep() {
+		Quote quote = new Quote(
+				QUOTE.bid(), QUOTE.ask(), Side.Buy, EnumSet.of(Flags.firm), new Stamp(0, null, (byte) 'Z')
+		);
+
+		assertWritesTheCodecsBytes(
+				new CompositesCodec(), new Composites(quote, LAST),
+				(buffer, offset) -> new CompositesWriter().wrap(buffer, offset)
+						.quote()
+						.bid().mantissa(10_125).exponent((byte) -2)
+						.ask().mantissa(10_150).exponent((byte) -2)
+						.side(corpus.composites.sbe.Side.Buy)
+						.flags().firm(true).end()
+						.stamp().time(0).precisionNull()
+						.last().mantissa(10_125).exponent((byte) -2)
+						.length()
+		);
 	}
 }

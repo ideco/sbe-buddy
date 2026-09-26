@@ -12,8 +12,11 @@ import com.example.trading.CancelRejectCodec;
 import com.example.trading.NewOrder;
 import com.example.trading.NewOrderCodec;
 import com.example.trading.Samples;
-import com.example.trading.hand.NewOrderWriter.RootBlock;
+import com.example.trading.sbe.CancelRejectWriter;
 import com.example.trading.sbe.CxlRejReason;
+import com.example.trading.sbe.ExecInstWriter;
+import com.example.trading.sbe.NewOrderWriter;
+import com.example.trading.sbe.NewOrderWriter.RootBlock;
 import com.example.trading.sbe.OrdStatus;
 import com.example.trading.sbe.OrdType;
 import com.example.trading.sbe.PartyRole;
@@ -21,10 +24,10 @@ import com.example.trading.sbe.Side;
 import com.example.trading.sbe.TimeInForce;
 
 /**
- * The hand-written writers against the codecs: a chain writes the same bytes
- * the codec writes for the sample, an optional field left unset is null, an
- * empty group is a header, and a kept stage cannot write out of order. The
- * generated writers must pass this unchanged.
+ * The generated writers against the codecs, as the hand-written ones were held:
+ * a chain writes the same bytes the codec writes for the sample, an optional
+ * field left unset is null, an empty group is a header, and a kept stage cannot
+ * write out of order.
  *
  * <pre>
  * // does not compile: length() before the group, and the var-data without it

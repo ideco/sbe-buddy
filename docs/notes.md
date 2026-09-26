@@ -475,6 +475,33 @@ alternatives considered.
   `generatePrimitiveArrayPropertyDecode`, `generateConstPropertyMethods`,
   `generateEnumDecoder`, `generateBitSetProperty`, `generateCompositeProperty`
   and `generateDeclaration`; `Token.java`, read 2026-09-26.)
+* A group encoder's `wrap(buffer, count)`, which `<group>Count(int)` calls,
+  writes the dimensions at the limit with the count given, remembering where
+  as its initial limit, and refuses a count outside the dimension's
+  `numInGroup` range; `next()` throws `NoSuchElementException` once `count`
+  entries are opened; `resetCountToIndex()` sets the count to the entries
+  opened so far and writes it over the dimensions at the initial limit. The
+  static `countMinValue()` and `countMaxValue()` are the `numInGroup` range,
+  typed as its face, which widens to the count's `int` for the `uint8` and
+  `uint16` a dimension must be. So a group opened with `countMaxValue()` and settled by
+  `resetCountToIndex()` writes the bytes a group opened with its count
+  writes. (`JavaGenerator.java`, `generateGroupEncoderClassHeader`, read
+  2026-09-26; `WriterAssert` over the corpus.)
+* The encoder's setters of a field, which a writer's step takes whole: a
+  primitive's `<field>(value)`; a `char` array's `<field>(String)`,
+  `<field>(CharSequence)` only in ASCII, `put<Field>(byte[], int)` and the
+  indexed `<field>(int, byte)`; an enum's `<field>(Enum)`. Var-data in ASCII
+  has `<data>(CharSequence)` beside `<data>(String)`; in another encoding
+  only the latter. (`JavaGenerator.java`, both
+  `generateCharArrayEncodeMethods` and `generateDataEncodeMethods`, read
+  2026-09-26.)
+* `Ir.getType(name)` returns a type's tokens by its applicable name: the IR
+  captures every composite, enum and set it meets in the messages' tokens,
+  those nested in a composite included, keyed by the referenced name for a
+  `ref` and by the name otherwise, keeping the lowest version where one name
+  is met twice. `JavaGenerator` generates a composite's, an enum's and a
+  set's flyweights from these. (`Ir.java`, `captureTypes` and
+  `captureType`, read 2026-09-26.)
 * `OtfMessageDecoder.decode` walks a message as the readers do:
   `onBeginMessage`, the root block's fields, then each group, `onGroupHeader`
   with its count and per entry `onBeginGroup`, the entry's fields, its own

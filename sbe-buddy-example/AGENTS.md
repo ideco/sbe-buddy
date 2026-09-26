@@ -31,7 +31,7 @@ interop with sbe-tool; coverage belongs in sbe-buddy-tests.
 - `src/test/java/com/example/trading/hand` holds the typed flyweights of
   increment 26 written by hand, `NewOrder` and `CancelReject`, a reader and
   a writer each with their bound stages: the shape the generator must
-  emit, and the tests it must pass. `HandReaderTest` runs against the
-  generated readers already; the hand-written readers stay while
-  `HandBoundTest` reads through their bound stages, until step 4 of
-  `docs/next.md` generates them, and step 3 does the same for the writers.
+  emit, and the tests it must pass. `HandReaderTest` and `HandWriterTest`
+  run against the generated readers and writers already; the hand-written
+  ones stay while `HandBoundTest` reads and writes through their bound
+  stages, until step 4 of `docs/next.md` generates them.

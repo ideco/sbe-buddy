@@ -261,7 +261,7 @@ final class FlyweightWalk {
 				if (STAGE_METHODS.contains(accessor.name()) || entry && accessor.name().equals("index")) {
 					problems.add(
 							new Problem(
-									carrier(field.token().name(), components, unmapped),
+									carrier(node, field.token().name(), components, unmapped),
 									"the field \"" + field.token().name() + "\" clashes with the reader's " + stage
 											+ "."
 											+ accessor.name() + "(); rename it"
@@ -274,8 +274,10 @@ final class FlyweightWalk {
 		return accessors;
 	}
 
-	/** The component or unmapped entry of the wire name, or the walk's node. */
-	private Object carrier(String wireName, List<Annotated.Component> components, List<Annotated.Field> unmapped) {
+	/** The component or unmapped entry of the wire name, or else {@code node}. */
+	static Object carrier(
+			Object node, String wireName, List<Annotated.Component> components, List<Annotated.Field> unmapped
+	) {
 		List<Annotated.Field> fields = new ArrayList<>(unmapped);
 		for (Annotated.Component component : components) {
 			if (component instanceof Annotated.Field field) {

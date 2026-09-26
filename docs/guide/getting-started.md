@@ -109,7 +109,7 @@ sbe-buddy also generates:
 com.example.trading.PlaceOrderCodec
 ```
 
-and, beside the flyweights, `com.example.trading.sbe.PlaceOrderReader`, which reads the message in place as a sequence of stages; see [Typed flyweights](reference/flyweights.md).
+and, beside the flyweights, `com.example.trading.sbe.PlaceOrderReader`, which reads the message in place as a sequence of stages, and `PlaceOrderWriter`, which writes it as a chain that offers only the next step; see [Typed flyweights](reference/flyweights.md).
 
 ## Encode and decode
 

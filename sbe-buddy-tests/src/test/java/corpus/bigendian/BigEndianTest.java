@@ -1,6 +1,7 @@
 package corpus.bigendian;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.EnumSet;
@@ -13,6 +14,7 @@ import net.concini.sbebuddy.tests.SchemaCase;
 
 import corpus.bigendian.BigEndian.Fill;
 import corpus.bigendian.sbe.BigEndianDecoder;
+import corpus.bigendian.sbe.BigEndianWriter;
 import corpus.bigendian.sbe.GroupSizeEncodingDecoder;
 import corpus.bigendian.sbe.MessageHeaderDecoder;
 import corpus.bigendian.sbe.PriceDecoder;
@@ -163,5 +165,28 @@ final class BigEndianTest implements SchemaCase {
 		int note = firstEntry + 2 * BigEndianDecoder.FillsDecoder.sbeBlockLength();
 		assertThat(buffer.getShort(note + VarStringEncodingDecoder.lengthEncodingOffset(), BIG_ENDIAN))
 				.isEqualTo((short) 3);
+	}
+
+	@Test
+	void theWriterWritesTheCodecsBytesInTheSchemasOrder() {
+		assertWritesTheCodecsBytes(
+				new BigEndianCodec(), VALUE,
+				(buffer, offset) -> new BigEndianWriter().wrap(buffer, offset)
+						.orderId(0x0102030405060708L)
+						.level((short) 0x0102)
+						.port(0xABCD)
+						.count(0x01020304)
+						.sequence(0xF1F2F3F4L)
+						.timestamp(0x1112131415161718L)
+						.ratio(1.5f)
+						.rate(Math.PI)
+						.putBounds((short) 0x0102, (short) 0x0304)
+						.venue(corpus.bigendian.sbe.Venue.XNYS)
+						.rights().trade(true).quote(true).end()
+						.bid().mantissa(0x0A0B0C0D0E0F1011L).exponent((byte) -2)
+						.fills().entry().quantity(0x01020304).entry().quantity(5).end()
+						.note("big")
+						.length()
+		);
 	}
 }
