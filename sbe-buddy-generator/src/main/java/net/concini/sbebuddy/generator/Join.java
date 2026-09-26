@@ -62,14 +62,13 @@ final class Join {
 	/**
 	 * The header as the IR resolved it, the schema's {@code headerType} or the
 	 * composite named {@code messageHeader}, joined as a composite is: {@code own}
-	 * are its members other than the standard four, and {@code nulls} how each of
-	 * them is written when no header is given, a constant needing nothing.
+	 * are the members other than the standard four a component carries, which a
+	 * header writes.
 	 */
-	record Header(Composite composite, List<Field> own, List<Field> nulls) {
+	record Header(Composite composite, List<Field> own) {
 
 		Header {
 			own = List.copyOf(own);
-			nulls = List.copyOf(nulls);
 		}
 	}
 
@@ -300,61 +299,23 @@ final class Join {
 
 	/**
 	 * The header, read as a composite is. The standard four are read and never
-	 * written; every other member is written from a header or as its null value,
-	 * and a constant is neither.
+	 * written; every other member a component carries is written from a header, and
+	 * one no component carries is the writer's null value.
 	 */
 	private Header header() {
 		List<Token> tokens = ir.headerStructure().tokens();
 		String headerClass = JavaUtil.formatClassName(tokens.get(0).name());
 		Composite composite = compositeBody(tokens, annotated.headerType(), headerClass);
 		List<Field> own = new ArrayList<>();
-		List<Field> nulls = new ArrayList<>();
 		for (Field field : composite.members()) {
-			Face face = field.face();
-			if (face == null) {
-				continue;
-			}
-			switch (face) {
-				case Face.Mapped mapped -> {
-					if (!STANDARD_HEADER_MEMBERS.contains(field.property())) {
-						own.add(field);
-						Shape shape = nullShape(mapped, field.property(), headerClass);
-						if (shape != null) {
-							nulls.add(
-									new Field(
-											field.token(), field.type(), field.property(),
-											new Face.Null(field.property(), shape), List.of()
-									)
-							);
-						}
-					}
-				}
-				case Face.Null unmapped -> {
-					own.add(field);
-					nulls.add(field);
+			if (field.face() instanceof Face.Mapped mapped && !STANDARD_HEADER_MEMBERS.contains(field.property())) {
+				own.add(field);
+				if (mapped.shape() instanceof Shape.Composite) {
+					codecProblem(lacking("a composite in a header"));
 				}
 			}
 		}
-		return new Header(composite, own, nulls);
-	}
-
-	/**
-	 * How a header member is written when no header is given: its null value, an
-	 * array's in every element; a constant needs nothing.
-	 */
-	private @Nullable Shape nullShape(Face.Mapped mapped, String property, String headerClass) {
-		return switch (mapped.shape()) {
-			case Shape.Scalar scalar -> new Shape.Scalar(null);
-			case Shape.Text text -> new Shape.Array(headerClass + "$$" + Generators.toUpperFirstChar(property));
-			case Shape.Array array -> array;
-			case Shape.Enum enumeration -> enumeration;
-			case Shape.Set set -> set;
-			case Shape.Constant constant -> null;
-			case Shape.Composite composite -> {
-				codecProblem(lacking("a composite in a header"));
-				yield null;
-			}
-		};
+		return new Header(composite, own);
 	}
 
 	// ---- a message's or a group entry's block

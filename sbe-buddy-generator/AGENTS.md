@@ -14,14 +14,15 @@ SchemaEvolution  whether a schema still reads its baseline, and where it breaks 
 Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
 Join             one message's IR joined with its record, or with nothing: a tree of nodes and their leaves
 Faces            the leaf: what a component is on the wire, its shape, absence, binding and helpers
-FaceWriter       a Faces leaf to source, for a codec or a flyweight: its read and write with absence and binding, null write, var-data, helpers
+FaceWriter       a Faces leaf to source, for a flyweight or the codec's header: its read and write with absence and binding, null write, var-data, helpers
 FaceTemplates    the text of a leaf: read, write, null write, absence, binding, var-data
 FaceHelperTemplates the text of the helpers the leaves call: checks, array pairs, enum and set mappings, composite pairs, var-data methods
-CodecWalk        a Join to a CodecModel: bodies, wire and constructor order, the methods collected
-CodecModel       what a codec is made of around its leaves
-CodecWriter      a CodecModel to source, each leaf through FaceWriter
-CodecTemplates   the text of a codec around its leaves: the class, the header, lengths, groups, var-data, the union
+CodecWalk        a Join laid over its reader's and writer's models as a CodecModel: blocks read and written, the chain followed stage by stage
+CodecModel       what a codec is made of: the record's structure over the reader and writer, and the header
+CodecWriter      a CodecModel to source, the header's leaves through FaceWriter
+CodecTemplates   the text of a codec: the class, the header, the lengths, a block's chain, groups, var-data
 UnionModel       what a union's codec is made of: its members' codecs
+UnionTemplates   the text of a union's codec
 FlyweightWalk    a Join to a FlyweightModel: a reader's stages, positions and steps in wire order, and the names it takes
 FlyweightModel   what a message's reader is made of
 ReaderWriter     a FlyweightModel to source, bound stages through FaceWriter
@@ -33,10 +34,10 @@ WriterWriter     a WriterModel to source, null values and bound steps through Fa
 WriterTemplates  the text of a writer: the class, its stages, the objects behind them, the null values
 WriterStepTemplates the text of a writer's steps: guard, delegation to the encoder, how each hands on
 SubWriterTemplates the text of a composite's and a set's sub-chain
-FlyweightEmitter a reader and a writer for every message of the IR, the sub-chains, then the output, beside the codecs
+FlyweightEmitter a reader and a writer for every message of the IR, the sub-chains, then the output; the models the codecs are written over
 UnionWriter      a UnionModel to source
 Template         a text block with named placeholders
-CodecEmitter     the walk and the writer per message, a union's codec over them, then the output
+CodecEmitter     the join's problems first; then, over the flyweights, the codec per message, a union's over them, and the output
 Problem          a mistake on a node of either model
 ```
 
@@ -96,20 +97,39 @@ Problem          a mistake on a node of either model
   the choices' bits.
 - The header is walked as a composite from `ir.headerStructure()`. Its
   standard four are read and never written: the message flyweight's
-  `wrapAndApplyHeader` writes them. Its own members are written from a
-  header or as their null value.
+  `wrapAndApplyHeader` writes them. Its own members a component carries are
+  written from a header; the writer writes each as its null value first.
 - A construct the codec does not cover yet is a `Problem` on the message,
   reported only when codecs are wanted, and the message gets no model.
   Nothing is skipped silently. A composite is walked by every message that
   uses it; `CodecEmitter` reports each of its problems once.
+- The codec holds no leaf. It is written over its message's reader and
+  writer, which `FlyweightEmitter` lays out first: `CodecEmitter.check`
+  reports the join's problems, the flyweights follow, and `CodecEmitter.emit`
+  lays each message's `Join` over their models. A block is read through the
+  reader's stage and its bound stage, every group and var-data into a local
+  in wire order before the constructor, `count()` driving each group's
+  loop; and written through the writer's bound chain, followed stage by
+  stage in `CodecWalk`: a hop where the next component is taken on a twin,
+  the required components in wire order, then the block complete's, then
+  each group, whose entries a method writes, and each var-data. A chain
+  that would not type-check is `CodecWalk`'s mistake and fails there, never
+  in the codec's source.
+- The header record is the one leaf the codec writes and reads itself:
+  `decodeHeader` reads any message's header, which no reader wraps. Its
+  helpers, bindings and contexts are the codec's; a group's binding over the
+  whole list, and a var-data's for its length, are the codec's too.
+- `encodedLength` counts without writing: a group's dimensions and entries,
+  a var-data through its writer's length method, the one method a writer
+  leaves package-private for its codec.
 - A new construct is a shape in `Faces`, its templates in `FaceTemplates`
   (a helper's in `FaceHelperTemplates`), and a case in `FaceWriter`; the
-  codec and the flyweights' bound stages both write it there, naming the
-  variable holding the flyweight and the expression of the value, so a
-  component is on the wire what one leaf says. `Join` collects the helpers a
-  leaf calls, a composite's pair after its members', a var-data's methods
-  after its checks. What surrounds the leaves, a block, a group, var-data,
-  is a node in `Join` and `CodecModel`, with its templates in
+  flyweights' bound stages write it there, naming the variable holding the
+  flyweight and the expression of the value, so a component is on the wire
+  what one leaf says, and the codec gets it through them. `Join` collects the
+  helpers a leaf calls, a composite's pair after its members', a var-data's
+  methods after its checks. What surrounds the leaves, a block, a group,
+  var-data, is a node in `Join` and `CodecModel`, with its templates in
   `CodecTemplates`.
 - Templates hold no conditionals and no loops. What varies is decided in Java
   and filled in; no code is assembled by concatenation.
@@ -140,9 +160,9 @@ Problem          a mistake on a node of either model
 - Every message of the IR gets a reader, `ir.messages()` in template id
   order, a record or not, in the schema's package beside the codecs: its
   bound stages name the records' types, which may be package-private.
-  `FlyweightEmitter` runs after `CodecEmitter`, and only when it reported no
-  error: the reader joins each message with its record the same way, and
-  the join's problems are the codec emitter's.
+  `FlyweightEmitter` runs after `CodecEmitter.check`, and only when it
+  reported no error: the reader joins each message with its record the same
+  way, and the join's problems are the codec emitter's.
 - The reader's order is `OtfMessageDecoder`'s: each position of the `At`
   enum has one step, the level's next present group or var-data, else the
   next entry of the group the level is an entry of, else what follows that
@@ -185,7 +205,13 @@ Problem          a mistake on a node of either model
   twin writing it through its leaf, `FaceWriter.write` with the parameter as
   the value, one bound object per block; a step returns the next twin, else
   the next wire stage, and a field no component carries has no step there.
-  The write halves of the helpers are declared in the writer.
+  A component on a field with no step, a constant or a composite of
+  constants, is checked by a step of the block complete's twin, which makes
+  such an entry complete; so is a block whose required fields no component
+  maps, so the chain reaches past them. `WriterWalk.place` says which, and
+  `CodecWalk` follows it. A hop is declared once per object, open over
+  every stage it serves. The write halves of the helpers are declared in
+  the writer.
 - `GroupsWriter.java` and `QuoteWriter.java` are goldens in sbe-buddy-tests,
   beside `GroupsReader.java`.
 

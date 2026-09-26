@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -12,20 +13,19 @@ import java.util.Map;
 import java.util.Set;
 
 import org.agrona.generation.DynamicPackageOutputManager;
-import org.jspecify.annotations.Nullable;
 
 import uk.co.real_logic.sbe.ir.Ir;
 
 /**
- * Step 7 of the pipeline, the join of the IR with the annotations: every
- * message walked by {@link CodecWalk}, which {@link Join joins} it, applying
- * the face rules to each token it meets, into a {@link CodecModel} written by
- * {@link CodecWriter} as {@code <Msg>Codec}, then one {@code <Union>Codec} per
- * union, composed from its members' codecs and written by {@link UnionWriter}.
- * The walk runs whether or not the schema wants codecs, for the rules; the
- * codecs are written only when it does. A construct the codec does not cover
- * yet is a problem naming the message; nothing is skipped silently, and nothing
- * is written while an error stands.
+ * Step 7 of the pipeline, the join of the IR with the annotations, and the
+ * codecs: every message a record maps {@link Join joined} by {@link CodecWalk},
+ * which applies the face rules to each token it meets, whether or not the
+ * schema wants codecs; then, over the message's reader and writer, a
+ * {@link CodecModel} written by {@link CodecWriter} as {@code <Msg>Codec}, and
+ * one {@code <Union>Codec} per union, composed from its members' codecs and
+ * written by {@link UnionWriter}. A construct the codec does not cover yet is a
+ * problem naming the message; nothing is skipped silently, and nothing is
+ * written while an error stands.
  */
 public final class CodecEmitter {
 
@@ -33,40 +33,68 @@ public final class CodecEmitter {
 	}
 
 	/**
-	 * Walks every message and, when the schema wants codecs, writes each message's
-	 * and union's codec through the output under the schema package; or writes
-	 * nothing and returns the problems: every rule broken in any message is
-	 * collected, never a partial write. Warnings come back with everything written.
-	 * An output that fails to write is an {@link UncheckedIOException}.
+	 * The problems of joining every message a record maps, and, when the schema
+	 * wants codecs, of their names: every rule broken in any message is collected.
 	 * {@code baseline} is the oldest version the codecs read.
 	 */
-	public static List<Problem> emit(Ir ir, Annotated annotated, int baseline, DynamicPackageOutputManager output) {
+	public static List<Problem> check(Ir ir, Annotated annotated, int baseline) {
 		Problems problems = new Problems();
-		Map<String, String> sources = new LinkedHashMap<>();
-		Map<Annotated.Message, CodecModel> models = new IdentityHashMap<>();
+		Set<Annotated.Message> failed = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Annotated.Message message : annotated.messages()) {
 			List<Problem> walked = new ArrayList<>();
-			CodecModel model = CodecWalk.walk(ir, annotated, baseline, message, walked);
-			problems.addAll(walked);
-			if (model != null) {
-				models.put(message, model);
-				sources.put(model.codec(), CodecWriter.write(model));
+			if (!CodecWalk.check(ir, annotated, baseline, message, walked)) {
+				failed.add(message);
 			}
+			problems.addAll(walked);
 		}
 		if (!annotated.codecs()) {
 			return problems.list();
 		}
 		problems.addAll(duplicateCodecs(annotated));
 		for (Annotated.Union union : annotated.unions()) {
-			List<Problem> unionProblems = new ArrayList<>();
-			UnionModel model = union(annotated, union, models, unionProblems);
-			problems.addAll(unionProblems);
-			if (model != null) {
-				sources.put(model.codec(), UnionWriter.write(model));
+			for (Annotated.Message member : union.members()) {
+				if (failed.contains(member)) {
+					problems.addAll(
+							List.of(
+									new Problem(
+											union, "no codec for " + union.javaName() + ": its message "
+													+ member.javaName() + " has none"
+									)
+							)
+					);
+				}
 			}
 		}
-		if (problems.list().stream().anyMatch(Problem::isError)) {
-			return problems.list();
+		return problems.list();
+	}
+
+	/**
+	 * Writes each message's and union's codec through the output under the schema
+	 * package, when the schema wants codecs, over the readers and writers of
+	 * {@code flyweights} by template id, once {@link #check} found no error. An
+	 * output that fails to write is an {@link UncheckedIOException}.
+	 */
+	static void emit(
+			Ir ir, Annotated annotated, int baseline, Map<Integer, FlyweightEmitter.Models> flyweights,
+			DynamicPackageOutputManager output
+	) {
+		if (!annotated.codecs()) {
+			return;
+		}
+		Map<String, String> sources = new LinkedHashMap<>();
+		Map<Annotated.Message, CodecModel> models = new IdentityHashMap<>();
+		for (Annotated.Message message : annotated.messages()) {
+			FlyweightEmitter.Models over = flyweights.get(message.id());
+			if (over == null) {
+				throw new IllegalStateException(message.javaName() + " has no reader and writer");
+			}
+			CodecModel model = CodecWalk.walk(ir, annotated, baseline, message, over.reader(), over.writer());
+			models.put(message, model);
+			sources.put(model.codec(), CodecWriter.write(model));
+		}
+		for (Annotated.Union union : annotated.unions()) {
+			UnionModel model = union(annotated, union, models);
+			sources.put(model.codec(), UnionWriter.write(model));
 		}
 		for (Map.Entry<String, String> source : sources.entrySet()) {
 			// Before every file: Agrona's manager falls back to the first package it
@@ -78,7 +106,6 @@ public final class CodecEmitter {
 				throw new UncheckedIOException(e);
 			}
 		}
-		return problems.list();
 	}
 
 	/**
@@ -106,26 +133,16 @@ public final class CodecEmitter {
 		}
 	}
 
-	/**
-	 * A union's codec, composed from its members' models; null with a problem
-	 * naming the union when a member has no codec.
-	 */
-	private static @Nullable UnionModel union(
-			Annotated annotated, Annotated.Union union, Map<Annotated.Message, CodecModel> models,
-			List<Problem> problems
+	/** A union's codec, composed from its members' models. */
+	private static UnionModel union(
+			Annotated annotated, Annotated.Union union, Map<Annotated.Message, CodecModel> models
 	) {
 		List<UnionModel.Case> cases = new ArrayList<>();
 		CodecModel any = null;
 		for (Annotated.Message member : union.members()) {
 			CodecModel model = models.get(member);
 			if (model == null) {
-				problems.add(
-						new Problem(
-								union, "no codec for " + union.javaName() + ": its message " + member.javaName()
-										+ " has none"
-						)
-				);
-				continue;
+				throw new IllegalStateException(union.javaName() + "'s message " + member.javaName() + " has no codec");
 			}
 			any = model;
 			cases.add(
@@ -136,8 +153,8 @@ public final class CodecEmitter {
 					)
 			);
 		}
-		if (any == null || cases.size() < union.members().size()) {
-			return null;
+		if (any == null) {
+			throw new IllegalStateException(union.javaName() + " has no member");
 		}
 		return new UnionModel(
 				annotated.packageName(), union.javaName() + "Codec", union.qualifiedName(), union.javaName(),

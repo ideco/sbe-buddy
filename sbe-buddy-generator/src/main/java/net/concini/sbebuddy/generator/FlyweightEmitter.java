@@ -25,22 +25,29 @@ import uk.co.real_logic.sbe.ir.Token;
  * {@link ReaderWriter} and {@link WriterWriter} into the schema's package,
  * beside the codecs and the records their bound stages name, then a sub-chain
  * for every composite and set the writers open. A message needs no record to
- * have them. Nothing is written while an error stands.
+ * have them. Nothing is written while an error stands; the codecs are written
+ * over them after.
  */
 public final class FlyweightEmitter {
 
 	private FlyweightEmitter() {
 	}
 
+	/** A message's reader and writer, which its codec is written over. */
+	record Models(FlyweightModel reader, WriterModel.Message writer) {
+	}
+
 	/**
 	 * Writes every message's reader and writer, and the sub-chains, through the
-	 * output under the IR's namespace, or writes nothing and returns the problems.
+	 * output under the IR's namespace, or writes nothing and returns the problems;
+	 * each message's models are put in {@code models} by template id.
 	 * {@code schema} is the node a problem lands on where no record maps the
 	 * message; {@code baseline} is the one the codecs read from. An output that
 	 * fails to write is an {@link UncheckedIOException}.
 	 */
-	public static List<Problem> emit(
-			Ir ir, Annotated annotated, int baseline, Object schema, DynamicPackageOutputManager output
+	static List<Problem> emit(
+			Ir ir, Annotated annotated, int baseline, Object schema, DynamicPackageOutputManager output,
+			Map<Integer, Models> models
 	) {
 		List<Problem> problems = new ArrayList<>();
 		Map<String, String> sources = new LinkedHashMap<>();
@@ -59,6 +66,7 @@ public final class FlyweightEmitter {
 					.walk(ir, annotated, baseline, tokens, record, schema, problems, composites, sets);
 			if (writer != null) {
 				sources.put(writer.writer(), WriterWriter.write(writer));
+				models.put(tokens.get(0).id(), new Models(model, writer));
 			}
 		}
 		// A composite's members may open further composites, which join the end.

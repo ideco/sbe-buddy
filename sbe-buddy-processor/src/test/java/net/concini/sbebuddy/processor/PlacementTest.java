@@ -311,9 +311,10 @@ final class PlacementTest {
 		assertThat(warning.getMessage(null)).isEqualTo("Long is boxed although the field is never absent");
 		assertThat(warning.getLineNumber()).isEqualTo(lineOf(source, "Long orderId"));
 		assertThat(result.outputs()).containsKeys(
-				"placement/schema.xml", "placement/OrderCodec.java", "placement/sbe/OrderEncoder.java"
+				"placement/schema.xml", "placement/OrderCodec.java", "placement/OrderWriter.java",
+				"placement/sbe/OrderEncoder.java"
 		);
-		assertThat(result.outputs().get("placement/OrderCodec.java"))
+		assertThat(result.outputs().get("placement/OrderWriter.java"))
 				.contains("throw new IllegalArgumentException(\"orderId is required\");");
 	}
 

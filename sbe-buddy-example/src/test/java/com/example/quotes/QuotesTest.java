@@ -136,7 +136,7 @@ final class QuotesTest {
 	@Test
 	void aNullVenueInsideAContributorIsRefused() {
 		QuoteCodec codec = new QuoteCodec();
-		UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
 		Quote quote = new Quote(
 				42, BID, ASK, 4_000_000_000L, 250, 7, null, Venue.XNAS, MarketState.OPEN, Set.of(), "ACME", EXPONENT,
 				DEPTH, TRADE, List.of(new Contributor(null, BID, ASK, 100, 100, 1L)), REMARK
