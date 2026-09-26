@@ -2,6 +2,8 @@ package net.concini.sbebuddy.generator;
 
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
+
 import net.concini.sbebuddy.generator.FlyweightModel.Parameter;
 
 /**
@@ -22,6 +24,8 @@ final class WriterModel {
 	 * the positions it passes through in wire order, and the null values each block
 	 * is filled with when it opens. {@code first} is the stage {@code wrap} hands
 	 * out; {@code header} the header's own members, written as their null values.
+	 * Where a record maps the message, the bound stages write through the bindings,
+	 * their contexts and the helpers held here.
 	 */
 	record Message(
 			String packageName,
@@ -36,7 +40,10 @@ final class WriterModel {
 			List<Implementation> implementations,
 			List<Field> encoders,
 			List<NullWrite> header,
-			List<Nulls> nulls
+			List<Nulls> nulls,
+			List<Faces.Binding> bindings,
+			List<Faces.Context> contexts,
+			List<Faces.Helper> helpers
 	) {
 
 		Message {
@@ -46,6 +53,9 @@ final class WriterModel {
 			encoders = List.copyOf(encoders);
 			header = List.copyOf(header);
 			nulls = List.copyOf(nulls);
+			bindings = List.copyOf(bindings);
+			contexts = List.copyOf(contexts);
+			helpers = List.copyOf(helpers);
 		}
 	}
 
@@ -118,7 +128,10 @@ final class WriterModel {
 			AFTER,
 
 			/** Before a composite's member. */
-			MEMBER
+			MEMBER,
+
+			/** The record's view of the wire stage {@code subject}. */
+			BOUND
 		}
 	}
 
@@ -254,6 +267,41 @@ final class WriterModel {
 
 		/** The bytes written, header included. */
 		record Length(Signature signature, Guard guard) implements Method {
+		}
+
+		/**
+		 * From a stage to its twin, or back: the object {@code object}, the same place
+		 * in the chain.
+		 */
+		record Hop(Signature signature, Guard guard, String object) implements Method {
+		}
+
+		/**
+		 * The component written from its parameter through {@code leaf}, to the
+		 * flyweight {@code flyweight}, of the class {@code encoder}, as the codec
+		 * writes it.
+		 */
+		record Bound(
+				Signature signature, Guard guard, Faces.Face.Mapped leaf, String flyweight, String encoder, Then then
+		)
+				implements
+					Method {
+		}
+
+		/**
+		 * The var-data's component written from its parameter through its {@code leaf},
+		 * and through {@code binding} with {@code context} where one stands in front of
+		 * it, to {@code flyweight}.
+		 */
+		record BoundData(
+				Signature signature,
+				Guard guard,
+				Faces.Helper.Data leaf,
+				@Nullable String binding,
+				@Nullable String context,
+				String flyweight,
+				Then then
+		) implements Method {
 		}
 
 		/**

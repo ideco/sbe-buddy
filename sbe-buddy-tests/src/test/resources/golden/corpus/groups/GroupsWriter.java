@@ -11,7 +11,14 @@ public final class GroupsWriter {
 
 	/** Before the required field {@code orderId}: its step is the one way on. */
 	public interface RootBlockOrderId {
+		RootBlockOrderIdBound bound();
 		RootBlock orderId(long value);
+	}
+
+	/** The record's view of {@code RootBlockOrderId}: each step takes a component as the record holds it, through its binding. */
+	public interface RootBlockOrderIdBound {
+		RootBlock orderId(long value);
+		RootBlockOrderId wire();
 	}
 
 	/** The root block complete: its optional fields, in any order, and what follows it. */
@@ -27,7 +34,14 @@ public final class GroupsWriter {
 
 	/** Before the required field {@code legs.legId}: its step is the one way on. */
 	public interface LegsEntryLegId {
+		LegsEntryLegIdBound bound();
 		LegsEntryLegRatio legId(int value);
+	}
+
+	/** The record's view of {@code LegsEntryLegId}: each step takes a component as the record holds it, through its binding. */
+	public interface LegsEntryLegIdBound {
+		LegsEntry legId(int value);
+		LegsEntryLegId wire();
 	}
 
 	/** Before the required field {@code legs.legRatio}: its step is the one way on. */
@@ -48,12 +62,26 @@ public final class GroupsWriter {
 
 	/** Before the required field {@code legs.allocations.account}: its step is the one way on. */
 	public interface AllocationsEntryAccount {
+		AllocationsEntryAccountBound bound();
 		AllocationsEntry account(int value);
+	}
+
+	/** The record's view of {@code AllocationsEntryAccount}: each step takes a component as the record holds it, through its binding. */
+	public interface AllocationsEntryAccountBound {
+		AllocationsEntryBound account(int value);
+		AllocationsEntryAccount wire();
 	}
 
 	/** An entry of {@code legs.allocations} complete: its optional fields, in any order, and what follows it. */
 	public interface AllocationsEntry extends Allocations {
+		AllocationsEntryBound bound();
 		AllocationsEntry share(int value);
+	}
+
+	/** The record's view of {@code AllocationsEntry}: each step takes a component as the record holds it, through its binding. */
+	public interface AllocationsEntryBound extends Allocations {
+		AllocationsEntryBound share(java.lang.Integer value);
+		AllocationsEntry wire();
 	}
 
 	/** Past {@code legs}: what follows it. */
@@ -69,7 +97,14 @@ public final class GroupsWriter {
 
 	/** Before the required field {@code fills.price}: its step is the one way on. */
 	public interface FillsEntryPrice {
+		FillsEntryPriceBound bound();
 		Fills price(long value);
+	}
+
+	/** The record's view of {@code FillsEntryPrice}: each step takes a component as the record holds it, through its binding. */
+	public interface FillsEntryPriceBound {
+		Fills price(java.math.BigDecimal value);
+		FillsEntryPrice wire();
 	}
 
 	/** Past {@code fills}: what follows it. */
@@ -91,15 +126,21 @@ public final class GroupsWriter {
 		AFTER_FILLS,
 	}
 
+	private static final net.concini.sbebuddy.BindingContext fills$PriceContext = new net.concini.sbebuddy.BindingContext("price", net.concini.sbebuddy.PrimitiveType.INT64, null, null, null, net.concini.sbebuddy.Presence.REQUIRED);
 	private final corpus.groups.sbe.MessageHeaderEncoder header = new corpus.groups.sbe.MessageHeaderEncoder();
 	private final corpus.groups.sbe.GroupsEncoder encoder = new corpus.groups.sbe.GroupsEncoder();
+	private final corpus.groups.CentsBinding centsBinding = new corpus.groups.CentsBinding();
 	private final RootBlockStage rootBlockStage = new RootBlockStage();
+	private final RootBlockBoundStage rootBlockBoundStage = new RootBlockBoundStage();
 	private final LegsStage legsStage = new LegsStage();
 	private final LegsEntryStage legsEntryStage = new LegsEntryStage();
+	private final LegsEntryBoundStage legsEntryBoundStage = new LegsEntryBoundStage();
 	private final AllocationsStage allocationsStage = new AllocationsStage();
 	private final AllocationsEntryStage allocationsEntryStage = new AllocationsEntryStage();
+	private final AllocationsEntryBoundStage allocationsEntryBoundStage = new AllocationsEntryBoundStage();
 	private final FillsStage fillsStage = new FillsStage();
 	private final FillsEntryStage fillsEntryStage = new FillsEntryStage();
+	private final FillsEntryBoundStage fillsEntryBoundStage = new FillsEntryBoundStage();
 	private corpus.groups.sbe.GroupsEncoder.LegsEncoder legsEncoder;
 	private corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder allocationsEncoder;
 	private corpus.groups.sbe.GroupsEncoder.FillsEncoder fillsEncoder;
@@ -152,6 +193,12 @@ public final class GroupsWriter {
 	private final class RootBlockStage implements RootBlockOrderId, RootBlock, AfterLegs, AfterFills {
 
 		@Override
+		public RootBlockBoundStage bound() {
+			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			return rootBlockBoundStage;
+		}
+
+		@Override
 		public RootBlock orderId(long value) {
 			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
 			encoder.orderId(value);
@@ -181,6 +228,22 @@ public final class GroupsWriter {
 		}
 	}
 
+	private final class RootBlockBoundStage implements RootBlockOrderIdBound {
+
+		@Override
+		public RootBlock orderId(long value) {
+			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			encoder.orderId(value);
+			return rootBlockStage;
+		}
+
+		@Override
+		public RootBlockStage wire() {
+			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			return rootBlockStage;
+		}
+	}
+
 	private final class LegsStage implements Legs {
 
 		@Override
@@ -204,6 +267,12 @@ public final class GroupsWriter {
 	private final class LegsEntryStage implements LegsEntryLegId, LegsEntryLegRatio, LegsEntry {
 
 		@Override
+		public LegsEntryBoundStage bound() {
+			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			return legsEntryBoundStage;
+		}
+
+		@Override
 		public LegsEntryLegRatio legId(int value) {
 			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
 			legsEncoder.legId(value);
@@ -223,6 +292,22 @@ public final class GroupsWriter {
 			allocationsEncoder = legsEncoder.allocationsCount(corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder.countMaxValue());
 			at = At.ALLOCATIONS;
 			return allocationsStage;
+		}
+	}
+
+	private final class LegsEntryBoundStage implements LegsEntryLegIdBound {
+
+		@Override
+		public LegsEntry legId(int value) {
+			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			legsEncoder.legId(value);
+			return legsEntryStage;
+		}
+
+		@Override
+		public LegsEntryStage wire() {
+			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			return legsEntryStage;
 		}
 	}
 
@@ -249,6 +334,12 @@ public final class GroupsWriter {
 	private final class AllocationsEntryStage implements AllocationsEntryAccount, AllocationsEntry {
 
 		@Override
+		public AllocationsEntryBoundStage bound() {
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsEntryBoundStage;
+		}
+
+		@Override
 		public AllocationsEntry account(int value) {
 			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsEncoder.account(value);
@@ -270,6 +361,39 @@ public final class GroupsWriter {
 			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsEncoder.share(value);
 			return this;
+		}
+	}
+
+	private final class AllocationsEntryBoundStage implements AllocationsEntryAccountBound, AllocationsEntryBound {
+
+		@Override
+		public AllocationsEntryBound account(int value) {
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			allocationsEncoder.account(value);
+			return this;
+		}
+
+		@Override
+		public AllocationsEntryBound share(java.lang.Integer value) {
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			allocationsEncoder.share(value == null ? corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder.shareNullValue() : value);
+			return this;
+		}
+
+		@Override
+		public AllocationsEntryAccount entry() {
+			return allocationsStage.entry();
+		}
+
+		@Override
+		public Legs end() {
+			return allocationsStage.end();
+		}
+
+		@Override
+		public AllocationsEntryStage wire() {
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			return allocationsEntryStage;
 		}
 	}
 
@@ -296,10 +420,35 @@ public final class GroupsWriter {
 	private final class FillsEntryStage implements FillsEntryPrice {
 
 		@Override
+		public FillsEntryBoundStage bound() {
+			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			return fillsEntryBoundStage;
+		}
+
+		@Override
 		public Fills price(long value) {
 			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
 			fillsEncoder.price(value);
 			return fillsStage;
+		}
+	}
+
+	private final class FillsEntryBoundStage implements FillsEntryPriceBound {
+
+		@Override
+		public Fills price(java.math.BigDecimal value) {
+			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			if (value == null) {
+				throw new IllegalArgumentException("price is required");
+			}
+			fillsEncoder.price(centsBinding.toWire(value, fills$PriceContext));
+			return fillsStage;
+		}
+
+		@Override
+		public FillsEntryStage wire() {
+			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			return fillsEntryStage;
 		}
 	}
 }

@@ -1,5 +1,7 @@
 package net.concini.sbebuddy.generator;
 
+import static net.concini.sbebuddy.generator.FaceTemplates.BINDING_FIELD;
+import static net.concini.sbebuddy.generator.FaceTemplates.CONTEXT_FIELD;
 import static net.concini.sbebuddy.generator.SubWriterTemplates.*;
 import static net.concini.sbebuddy.generator.WriterStepTemplates.*;
 import static net.concini.sbebuddy.generator.WriterTemplates.*;
@@ -37,7 +39,7 @@ final class WriterWriter {
 		this.flyweights = flyweights;
 		this.writer = writer;
 		this.headerClass = headerClass;
-		this.faces = new FaceWriter(flyweights, "", "");
+		this.faces = new FaceWriter(flyweights, writer + ".", writer + ".this.");
 	}
 
 	static String write(WriterModel.Message model) {
@@ -79,8 +81,23 @@ final class WriterWriter {
 		for (Nulls one : model.nulls()) {
 			nulls.add(NULLS.fill("encoder", one.encoder(), "writes", writes(one.encoder(), one.writes())));
 		}
+		List<String> helpers = new ArrayList<>();
+		for (Faces.Helper helper : model.helpers()) {
+			helpers.addAll(faces.helper(helper, true, false));
+		}
+		List<String> bindings = new ArrayList<>();
+		for (Faces.Binding binding : model.bindings()) {
+			bindings.add(BINDING_FIELD.fill(binding));
+		}
+		List<String> contexts = new ArrayList<>();
+		for (Faces.Context context : model.contexts()) {
+			contexts.add(CONTEXT_FIELD.fill(context));
+		}
 		return WRITER.fill(
 				model,
+				"contexts", String.join("\n", contexts),
+				"bindings", String.join("\n", bindings),
+				"helpers", helpers.isEmpty() ? "" : "\n" + String.join("\n\n", helpers),
 				"stages", stages(model.stages(), false),
 				"positions", String.join("\n", positions),
 				"fields", String.join("\n", fields),
@@ -120,6 +137,7 @@ final class WriterWriter {
 				case GROUP -> GROUP_DOC;
 				case AFTER -> AFTER_DOC;
 				case MEMBER -> MEMBER_DOC;
+				case BOUND -> BOUND_DOC;
 			};
 			String javadoc = stage.kind() == Stage.Kind.ROOT_BLOCK ? doc.fill() : doc.fill("subject", stage.subject());
 			Template template = generic
@@ -216,6 +234,20 @@ final class WriterWriter {
 			case Method.Length length -> {
 				guard = guard(length.guard());
 				then = LENGTH.fill("flyweights", flyweights, "headerClass", headerClass);
+			}
+			case Method.Hop hop -> {
+				guard = guard(hop.guard());
+				then = RETURN.fill("object", hop.object());
+			}
+			case Method.Bound bound -> {
+				guard = guard(bound.guard());
+				body = faces.write(bound.leaf(), bound.flyweight(), bound.encoder(), "value");
+				then = then(bound.then());
+			}
+			case Method.BoundData bound -> {
+				guard = guard(bound.guard());
+				body = faces.writeData(bound.leaf(), bound.binding(), bound.context(), bound.flyweight(), "value");
+				then = then(bound.then());
 			}
 			case Method.Delegate delegate ->
 				then = DELEGATE.fill("object", delegate.object(), "name", signature.name());

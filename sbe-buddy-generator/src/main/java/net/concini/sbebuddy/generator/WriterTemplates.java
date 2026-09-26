@@ -31,8 +31,10 @@ final class WriterTemplates {
 							{positions}
 						}
 
+						{contexts}
 						private final {flyweights}.{headerClass}Encoder header = new {flyweights}.{headerClass}Encoder();
 						private final {flyweights}.{message}Encoder encoder = new {flyweights}.{message}Encoder();
+						{bindings}
 						{fields}
 						private At at = At.BEFORE_ROOT_BLOCK;
 
@@ -65,6 +67,7 @@ final class WriterTemplates {
 						{nulls}
 
 						{implementations}
+						{helpers}
 					}
 					"""
 	);
@@ -99,6 +102,10 @@ final class WriterTemplates {
 	);
 
 	static final Template AFTER_DOC = Template.of("/** Past {@code {subject}}: what follows it. */");
+
+	static final Template BOUND_DOC = Template.of(
+			"/** The record's view of {@code {subject}}: each step takes a component as the record holds it, through its binding. */"
+	);
 
 	static final Template MEMBER_DOC = Template
 			.of("/** Before the member {@code {subject}}: its step is the one way on. */");
