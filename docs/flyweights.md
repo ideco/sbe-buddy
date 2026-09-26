@@ -417,6 +417,13 @@ derives the sequence the way the OTF walk does, and `notes.md` cites it.
 - **Presence.** `hasFoo()` beside an optional field, false too above the
   acting version, is the garbage-free shape sbe-tool's users know; a sealed
   `Present | Absent` would allocate per call, and `bound()` boxes.
+- **A `String` on the wire var-data stage.** It has `length()`, `copyTo`
+  and `wrap` only; the `String` is the record's, on `bound().value()`. But
+  sbe-tool's own face has `text()` where the schema names a
+  `characterEncoding`, and a reader of a message with no record has no
+  other way to a `String` than `copyTo` and `new String`. A `value()` on
+  the wire stage, in the schema's encoding, allocating as sbe-tool's does,
+  may be wanted; step 0 left it out.
 - **Kinds.** A `VarData` interface in the api, `length()`, `copyTo`,
   `wrap`, would let `case VarData v -> v.copyTo(audit, …)` run over any
   message; the other kinds have too little to share. In reserve until an
