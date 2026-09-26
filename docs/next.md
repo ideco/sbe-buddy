@@ -110,7 +110,14 @@ Decided here, where the sketch left room:
   `RootBlock`, `Stage`, `Member` (after `formatClassName`), or a group
   and a sibling named `<Group>Entry`, is
   `the <group|data> "<name>" clashes with the reader's <Name>; rename it`,
-  on the component code-first, on the package schema-first.
+  on the component code-first, on the package schema-first. Step 2 found
+  more a reader cannot compile with, and they are the same error: `At`,
+  the reader's own name, the java.lang types it names (`String`,
+  `Iterable`, `Override`, `Appendable`, `IllegalStateException`), any two
+  stages or `At` constants alike anywhere in the message, and a field whose
+  accessor would be `skip`, `bound`, an entry's `index` or a method of
+  `Object`, `the field "index" clashes with the reader's LegsEntry.index();
+  rename it`.
 
 ### The successor of each stage
 
@@ -275,8 +282,10 @@ generated into `<package>.sbe` beside sbe-tool's flyweights.
   `FlyweightModel` (the reader's stages: for each stage its kind, name,
   the flyweight members it delegates to, its successor per the table, its
   nesting), `ReaderTemplates`, `ReaderWriter`, and `FlyweightEmitter`
-  called by `Generator.generate` after step 6 for every message of
-  `ir.messages()`, into `staged` under `ir.applicableNamespace()`.
+  called by `Generator.generate` after the codec emitter, once it reported
+  no error, for every message of `ir.messages()`, into `staged` under
+  `ir.applicableNamespace()`; the reader's join is the codec's, whose
+  problems the codec emitter reports.
   The reserved-name check lives in `FlyweightWalk` and reports a `Problem`
   on the component, or on the package where no record exists.
 - The generated reader exactly as `flyweights.md`'s shape: `Iterable` and
@@ -308,10 +317,12 @@ generated into `<package>.sbe` beside sbe-tool's flyweights.
   The two lists are equal. Also: `decodedLength()` equals the codec's.
 - The same test, second pass: `skip()` on every group header the first
   time it is met gives the OTF sequence with that group's entries and
-  everything under them removed.
+  everything under them removed. A third pass skips every entry, which
+  removes what each entry holds past its block.
 - `HandReaderTest` from step 0 re-pointed at the generated
-  `com.example.trading.sbe.NewOrderReader` and `CancelRejectReader`, the
-  hand-written readers deleted.
+  `com.example.trading.sbe.NewOrderReader` and `CancelRejectReader`. The
+  hand-written readers stay until step 4, since `HandBoundTest` reads
+  through their bound stages; step 4 deletes them.
 - `GoldenSourcesTest` in `sbe-buddy-tests`: `target/generated-sources/annotations/corpus/groups/sbe/GroupsReader.java`
   equals `src/test/resources/golden/corpus/groups/sbe/GroupsReader.java`;
   running with `-Dgolden.update=true` rewrites the resource instead.
@@ -427,6 +438,8 @@ record maps, carrying the record's components through `Faces`.
   `@Test` reading their first round-trip value's bound components
   through the reader and asserting equality, and `AddedFieldsTest`
   asserts a field above the acting version is `null` on the bound stage.
+- `HandBoundTest`'s reading half re-pointed at the generated readers, the
+  hand-written readers deleted.
 - Goldens updated (`GroupsReader.java`, `GroupsWriter.java`) and
   reviewed: the diff is the bound classes and nothing else.
 

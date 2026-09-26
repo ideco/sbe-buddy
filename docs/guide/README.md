@@ -18,6 +18,7 @@ Start with [Getting started](getting-started.md) for a complete example from dec
 * [Groups](reference/groups.md) — `@SbeGroup`, the entry record, nested groups, what a group costs
 * [Variable data](reference/var-data.md) — `@SbeData`, strings and byte arrays after the block
 * [Unions](reference/unions.md) — `@SbeUnion`, one codec over several messages, the exhaustive `switch`, replacing a message, routing with `canDecode`
+* [Typed flyweights](reference/flyweights.md) — every message as a sequence of stages over sbe-tool's flyweights, in wire order
 * Codecs — the `Codec` contract and its lifecycle
 
 ## How-to

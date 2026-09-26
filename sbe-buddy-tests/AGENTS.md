@@ -12,6 +12,11 @@ against the flyweights and codecs the processor generated for it.
   block, and the round trips.
 - Nothing registers a case. `Cases` finds every one on the classpath, the only
   classpath scan in the repository, and `SchemaCasesTest` runs its checks.
+  `ReaderSequenceTest` runs every round trip through the message's generated
+  reader against sbe-tool's `OtfMessageDecoder` on the same bytes.
+- `GoldenSourcesTest` holds generated sources against copies in
+  `src/test/resources/golden`, reviewed like any source;
+  `-Dgolden.update=true` rewrites them from the build.
 - A case waiting on a later increment sets `codecs = false` and says which
   increment in its Javadoc.
 - One case per XSD feature, and one per shape worth taking from sbe-tool's

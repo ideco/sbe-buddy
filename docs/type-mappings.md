@@ -402,6 +402,63 @@ resolve relative to the resource. Then:
   leaves out; a baseline turns that loss into errors. `partial` without a
   resource is an error.
 
+## Typed flyweights: the reader
+
+Every message of the schema gets `<Message>Reader` in `<schema package>.sbe`,
+beside sbe-tool's flyweights and over them, whether or not a record maps it:
+a partial package's other messages and a package with no record at all get
+one too. It is named by `JavaUtil.formatClassName` of the message's name, as
+the flyweights are, and so is everything in it.
+
+* **The message as a sequence of stages.** A reader is `Iterable` and its
+  own `Iterator` of its sealed `Stage`, which extends the api's
+  `net.concini.sbebuddy.Stage`. The stages come in wire order: the root block,
+  then each group's header followed by its entries, each entry followed by its
+  own groups and var-data, then each var-data. For a root block, a group
+  `fills` whose entries hold a group `allocations`, and var-data `note`:
+  `RootBlock, Fills, FillsEntry, Allocations, AllocationsEntry, …, Note`.
+* **The stage kinds.** `RootBlock` has the message's fields. A group's header
+  is its name, `Fills`, with `count()`; its entry is `FillsEntry`, with
+  `index()` from 0 and the entry's fields; one object per kind is advanced
+  from entry to entry. A var-data is its name, `Note`, with `length()`,
+  `copyTo(MutableDirectBuffer, int)`, `copyTo(byte[], int)` and
+  `wrap(DirectBuffer)`, a window over its bytes; it has no `String`
+  accessor. A field's accessors are every getter sbe-tool's decoder has for
+  it, delegated one to one with its name and face: a primitive's, a
+  `char` array's `String`, indexed and bulk getters, an enum's and its
+  `Raw`, a set's and a composite's flyweight, a constant's literal.
+* **The reader.** `wrap(buffer, offset)` reads the header through sbe-tool's
+  `wrapAndApplyHeader`, whose `IllegalStateException` refuses another
+  template, and stands before the root block. `rewind()` goes back there,
+  `header()` is sbe-tool's header decoder as read, `actingVersion()` the
+  header's version. `decodedLength()` is the whole message's length, header
+  included, at any point, disturbing nothing. `next()` past the last stage is
+  `NoSuchElementException`.
+* **Unread is passed over.** Moving on passes over whatever the current stage
+  left unread. A var-data is passed over the moment its stage arrives, its
+  start and length kept, so it reads again and again.
+* **`skip()` prunes.** On the root block the rest of the message, on a
+  header its entries, on an entry its groups and var-data, on a var-data
+  nothing: what the stage contains never comes, and what follows it does.
+  Only the current stage can skip; any other is `IllegalStateException("<Stage>
+  is not the current stage")`.
+* **A stage answers while the reader is inside it.** The root block for the
+  whole message; a header or an entry while the reader is at it or inside
+  what it holds, so a nested entry may read its parent entry's fields; a
+  var-data while current. An entry kept across its group's next entry reads
+  that entry. Any other read is `IllegalStateException("<Stage> is not
+  open")`.
+* **Versions.** A group or var-data added after the acting version never
+  comes; a field of an older block reads as sbe-tool's getter reads it.
+* **Names a reader takes.** A group or var-data whose stage would be
+  `RootBlock`, `Stage`, `Member`, `At`, the reader's own name, `String`,
+  `Iterable`, `Override`, `Appendable` or `IllegalStateException`, or
+  another group's or var-data's stage, `fills` beside var-data
+  `fillsEntry`, is an error, `the group "stage" clashes with the reader's
+  Stage; rename it`, on its component, and on the package where no record
+  maps the message. So is a field whose accessor would be `skip`, `bound`,
+  an entry's `index`, or a method of `Object`.
+
 ## Running example, complete
 
 The whole surface in one picture; documentation, not a fixture. The

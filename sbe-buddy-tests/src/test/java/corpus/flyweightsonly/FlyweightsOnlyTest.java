@@ -14,12 +14,14 @@ import corpus.flyweightsonly.sbe.MessageHeaderDecoder;
 import corpus.flyweightsonly.sbe.MessageHeaderEncoder;
 import corpus.flyweightsonly.sbe.PingDecoder;
 import corpus.flyweightsonly.sbe.PingEncoder;
+import corpus.flyweightsonly.sbe.PingReader;
 import corpus.flyweightsonly.sbe.PongEncoder;
+import corpus.flyweightsonly.sbe.PongReader;
 
 /**
  * A schema with no record: its package is a {@code package-info.java} naming
  * the resource and a baseline, which the compile held it against, and what it
- * gets is sbe-tool's flyweights, for every message.
+ * gets is sbe-tool's flyweights and a reader over them, for every message.
  */
 final class FlyweightsOnlyTest implements SchemaCase {
 
@@ -70,6 +72,22 @@ final class FlyweightsOnlyTest implements SchemaCase {
 		assertThat(ping.sentAt()).isEqualTo(-1L);
 		assertThat(PingEncoder.SCHEMA_VERSION).isEqualTo(1);
 		assertThat(PongEncoder.TEMPLATE_ID).isEqualTo(2);
+	}
+
+	@Test
+	void everyMessageHasAReader() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+		new PingEncoder().wrapAndApplyHeader(buffer, 0, new MessageHeaderEncoder()).sequence(3L).sentAt(-1L);
+		PingReader reader = new PingReader().wrap(buffer, 0);
+
+		PingReader.RootBlock block = (PingReader.RootBlock) reader.next();
+
+		assertThat(block.sequence()).isEqualTo(3L);
+		assertThat(block.sentAt()).isEqualTo(-1L);
+		assertThat(reader.hasNext()).isFalse();
+		assertThat(reader.decodedLength()).isEqualTo(MessageHeaderEncoder.ENCODED_LENGTH + PingEncoder.BLOCK_LENGTH);
+		new PongEncoder().wrapAndApplyHeader(buffer, 32, new MessageHeaderEncoder()).sequence(4L);
+		assertThat(((PongReader.RootBlock) new PongReader().wrap(buffer, 32).next()).sequence()).isEqualTo(4L);
 	}
 
 	@Test

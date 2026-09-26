@@ -150,7 +150,8 @@ of message"); a group's header is the group's name, `Fills`, and its entry
 record would give two regimes. A var-data is its name, `Note`. Bound
 stages take the suffix, `RootBlockBound`, `FillsEntryBound`. `Stage`,
 `Member`, `RootBlock` and `Entry` as a suffix are reserved: a group or
-var-data that would clash is an error on its node.
+var-data that would clash is an error on its node, and so is any other name
+the reader could not compile with, which `type-mappings.md` lists.
 
 ## Settled
 

@@ -2,6 +2,7 @@ package corpus.evolution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.agrona.concurrent.UnsafeBuffer;
@@ -13,13 +14,15 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.evolution.Order.Allocation;
 import corpus.evolution.Order.Fill;
 import corpus.evolution.Order.Leg;
+import corpus.evolution.sbe.OrderReader;
 
 /**
  * The evolution schema at version 2, crossed with the packages holding its
  * versions 0 and 1, each with its own records and codecs. Fields appended to a
  * block cross both ways; the group and var-data appended inside the entry are
  * read from every older message, while an older reader cannot step over them,
- * which is SBE's limit.
+ * which is SBE's limit. The flyweight reader passes over them in an older
+ * message.
  */
 final class EvolutionTest implements SchemaCase {
 
@@ -186,6 +189,25 @@ final class EvolutionTest implements SchemaCase {
 						)
 				)
 		);
+	}
+
+	@Test
+	void theCurrentFlyweightReaderPassesOverWhatAVersion0MessageLacks() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[512]);
+		int length = new corpus.evolution.v0.OrderCodec().encode(VERSION_0, buffer, OFFSET);
+		OrderReader reader = new OrderReader().wrap(buffer, OFFSET);
+
+		List<String> stages = new ArrayList<>();
+		for (OrderReader.Stage stage : reader) {
+			stages.add(stage.getClass().getSimpleName());
+		}
+
+		assertThat(stages).containsExactly(
+				"RootBlock", "Legs", "LegsEntry", "Allocations", "AllocationsEntry", "AllocationsEntry", "LegsEntry",
+				"Allocations"
+		);
+		assertThat(reader.actingVersion()).isZero();
+		assertThat(reader.decodedLength()).isEqualTo(length);
 	}
 
 	/**
