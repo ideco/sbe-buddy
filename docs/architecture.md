@@ -15,6 +15,7 @@ sbe-buddy-processor    javac elements to Annotated, problems to Messager, source
                        dep: sbe-buddy-generator
 sbe-buddy-example      realistic schemas with their oracles, and interop with sbe-tool's own flyweights; not deployed
 sbe-buddy-tests        the corpus, compiled by the real build and run against the generated code; not deployed
+sbe-buddy-benchmarks   JMH benchmarks of the example's codecs, run by hand; not deployed
 reference/             sbe-tool's sources as a submodule, for reading
 ```
 
@@ -188,6 +189,10 @@ Each layer is tested where it lives; the module's own `AGENTS.md` says how.
   nodes, the all-or-nothing pipeline, `Template` and `SchemaXmlAssert`.
 * **The example** proves the wiring on realistic schemas and interop with
   sbe-tool's own flyweights across frozen versions.
+* **sbe-buddy-benchmarks** measures the example's codecs with JMH, by hand:
+  `./mvnw -pl sbe-buddy-benchmarks -am package && java -jar
+  sbe-buddy-benchmarks/target/benchmarks.jar`. `verify` builds it and runs
+  nothing of it.
 
 ## Build
 
