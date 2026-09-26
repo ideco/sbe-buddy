@@ -1,10 +1,12 @@
 package corpus.groups;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.agrona.concurrent.UnsafeBuffer;
@@ -213,6 +215,79 @@ final class GroupsTest implements SchemaCase {
 						.end()
 						.fills().end()
 						.length()
+		);
+	}
+
+	/**
+	 * Each entry's bound stage answers while the reader is inside it, so a leg is
+	 * read after its allocations, as its record's constructor takes them.
+	 */
+	@Test
+	void theBoundStagesReadLegsWithTheirAllocationsAndTheAppendedFills() {
+		assertReadsTheValue(
+				new GroupsCodec(),
+				new Groups(
+						1L,
+						List.of(
+								new Leg(List.of(), 100),
+								new Leg(List.of(new Allocation(10, null), new Allocation(20, 5)), 200)
+						),
+						List.of(new Fill(new BigDecimal("1.05")), new Fill(new BigDecimal("2.50")))
+				),
+				(buffer, offset) -> {
+					GroupsReader reader = new GroupsReader().wrap(buffer, offset);
+					GroupsReader.RootBlockBound block = ((GroupsReader.RootBlock) reader.next()).bound();
+					GroupsReader.Legs legs = (GroupsReader.Legs) reader.next();
+					List<Leg> legList = new ArrayList<>();
+					for (int i = 0; i < legs.count(); i++) {
+						GroupsReader.LegsEntryBound leg = ((GroupsReader.LegsEntry) reader.next()).bound();
+						GroupsReader.Allocations allocations = (GroupsReader.Allocations) reader.next();
+						List<Allocation> allocationList = new ArrayList<>();
+						for (int j = 0; j < allocations.count(); j++) {
+							GroupsReader.AllocationsEntryBound allocation = ((GroupsReader.AllocationsEntry) reader
+									.next()).bound();
+							allocationList.add(new Allocation(allocation.account(), allocation.share()));
+						}
+						legList.add(new Leg(allocationList, leg.legId()));
+					}
+					GroupsReader.Fills fills = (GroupsReader.Fills) reader.next();
+					List<Fill> fillList = new ArrayList<>();
+					for (int i = 0; i < fills.count(); i++) {
+						fillList.add(new Fill(((GroupsReader.FillsEntry) reader.next()).bound().price()));
+					}
+					return new Groups(block.orderId(), legList, fillList);
+				}
+		);
+	}
+
+	/**
+	 * The bound chain takes the records' components only: the field no component
+	 * carries keeps the null value its entry was filled with, as the codec writes
+	 * it.
+	 */
+	@Test
+	void theBoundChainPassesOverTheFieldNoComponentCarries() {
+		assertWritesTheCodecsBytes(
+				new GroupsCodec(),
+				new Groups(
+						1L,
+						List.of(
+								new Leg(List.of(), 100),
+								new Leg(List.of(new Allocation(10, null), new Allocation(20, 5)), 200)
+						),
+						List.of(new Fill(new BigDecimal("1.05")))
+				),
+				(buffer, offset) -> {
+					GroupsWriter.Legs legs = new GroupsWriter().wrap(buffer, offset).bound().orderId(1L).legs();
+					legs = legs.entry().bound().legId(100).allocations().end();
+					GroupsWriter.Allocations allocations = legs.entry().bound().legId(200).allocations();
+					allocations = allocations.entry().bound().account(10);
+					allocations = allocations.entry().bound().account(20).share(5);
+					return allocations.end().end()
+							.fills().entry().bound().price(new BigDecimal("1.05"))
+							.end()
+							.length();
+				}
 		);
 	}
 }

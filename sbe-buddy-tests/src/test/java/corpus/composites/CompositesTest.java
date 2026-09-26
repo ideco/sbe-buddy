@@ -1,5 +1,6 @@
 package corpus.composites;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -248,5 +249,14 @@ final class CompositesTest implements SchemaCase {
 						.last().mantissa(10_125).exponent((byte) -2)
 						.length()
 		);
+	}
+
+	@Test
+	void theBoundStageReadsTheFaceRecordAndTheBoundComposite() {
+		assertReadsTheValue(new CompositesCodec(), new Composites(QUOTE, LAST), (buffer, offset) -> {
+			CompositesReader.RootBlockBound block = ((CompositesReader.RootBlock) new CompositesReader()
+					.wrap(buffer, offset).next()).bound();
+			return new Composites(block.quote(), block.last());
+		});
 	}
 }

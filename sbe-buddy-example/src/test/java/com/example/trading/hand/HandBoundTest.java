@@ -13,12 +13,19 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
 import com.example.trading.CancelRejectCodec;
+import com.example.trading.CancelRejectReader;
+import com.example.trading.CancelRejectWriter;
 import com.example.trading.CxlRejReason;
 import com.example.trading.ExecInst;
 import com.example.trading.NewOrder;
 import com.example.trading.NewOrder.Party;
 import com.example.trading.NewOrder.PartySubId;
 import com.example.trading.NewOrderCodec;
+import com.example.trading.NewOrderReader;
+import com.example.trading.NewOrderReader.PartiesEntry;
+import com.example.trading.NewOrderReader.PartySubIdsEntry;
+import com.example.trading.NewOrderReader.RootBlock;
+import com.example.trading.NewOrderWriter;
 import com.example.trading.OrdStatus;
 import com.example.trading.OrdType;
 import com.example.trading.PartyRole;
@@ -26,16 +33,13 @@ import com.example.trading.Samples;
 import com.example.trading.SecurityIdSource;
 import com.example.trading.Side;
 import com.example.trading.TimeInForce;
-import com.example.trading.hand.NewOrderReader.PartiesEntry;
-import com.example.trading.hand.NewOrderReader.PartySubIdsEntry;
-import com.example.trading.hand.NewOrderReader.RootBlock;
 
 /**
  * The bound stages against the records: what the reader's {@code bound()} gives
  * is the sample, component by component, absent ones {@code null}; what the
  * writer's bound chain writes is the codec's bytes; the chain hops between wire
  * and bound; and a bound setter refuses what the codec refuses, naming the
- * field. The generated bound stages must pass this unchanged.
+ * field.
  */
 final class HandBoundTest {
 

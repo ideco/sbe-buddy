@@ -1,9 +1,11 @@
 package corpus.vardata;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -227,5 +229,33 @@ final class VarDataTest implements SchemaCase {
 		byte[] bytes = new byte[length];
 		Arrays.fill(bytes, (byte) 7);
 		return bytes;
+	}
+
+	/** Var-data inside an entry reads through its own bound stage. */
+	@Test
+	void theBoundStagesReadTheAttachmentsAndEveryData() {
+		assertReadsTheValue(
+				new VarDataCodec(),
+				new VarData(
+						3, List.of(new Attachment(1, new byte[0]), new Attachment(2, filled(254))), "note",
+						new byte[]{42}, filled(254)
+				),
+				(buffer, offset) -> {
+					VarDataReader reader = new VarDataReader().wrap(buffer, offset);
+					VarDataReader.RootBlockBound block = ((VarDataReader.RootBlock) reader.next()).bound();
+					VarDataReader.Attachments attachments = (VarDataReader.Attachments) reader.next();
+					List<Attachment> attachmentList = new ArrayList<>();
+					for (int i = 0; i < attachments.count(); i++) {
+						VarDataReader.AttachmentsEntryBound attachment = ((VarDataReader.AttachmentsEntry) reader
+								.next()).bound();
+						byte[] content = ((VarDataReader.Content) reader.next()).bound().value();
+						attachmentList.add(new Attachment(attachment.kind(), content));
+					}
+					String note = ((VarDataReader.Note) reader.next()).bound().value();
+					byte[] payload = ((VarDataReader.Payload) reader.next()).bound().value();
+					byte[] signature = ((VarDataReader.Signature) reader.next()).bound().value();
+					return new VarData(block.orderId(), attachmentList, note, payload, signature);
+				}
+		);
 	}
 }

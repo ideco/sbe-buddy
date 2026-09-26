@@ -1,5 +1,6 @@
 package corpus.optionalfields;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -108,5 +109,14 @@ final class OptionalFieldsTest implements SchemaCase {
 						.quantity(100)
 						.length()
 		);
+	}
+
+	@Test
+	void theBoundStageReadsTheNullValuesAsNull() {
+		assertReadsTheValue(new OptionalFieldsCodec(), new OptionalFields(42L, null, null), (buffer, offset) -> {
+			OptionalFieldsReader.RootBlockBound block = ((OptionalFieldsReader.RootBlock) new OptionalFieldsReader()
+					.wrap(buffer, offset).next()).bound();
+			return new OptionalFields(block.orderId(), block.quantity(), block.price());
+		});
 	}
 }

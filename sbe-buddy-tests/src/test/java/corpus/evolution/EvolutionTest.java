@@ -1,5 +1,6 @@
 package corpus.evolution;
 
+import static net.concini.sbebuddy.tests.ReaderAssert.assertReadsTheValue;
 import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -256,5 +257,48 @@ final class EvolutionTest implements SchemaCase {
 						.end()
 						.length()
 		);
+	}
+
+	/**
+	 * The appended field, group and var-data of each entry are read through the
+	 * entry's and the var-data's bound stages at the current version.
+	 */
+	@Test
+	void theBoundStagesReadEveryAppendedMember() {
+		Order order = new Order(
+				1L, List.of(
+						new Leg(
+								1, new Price(100L, (byte) -2), 3,
+								List.of(new Allocation(7, 70L), new Allocation(8, 80L)),
+								List.of(new Fill(10), new Fill(20)), "first"
+						),
+						new Leg(2, new Price(-5L, (byte) 0), 4, List.of(), List.of(new Fill(30)), "second")
+				)
+		);
+
+		assertReadsTheValue(new OrderCodec(), order, (buffer, offset) -> {
+			OrderReader reader = new OrderReader().wrap(buffer, offset);
+			OrderReader.RootBlockBound block = ((OrderReader.RootBlock) reader.next()).bound();
+			OrderReader.Legs legs = (OrderReader.Legs) reader.next();
+			List<Leg> legList = new ArrayList<>();
+			for (int i = 0; i < legs.count(); i++) {
+				OrderReader.LegsEntryBound leg = ((OrderReader.LegsEntry) reader.next()).bound();
+				OrderReader.Allocations allocations = (OrderReader.Allocations) reader.next();
+				List<Allocation> allocationList = new ArrayList<>();
+				for (int j = 0; j < allocations.count(); j++) {
+					OrderReader.AllocationsEntryBound allocation = ((OrderReader.AllocationsEntry) reader.next())
+							.bound();
+					allocationList.add(new Allocation(allocation.account(), allocation.share()));
+				}
+				OrderReader.Fills fills = (OrderReader.Fills) reader.next();
+				List<Fill> fillList = new ArrayList<>();
+				for (int j = 0; j < fills.count(); j++) {
+					fillList.add(new Fill(((OrderReader.FillsEntry) reader.next()).bound().quantity()));
+				}
+				String note = ((OrderReader.Note) reader.next()).bound().value();
+				legList.add(new Leg(leg.legId(), leg.price(), leg.ratio(), allocationList, fillList, note));
+			}
+			return new Order(block.orderId(), legList);
+		});
 	}
 }
