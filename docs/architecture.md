@@ -15,6 +15,7 @@ sbe-buddy-processor    javac elements to Annotated, problems to Messager, source
                        dep: sbe-buddy-generator
 sbe-buddy-example      realistic schemas with their oracles, and interop with sbe-tool's own flyweights; not deployed
 sbe-buddy-tests        the corpus, compiled by the real build and run against the generated code; not deployed
+sbe-buddy-benchmarks   JMH benchmarks of the example's codecs, run by hand; not deployed
 reference/             sbe-tool's sources as a submodule, for reading
 ```
 
@@ -36,9 +37,10 @@ One compilation of an `@SbeSchema` package runs:
 4  the document ──► MessageSchema     sbe-tool  XmlSchemaParser, after sbe.xsd
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
-7  Ir ⋈ Annotated ──► codec sources   ours      the join: Join with FaceRules, then CodecWalk, CodecModel, CodecWriter over FaceWriter, UnionWriter
+7  Ir ⋈ Annotated ──► problems        ours      the join: Join with FaceRules, per message a record maps
    Ir ⋈ Annotated ──► readers         ours      the same join per message of the IR, then FlyweightWalk, FlyweightModel, ReaderWriter over FaceWriter
    Ir ⋈ Annotated ──► writers         ours      the same join again, then WriterWalk, WriterModel, WriterWriter over FaceWriter
+   readers, writers ──► codec sources ours      the join laid over them: CodecWalk, CodecModel, CodecWriter, UnionWriter
 8  the document ──► schema.xml        ours      the schema ships in the jar               code-first
 ```
 
@@ -82,8 +84,11 @@ Closed grammars, each one file of nested records.
   absence and a binding, and the helper methods the shape calls, a
   composite's pair and a var-data's methods among them. The codec and the
   flyweights' bound stages both write their leaves through `FaceWriter`.
-* **`CodecModel`** is what a codec is made of: bodies of members in wire and
-  constructor order, each field a `Faces` leaf, and the methods they call.
+* **`CodecModel`** is what a codec is made of: the record's structure over
+  its message's reader and writer, each block read through the reader's
+  stages into its constructor and written by the writer's bound chain, the
+  calls that chain takes, its groups' methods, and the header, whose leaves
+  alone are the codec's.
 * **`FlyweightModel`** is what a message's reader is made of: its stages,
   the accessors each delegates to sbe-tool's flyweights, the positions the
   reader passes through in wire order and the step that moves it on from
@@ -128,16 +133,19 @@ Three layers, in the order a mistake meets them.
 * **Flyweights** come from `JavaGenerator` with sbe-tool's default
   configuration into `<schema package>.sbe`; the schema goes into the jar as
   `<schema package>/schema.xml`.
-* **Codecs** are the IR joined with the annotations, a `Join`, built into a
-  `CodecModel` and written from it, each leaf by `FaceWriter`, so a codec
-  calls what sbe-tool generated and holds no wire numbers. A union's codec
-  is a `UnionModel` over its members' models.
+* **Codecs** are written over the readers' and writers' bound stages and hold
+  no leaf conversion: the message's `Join` laid over its reader's and
+  writer's models as a `CodecModel`, decoding through the reader's stages
+  and their bound stages, encoding through the writer's bound chain, so the
+  corpus's round trips prove the flyweights. The header record is the one
+  leaf the codec reads and writes itself, since `decodeHeader` reads any
+  message's. A union's codec is a `UnionModel` over its members' models.
 * **Readers** are generated for every message of the IR, a record or not,
   into the schema's package beside the codecs, since their bound stages
   name the records' types, over the flyweights they delegate to: the
   message joined as the codec joins it, laid out as a `FlyweightModel` in
   the order `OtfMessageDecoder` walks a message, and written from it. They
-  run after the codecs, whose join reports the problems a record has.
+  run once the join reported no error, and the codecs after them.
 * **Writers** are generated beside the readers, for the same messages: the
   same join laid out as a `WriterModel`, a stage per required field and one
   per group and per what follows it, and written from it, the null values
@@ -188,6 +196,10 @@ Each layer is tested where it lives; the module's own `AGENTS.md` says how.
   nodes, the all-or-nothing pipeline, `Template` and `SchemaXmlAssert`.
 * **The example** proves the wiring on realistic schemas and interop with
   sbe-tool's own flyweights across frozen versions.
+* **sbe-buddy-benchmarks** measures the example's codecs with JMH, by hand:
+  `./mvnw -pl sbe-buddy-benchmarks -am package && java -jar
+  sbe-buddy-benchmarks/target/benchmarks.jar`. `verify` builds it and runs
+  nothing of it.
 
 ## Build
 

@@ -563,11 +563,19 @@ no record maps has no `bound()` anywhere.
   and writes it as the codec does, refusing what the codec refuses with the
   codec's message; a composite and a set are one step. A step returns the
   next twin where there is one, else the next wire stage: a group's
-  `entry()` and `end()` take no component and have no twin.
+  `entry()` and `end()` take no component and have no twin. The codec writes
+  through these twins, so the chain takes every component the record holds.
+* **A constant is checked on the block complete.** A component on a field
+  with no wire step, a constant or a composite of constants only, is a step
+  of the block complete's twin, in any order with the optional fields: it
+  writes nothing and refuses a value other than the schema's, `side is the
+  constant Sell`, as the codec always has. An entry holding one is complete,
+  `PartiesEntry` extending `Parties`, where a record maps it.
 * **What no component carries is passed over.** A field an `unmapped` entry
   declares has no step on the twins: `bound()` from its stage, or the step
   before it, goes past it, and it keeps the null value its block was filled
-  with. A constant has a step on neither chain.
+  with. A block none of whose required fields a component maps is complete
+  with a twin, so `bound()` from its first stage goes past all of them.
 * **Names bound stages take.** `<Stage>Bound` for every stage that has one
   and, on the writer, `<Block>BoundStage` for the objects behind them join
   the names a group, var-data or field may not take. A component named

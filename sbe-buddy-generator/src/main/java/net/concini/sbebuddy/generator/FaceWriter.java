@@ -227,7 +227,7 @@ final class FaceWriter {
 	}
 
 	/** What var-data is before its binding: its bytes, or its text. */
-	static String face(Content content) {
+	private static String face(Content content) {
 		return content == Content.BYTES ? "byte[]" : "String";
 	}
 

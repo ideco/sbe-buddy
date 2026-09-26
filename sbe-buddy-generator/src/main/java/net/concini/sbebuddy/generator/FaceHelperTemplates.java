@@ -227,9 +227,10 @@ final class FaceHelperTemplates {
 
 	/**
 	 * The length and the data, checked as the content needs; null has no wire form.
+	 * The codec beside the writer counts its var-data by it.
 	 */
 	static final Template DATA_LENGTH = Template.of("""
-			private static int {length}({face} value) {
+			static int {length}({face} value) {
 				if (value == null) {
 					throw new IllegalArgumentException("{component} is required");
 				}

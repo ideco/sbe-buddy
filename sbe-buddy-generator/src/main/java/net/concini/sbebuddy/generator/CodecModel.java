@@ -4,13 +4,13 @@ import java.util.List;
 
 import org.jspecify.annotations.Nullable;
 
-import net.concini.sbebuddy.generator.Faces.Shape;
-
 /**
- * What one message's codec is made of, every name resolved: its bodies of
- * members, each field a {@link Faces} leaf, and the helper methods they call.
- * {@link CodecWalk} builds it from a {@link Join}; {@link CodecWriter} renders
- * it. Class names are qualified as the generated code writes them.
+ * What one message's codec is made of, every name resolved: the record's
+ * structure over the message's reader and writer, which hold every leaf, and
+ * the header, which the codec reads and writes itself. {@link CodecWalk} builds
+ * it from a {@link Join} and the reader's and writer's models;
+ * {@link CodecWriter} renders it. Class names are qualified as the generated
+ * code writes them.
  */
 record CodecModel(
 		String packageName,
@@ -19,109 +19,155 @@ record CodecModel(
 		String flyweights,
 		Header header,
 		String message,
+		String reader,
+		String writer,
+		String first,
 		int baseline,
 		List<Faces.Binding> bindings,
 		List<Faces.Context> contexts,
-		Body body,
-		List<Helper> helpers
+		Block block,
+		List<Group> groups,
+		List<Faces.Helper> helpers
 ) {
 
 	CodecModel {
 		bindings = List.copyOf(bindings);
 		contexts = List.copyOf(contexts);
+		groups = List.copyOf(groups);
 		helpers = List.copyOf(helpers);
 	}
 
 	/**
 	 * The header every message is framed in, over the flyweights named after
-	 * {@code headerClass}; {@code record} is what {@code decodeHeader} returns.
-	 * {@code body} reads every component and writes the members of the header's
-	 * own, never the standard four, which {@code wrapAndApplyHeader} writes;
-	 * {@code nulls} writes those members as their null value when no header is
-	 * given.
+	 * {@code headerClass}; {@code record} is what {@code decodeHeader} returns,
+	 * read from any message's header, so through no reader. {@code own} writes the
+	 * header's own members, never the standard four, which the writer writes, and
+	 * {@code constructorOrder} reads every component; the helpers they call are the
+	 * codec's.
 	 */
-	record Header(String headerClass, String record, Body body, List<Member.Unmapped> nulls) {
+	record Header(
+			String headerClass,
+			String record,
+			String encoder,
+			String decoder,
+			List<Faces.Face.Mapped> own,
+			List<Faces.Face.Mapped> constructorOrder
+	) {
 
 		Header {
-			nulls = List.copyOf(nulls);
-		}
-	}
-
-	/**
-	 * A message's, a composite's or a group entry's members over its flyweights: in
-	 * the order the wire takes them, and in the order the record's constructor
-	 * takes its components, which leaves out what no component carries.
-	 */
-	record Body(String encoder, String decoder, List<Member> wireOrder, List<Member> constructorOrder) {
-
-		Body {
-			wireOrder = List.copyOf(wireOrder);
+			own = List.copyOf(own);
 			constructorOrder = List.copyOf(constructorOrder);
 		}
 	}
 
-	sealed interface Member {
+	/**
+	 * The message's block or a group's entry, read through the reader's stage
+	 * {@code stage}, whose bound stage {@code bound} reads the components, null
+	 * where the block carries none; its groups and var-data in wire order, and the
+	 * components in the order the record's constructor takes them. {@code checks}
+	 * are the groups refused as null before the block is written, and {@code chain}
+	 * the calls that write it, from the stage it starts at.
+	 */
+	record Block(
+			String stage,
+			@Nullable String bound,
+			List<Variable> variable,
+			List<Component> constructorOrder,
+			List<Variable.Group> checks,
+			List<Call> chain
+	) {
 
-		/** A record component on a field or a composite member: its leaf. */
-		record Field(Faces.Face.Mapped leaf) implements Member {
+		Block {
+			variable = List.copyOf(variable);
+			constructorOrder = List.copyOf(constructorOrder);
+			checks = List.copyOf(checks);
+			chain = List.copyOf(chain);
 		}
+	}
 
-		/**
-		 * A field or member no component carries: written as its null value, an array's
-		 * in every element, and never read.
-		 */
-		record Unmapped(String property, Shape shape) implements Member {
-		}
+	/** A constructor argument: a field's component, or a group or var-data. */
+	sealed interface Component {
 
-		/**
-		 * A repeating group read into a local of its component's name before the
-		 * constructor; {@code addedSince} is the flyweight's since-version method when
-		 * the group was appended above the baseline, or null; {@code binding} and
-		 * {@code context} as on a field, the binding over the list.
-		 */
-		record Group(
-				String component,
-				String property,
-				String path,
-				String record,
-				Body entry,
-				@Nullable String addedSince,
-				@Nullable String binding,
-				@Nullable String context
-		) implements Member {
-		}
-
-		/**
-		 * Var-data, read into a local of its component's name before the constructor,
-		 * through the methods of its {@code leaf}; {@code addedSince} is the
-		 * flyweight's since-version method when the data was appended above the
-		 * baseline, or null; {@code binding} and {@code context} as on a group.
-		 */
-		record Data(
-				String component,
-				Faces.Helper.Data leaf,
-				@Nullable String addedSince,
-				@Nullable String binding,
-				@Nullable String context
-		) implements Member {
+		/** A component the block's bound stage reads, by its name. */
+		record Field(String component) implements Component {
 		}
 	}
 
 	/**
-	 * A method the codec declares once, however many members call it, in the order
-	 * the walk first met each: a leaf's helper, or the methods of a group.
+	 * A group or var-data, read into a local of its component's name before the
+	 * constructor, in wire order; {@code addedSince} is the flyweight's
+	 * since-version method, static on {@code decoder}, when it was appended above
+	 * the baseline, or null; {@code binding} and {@code context} stand in front of
+	 * it where the component has one.
 	 */
-	sealed interface Helper {
+	sealed interface Variable extends Component {
 
-		/** A method a leaf calls. */
-		record Leaf(Faces.Helper helper) implements Helper {
+		String component();
+
+		/**
+		 * A repeating group at {@code path}, which names its methods, of the entry
+		 * record {@code record}; the binding over the list. {@code encoder} is the
+		 * entry's flyweight, whose sizes it is counted by.
+		 */
+		record Group(
+				String component,
+				String path,
+				String record,
+				String encoder,
+				@Nullable String addedSince,
+				String decoder,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Variable {
 		}
 
 		/**
-		 * A group's write, read and length methods, over its entry's body;
-		 * {@code parent} is the encoder of the body the group is in, which sizes it.
+		 * Var-data, the reader's stage {@code stage} read through its bound stage
+		 * {@code bound} as {@code type}, bound by the reader; {@code length} is the
+		 * writer's method that counts it, which the codec hands its binding's view.
 		 */
-		record GroupMethods(Member.Group group, String parent) implements Helper {
+		record Data(
+				String component,
+				String stage,
+				String bound,
+				String type,
+				String length,
+				@Nullable String addedSince,
+				String decoder,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Variable {
 		}
+	}
+
+	/**
+	 * One call of a block's chain on the writer's stages; the message's chain ends
+	 * with its length, an entry's hands on to its group.
+	 */
+	sealed interface Call {
+
+		/** From a stage to its twin. */
+		record Hop() implements Call {
+		}
+
+		/** A twin's step taking the component of its name. */
+		record Take(String component) implements Call {
+		}
+
+		/**
+		 * A group opened by {@code method}, its stage {@code stage} held in
+		 * {@code local}, and its entries written by the group's method, from whose
+		 * return the chain goes on.
+		 */
+		record Open(Variable.Group group, String method, String stage, String local) implements Call {
+		}
+	}
+
+	/**
+	 * A group's write, read and length methods, over its entry: {@code stage} is
+	 * the writer's group stage and {@code after} what its {@code end()} returns,
+	 * {@code header} the reader's header stage.
+	 */
+	record Group(Variable.Group group, Block entry, String stage, String after, String header) {
 	}
 }

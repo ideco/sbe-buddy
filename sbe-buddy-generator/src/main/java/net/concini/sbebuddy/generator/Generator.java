@@ -10,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -295,14 +296,16 @@ public final class Generator {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-		List<Problem> problems = new ArrayList<>(CodecEmitter.emit(ir, annotated, evolution.baseline(), staged));
+		List<Problem> problems = new ArrayList<>(CodecEmitter.check(ir, annotated, evolution.baseline()));
 		if (problems.stream().anyMatch(Problem::isError)) {
 			return problems;
 		}
-		problems.addAll(FlyweightEmitter.emit(ir, annotated, evolution.baseline(), schema, staged));
+		Map<Integer, FlyweightEmitter.Models> flyweights = new HashMap<>();
+		problems.addAll(FlyweightEmitter.emit(ir, annotated, evolution.baseline(), schema, staged, flyweights));
 		if (problems.stream().anyMatch(Problem::isError)) {
 			return problems;
 		}
+		CodecEmitter.emit(ir, annotated, evolution.baseline(), flyweights, staged);
 		for (Map.Entry<String, CharSequence> source : staged.getSources().entrySet()) {
 			// Keyed by qualified class name; the header flyweight, which sbe-tool opens
 			// twice with one content, is one entry here and so one file there.

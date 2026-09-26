@@ -98,7 +98,7 @@ A stage is one object, reused: nothing is allocated per step, and a stage may be
 
 ## Bound stages
 
-Where a record maps the message, every stage that carries a component has `bound()`: the record's view of it, every component under its Java name and with its Java type, its binding applied, as the codec reads and writes it. The wire stays the default and garbage-free; the bound stage is the one to reach for where the record's types are wanted.
+Where a record maps the message, every stage that carries a component has `bound()`: the record's view of it, every component under its Java name and with its Java type, its binding applied. The codec is written over these: it reads through the reader's bound stages and writes through the writer's, so a component is on the wire what one leaf says. The wire stays the default and garbage-free; the bound stage is the one to reach for where the record's types are wanted.
 
 ```java
 for (NewOrderReader.Stage stage : reader.wrap(buffer, offset)) {
@@ -132,6 +132,7 @@ int length = writer.wrap(buffer, offset).bound()
         .transactTime(Instant.now())                     // through UtcTimestampBinding
         .orderQty(700)                                   // a composite in one step, through QtyBinding
         .price(new BigDecimal("99.61"))                  // null writes the null value
+        .securityIdSource(SecurityIdSource.EXCHANGE_SYMBOL) // a constant: checked, nothing written
         .parties()
             .entry().bound().partyId("FIRM-A").partyRole(PartyRole.EXECUTING_FIRM)
                 .partySubIds().end()
@@ -141,6 +142,7 @@ int length = writer.wrap(buffer, offset).bound()
 
 * A composite is one step, taking its binding's value, or its face record where it has no binding; a set is one step, taking the `Set`.
 * A step refuses what the codec refuses, with the codec's message: `null` for a required field, a string too long, a value the binding cannot write, an enum constant with no wire form, a character the encoding lacks.
-* A field no component carries has no step on the twins: it keeps the null value its block was filled with, as the codec writes it. A constant has no step on either chain.
+* A field no component carries has no step on the twins: it keeps the null value its block was filled with, as the codec writes it.
+* A constant has no wire step. Where a component carries it, the block complete's twin has one that writes nothing and refuses any other value, `.securityIdSource(SecurityIdSource.EXCHANGE_SYMBOL)` above beside `price`, so the bound chain takes every component the record holds. The codec writes through these twins.
 * The chain hops freely: `.clOrdId("ORD-1").bound().account(...)`. A group's `entry()` and `end()` carry no component and are the wire's; an entry's twin is one `bound()` away.
 

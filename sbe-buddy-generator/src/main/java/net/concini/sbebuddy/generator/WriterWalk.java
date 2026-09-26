@@ -223,29 +223,35 @@ final class WriterWalk {
 		positions.add(level.position());
 		List<Join.Field> required = new ArrayList<>();
 		List<Join.Field> optional = new ArrayList<>();
+		// Components on fields with no step: checked by the block complete's twin.
+		List<Join.Field> checked = new ArrayList<>();
 		List<NullWrite> writes = new ArrayList<>();
 		for (Join.Field field : block.fields()) {
-			if (isConstant(field.token())) {
-				continue;
+			if (!isConstant(field.token())) {
+				NullWrite write = nullWrite(field.type(), field.property());
+				if (write != null) {
+					writes.add(write);
+				}
 			}
-			NullWrite write = nullWrite(field.type(), field.property());
-			if (write == null) {
-				continue;
-			}
-			writes.add(write);
-			if (!writable(field.type())) {
-				continue;
-			}
-			if (field.token().encoding().presence() == Encoding.Presence.OPTIONAL) {
-				optional.add(field);
-			} else {
-				required.add(field);
+			switch (place(ir, field)) {
+				case REQUIRED -> required.add(field);
+				case OPTIONAL -> optional.add(field);
+				case CHECKED -> {
+					if (leaf(field) != null) {
+						checked.add(field);
+					}
+				}
 			}
 		}
 		nulls.put(level.encoder(), new Nulls(level.encoder(), writes));
 		int followers = block.groups().size() + block.data().size();
 		Parent group = level.group();
-		boolean complete = group == null || !optional.isEmpty() || followers > 0;
+		// A twin the chain reaches only once the block is complete: where it checks
+		// a component, or where no component maps a required field, whose stages
+		// the chain can then only leave from there.
+		boolean late = mapped && (!checked.isEmpty()
+				|| !required.isEmpty() && required.stream().noneMatch(field -> leaf(field) != null));
+		boolean complete = group == null || !optional.isEmpty() || followers > 0 || late;
 		List<String> names = new ArrayList<>();
 		for (Join.Field field : required) {
 			String name = level.name() + JavaUtil.formatClassName(field.token().name());
@@ -257,9 +263,9 @@ final class WriterWalk {
 			implementation.stages.add(name);
 		}
 		// The block complete has a twin where it takes a component: an optional one,
-		// or var-data first.
+		// a checked one, or var-data first; and where the chain reaches no other.
 		boolean completeTwin = mapped && complete
-				&& (optional.stream().anyMatch(field -> leaf(field) != null)
+				&& (optional.stream().anyMatch(field -> leaf(field) != null) || late
 						|| block.groups().isEmpty() && !block.data().isEmpty());
 		// Past the required fields: the block complete, else the group it returns to.
 		Target filled = complete || group == null
@@ -335,6 +341,20 @@ final class WriterWalk {
 						), carrier(field, components, unmapped), "field", field.token().name()
 				);
 			}
+		}
+		for (Join.Field field : checked) {
+			Face.Mapped leaf = leaf(field);
+			if (leaf == null) {
+				throw new IllegalStateException(field.property() + " is checked though no component maps it");
+			}
+			use(field);
+			add(
+					bound, level.name() + BOUND,
+					new Method.Bound(
+							signature(level.name() + BOUND, leaf.component(), new Parameter(leaf.type(), "value")),
+							guard, leaf, level.flyweight(), level.encoder(), new Then.Return("this")
+					), carrier(field, components, unmapped), "field", field.token().name()
+			);
 		}
 		if (completeTwin && group != null && followers == 0) {
 			parents.put(level.name() + BOUND, List.of(group.stage()));
@@ -598,7 +618,8 @@ final class WriterWalk {
 	/**
 	 * {@code method()} on the stage {@code stage}, returning {@code returns}, which
 	 * the object {@code to} implements: declared on the class once, returning the
-	 * class, so every stage it implements shares it.
+	 * class, so every stage it implements shares it, and open from the first of
+	 * their positions to the last; each step past it guards its own.
 	 */
 	private void hop(Builder from, String stage, String returns, String method, Builder to, Guard guard) {
 		Signature declared = signature(returns, method);
@@ -607,6 +628,8 @@ final class WriterWalk {
 		}
 		if (from.hops.add(method)) {
 			add(from, null, new Method.Hop(signature(to.name, method), guard, to.field), node, "", "");
+		} else {
+			from.widen(method, guard);
 		}
 		methods(stage).add(declared);
 	}
@@ -907,7 +930,7 @@ final class WriterWalk {
 		String encoder = walk.flyweights + "." + compositeClass + "Encoder";
 		List<Token> members = new ArrayList<>();
 		for (Token member : members(ir, typeName)) {
-			if (!isConstant(member) && walk.writable(member)) {
+			if (!isConstant(member) && writable(ir, member)) {
 				members.add(member);
 			}
 		}
@@ -967,14 +990,35 @@ final class WriterWalk {
 	}
 
 	/**
+	 * Where a block's field is written on the twins, as {@link #level} lays them
+	 * out: a step of its own in wire order, a step of the block complete, or a
+	 * check there, for a field with no step.
+	 */
+	enum Place {
+
+		REQUIRED,
+
+		OPTIONAL,
+
+		CHECKED
+	}
+
+	static Place place(Ir ir, Join.Field field) {
+		if (isConstant(field.token()) || !writable(ir, field.type())) {
+			return Place.CHECKED;
+		}
+		return field.token().encoding().presence() == Encoding.Presence.OPTIONAL ? Place.OPTIONAL : Place.REQUIRED;
+	}
+
+	/**
 	 * Whether a field or member has a step: a constant has none, nor an array of
 	 * length 0, nor a composite of no member that has one.
 	 */
-	private boolean writable(Token type) {
+	private static boolean writable(Ir ir, Token type) {
 		return switch (type.signal()) {
 			case ENCODING -> type.arrayLength() >= 1;
 			case BEGIN_COMPOSITE -> members(ir, type.applicableTypeName()).stream()
-					.anyMatch(member -> !isConstant(member) && writable(member));
+					.anyMatch(member -> !isConstant(member) && writable(ir, member));
 			default -> true;
 		};
 	}
@@ -1077,6 +1121,23 @@ final class WriterWalk {
 			Claim other = reported == claim ? taken : claim;
 			problems.add(clash(reported.node(), reported.kind(), reported.wireName(), other.method()));
 			return false;
+		}
+
+		/** The hop {@code method} open up to where {@code guard} closes too. */
+		void widen(String method, Guard guard) {
+			for (int i = 0; i < methods.size(); i++) {
+				if (methods.get(i) instanceof Method.Hop hop && hop.signature().name().equals(method)
+						&& hop.guard() instanceof Guard.Current from && guard instanceof Guard.Current to) {
+					methods.set(
+							i, new Method.Hop(
+									hop.signature(), new Guard.Current(from.first(), to.last(), from.stage()),
+									hop.object()
+							)
+					);
+					return;
+				}
+			}
+			throw new IllegalStateException(name + " has no hop " + method + "() to widen");
 		}
 
 		Implementation build() {

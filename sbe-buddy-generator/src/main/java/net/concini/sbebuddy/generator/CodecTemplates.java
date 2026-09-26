@@ -1,10 +1,10 @@
 package net.concini.sbebuddy.generator;
 
 /**
- * The text of a codec around its leaves: the class, the header, the lengths,
- * the groups and the var-data, and a union's codec. {@link CodecWriter} and
- * {@link UnionWriter} fill them from their models; a template's names in braces
- * are the only values it takes.
+ * The text of a codec over its message's reader and writer: the class, the
+ * header, the lengths, the chain a block is written by, the groups and the
+ * var-data. {@link CodecWriter} fills them from its model; a template's names
+ * in braces are the only values it takes.
  */
 final class CodecTemplates {
 
@@ -20,10 +20,9 @@ final class CodecTemplates {
 					public final class {codec} implements net.concini.sbebuddy.Codec<{record}, {headerRecord}> {
 
 						{contexts}
-						private final {flyweights}.{headerClass}Encoder headerEncoder = new {flyweights}.{headerClass}Encoder();
 						private final {flyweights}.{headerClass}Decoder headerDecoder = new {flyweights}.{headerClass}Decoder();
-						private final {flyweights}.{message}Encoder encoder = new {flyweights}.{message}Encoder();
-						private final {flyweights}.{message}Decoder decoder = new {flyweights}.{message}Decoder();
+						private final {reader} reader = new {reader}();
+						private final {writer} writer = new {writer}();
 						{bindings}
 						private int lastDecodedLength;
 
@@ -43,9 +42,7 @@ final class CodecTemplates {
 							if (value == null) {
 								throw new IllegalArgumentException("value is required");
 							}
-							encoder.wrapAndApplyHeader(buffer, offset, headerEncoder);
-							{writeNullHeader}
-							return encodeBody(value);
+							return encodeBody(value, writer.wrap(buffer, offset));
 						}
 
 						@Override
@@ -56,14 +53,13 @@ final class CodecTemplates {
 							if (header == null) {
 								throw new IllegalArgumentException("header is required");
 							}
-							encoder.wrapAndApplyHeader(buffer, offset, headerEncoder);
+							{first} first = writer.wrap(buffer, offset);
 							{writeHeader}
-							return encodeBody(value);
+							return encodeBody(value, first);
 						}
 
-						private int encodeBody({record} value) {
-							{encodeFields}
-							return {flyweights}.{headerClass}Encoder.ENCODED_LENGTH + encoder.encodedLength();
+						private int encodeBody({record} value, {first} first) {
+							{encodeBlock}
 						}
 
 						@Override
@@ -75,12 +71,12 @@ final class CodecTemplates {
 										"not a {message}: schemaId " + headerDecoder.schemaId() + ", templateId " + headerDecoder.templateId());
 							}
 							{refuseBelowBaseline}
-							decoder.wrap(buffer, offset + {flyweights}.{headerClass}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
+							{readBlock}
 							{decodeVariable}
 							{record} value = new {record}(
 									{decodeFields}
 							);
-							lastDecodedLength = {flyweights}.{headerClass}Decoder.ENCODED_LENGTH + decoder.encodedLength();
+							lastDecodedLength = reader.decodedLength();
 							return value;
 						}
 
@@ -104,11 +100,11 @@ final class CodecTemplates {
 
 						@Override
 						public int decodedLength(org.agrona.DirectBuffer buffer, int offset) {
-							headerDecoder.wrap(buffer, offset);
-							{decodedLength}
+							return reader.wrap(buffer, offset).decodedLength();
 						}
 
 						{headerMethods}
+						{groupMethods}
 						{helpers}
 					}
 					"""
@@ -128,153 +124,82 @@ final class CodecTemplates {
 						"{message} version " + headerDecoder.version() + " is below the baseline {baseline}");
 			}""");
 
-	/**
-	 * Without a group or var-data the length is the header's block length, no walk
-	 * needed.
-	 */
-	static final Template BLOCK_DECODED_LENGTH = Template
-			.of("return {flyweights}.{headerClass}Decoder.ENCODED_LENGTH + headerDecoder.blockLength();");
+	// ---- reading a block: its stage from the reader, its components from the
+	// stage's bound stage
 
 	/**
-	 * With either, the flyweight walks every group and var-data and restores its
-	 * limit.
+	 * The root block arrives first, and its bound stage reads for the whole
+	 * message.
 	 */
-	static final Template WALKED_DECODED_LENGTH = Template.of(
-			"""
-					decoder.wrap(buffer, offset + {flyweights}.{headerClass}Decoder.ENCODED_LENGTH, headerDecoder.blockLength(), headerDecoder.version());
-					return {flyweights}.{headerClass}Decoder.ENCODED_LENGTH + decoder.sbeDecodedLength();"""
-	);
+	static final Template READ_ROOT_BLOCK = Template
+			.of("{bound} block = (({stage}) reader.wrap(buffer, offset).next()).bound();");
 
-	// ---- a union: one case per member, delegating to the member's codec
+	/** A root block carrying no component is passed, to reach what follows it. */
+	static final Template PASS_ROOT_BLOCK = Template.of("reader.wrap(buffer, offset).next();");
 
-	static final Template UNION_CODEC = Template.of(
-			"""
-					package {packageName};
+	/** An entry's bound stage reads while the reader is inside the entry. */
+	static final Template READ_ENTRY = Template.of("{bound} entry = (({stage}) reader.next()).bound();");
 
-					/** Generated by sbe-buddy from the schema of this package; do not edit. */
-					@javax.annotation.processing.Generated("net.concini.sbebuddy")
-					public final class {codec} implements net.concini.sbebuddy.Codec<{union}, {headerRecord}> {
+	static final Template PASS_ENTRY = Template.of("reader.next();");
 
-						private final {flyweights}.{headerClass}Decoder headerDecoder = new {flyweights}.{headerClass}Decoder();
-						{fields}
-						private net.concini.sbebuddy.Codec<?, ?> lastDecoder = {first};
+	/**
+	 * A component of the block, read through its bound stage, held in
+	 * {@code variable}.
+	 */
+	static final Template READ_FIELD = Template.of("{variable}.{component}()");
 
-						public {codec}() {
-						}
+	// ---- writing a block: the writer's chain, from the stage it starts at
 
-						@Override
-						public int encodedLength({union} value) {
-							if (value == null) {
-								throw new IllegalArgumentException("value is required");
-							}
-							return switch (value) {
-								{encodedLengths}
-							};
-						}
+	static final Template HOP = Template.of(".bound()");
 
-						@Override
-						public int encode({union} value, org.agrona.MutableDirectBuffer buffer, int offset) {
-							if (value == null) {
-								throw new IllegalArgumentException("value is required");
-							}
-							return switch (value) {
-								{encodes}
-							};
-						}
+	static final Template TAKE = Template.of(".{component}(value.{component}())");
 
-						@Override
-						public int encode({union} value, {headerRecord} header, org.agrona.MutableDirectBuffer buffer, int offset) {
-							if (value == null) {
-								throw new IllegalArgumentException("value is required");
-							}
-							return switch (value) {
-								{headerEncodes}
-							};
-						}
+	/** An entry's last step, which ends its statement. */
+	static final Template LAST_TAKE = Template.of(".{component}(value.{component}());");
 
-						@Override
-						public {union} decode(org.agrona.DirectBuffer buffer, int offset) {
-							headerDecoder.wrap(buffer, offset);
-							if (headerDecoder.schemaId() != {firstDecoder}.SCHEMA_ID) {
-								throw notOurs();
-							}
-							return switch (headerDecoder.templateId()) {
-								{decodes}
-								default -> throw notOurs();
-							};
-						}
+	/** A group opened where the chain stands, held for its entries. */
+	static final Template OPEN_GROUP = Template.of("""
+			{stage} {local} = {start}
+					{calls}
+					.{method}();""");
 
-						@Override
-						public boolean canDecode(org.agrona.DirectBuffer buffer, int offset) {
-							headerDecoder.wrap(buffer, offset);
-							return switch (headerDecoder.templateId()) {
-								{canDecodes}
-								default -> false;
-							};
-						}
+	static final Template OPEN_GROUP_AT_START = Template.of("{stage} {local} = {start}.{method}();");
 
-						@Override
-						public {headerRecord} decodeHeader(org.agrona.DirectBuffer buffer, int offset) {
-							return {first}.decodeHeader(buffer, offset);
-						}
+	/** The message complete: its length. */
+	static final Template CHAIN_LENGTH = Template.of("""
+			return {start}
+					{calls}
+					.length();""");
 
-						@Override
-						public int lastDecodedLength() {
-							return lastDecoder.lastDecodedLength();
-						}
+	static final Template LENGTH_AT_START = Template.of("return {start}.length();");
 
-						@Override
-						public int decodedLength(org.agrona.DirectBuffer buffer, int offset) {
-							headerDecoder.wrap(buffer, offset);
-							if (headerDecoder.schemaId() != {firstDecoder}.SCHEMA_ID) {
-								throw notOurs();
-							}
-							return switch (headerDecoder.templateId()) {
-								{decodedLengths}
-								default -> throw notOurs();
-							};
-						}
+	/** An entry complete, its group's to continue. */
+	static final Template CHAIN_END = Template.of("""
+			{start}
+					{calls}""");
 
-						private IllegalArgumentException notOurs() {
-							return new IllegalArgumentException("not a {unionName}: schemaId " + headerDecoder.schemaId() + ", templateId "
-									+ headerDecoder.templateId() + "; its templates are " + {templateIds});
-						}
-					}
-					"""
-	);
+	static final Template END_AT_START = Template.of("{start};");
 
-	static final Template UNION_CODEC_FIELD = Template.of("private final {codec} {field} = new {codec}();");
+	/**
+	 * A group's entries written, from the stage its {@code end()} hands back on.
+	 */
+	static final Template WRITE_GROUP_CALL = Template.of("write{path}({source}, {local})");
 
-	static final Template UNION_ENCODED_LENGTH_CASE = Template
-			.of("case {record} member -> {field}.encodedLength(member);");
+	/** An entry's chain starts at the group's next entry. */
+	static final Template ENTRY_START = Template.of("group.entry()");
 
-	static final Template UNION_ENCODE_CASE = Template
-			.of("case {record} member -> {field}.encode(member, buffer, offset);");
+	static final Template MESSAGE_START = Template.of("first");
 
-	static final Template UNION_HEADER_ENCODE_CASE = Template
-			.of("case {record} member -> {field}.encode(member, header, buffer, offset);");
-
-	/** The decoding codec is remembered, so {@code lastDecodedLength} asks it. */
-	static final Template UNION_DECODE_CASE = Template.of("""
-			case {decoder}.TEMPLATE_ID -> {
-				lastDecoder = {field};
-				yield {field}.decode(buffer, offset);
+	/** A group has no wire form for null: refused before the block is written. */
+	static final Template CHECK_GROUP = Template.of("""
+			if (value.{component}() == null) {
+				throw new IllegalArgumentException("{component} is required");
 			}""");
 
-	static final Template UNION_DECODED_LENGTH_CASE = Template
-			.of("case {decoder}.TEMPLATE_ID -> {field}.decodedLength(buffer, offset);");
+	// ---- the header: read whole from any message, its own members written from
+	// a header
 
-	static final Template UNION_CAN_DECODE_CASE = Template
-			.of("case {decoder}.TEMPLATE_ID -> {field}.canDecode(buffer, offset);");
-
-	static final Template UNION_TEMPLATE_ID = Template.of("{decoder}.TEMPLATE_ID");
-
-	// ---- the header: read whole, its own members written from a header or as
-	// null
-
-	static final Template WRITE_NULL_HEADER_CALL = Template.of("writeNullHeader(headerEncoder);");
-
-	static final Template WRITE_HEADER_CALL = Template.of("writeHeader(header, headerEncoder);");
+	static final Template WRITE_HEADER_CALL = Template.of("writeHeader(header, writer.header());");
 
 	static final Template READ_HEADER = Template.of("""
 			private {record} readHeader({decoder} decoder) {
@@ -284,7 +209,7 @@ final class CodecTemplates {
 			}""");
 
 	/**
-	 * The parameters bear the message's names, so every field shape serves a header
+	 * The parameters bear the leaves' names, so every field shape serves a header
 	 * member as it is.
 	 */
 	static final Template WRITE_HEADER = Template.of("""
@@ -292,61 +217,64 @@ final class CodecTemplates {
 				{members}
 			}""");
 
-	static final Template WRITE_NULL_HEADER = Template.of("""
-			private static void writeNullHeader({encoder} encoder) {
-				{members}
-			}""");
-
-	// ---- a binding: the component mapped before the flyweight and after it,
-	// handed the component's context
+	// ---- a binding over a whole group, and one over var-data, which the codec
+	// hands the writer's length
 
 	/** A group or var-data read into its local, handed to the record as it is. */
 	static final Template LOCAL = Template.of("{component}");
 
-	/** A group or var-data read into its local, bound on its way to the record. */
+	/** A group read into its local, bound on its way to the record. */
 	static final Template BOUND_LOCAL = Template.of("{binding}.fromWire({component}, {context})");
 
 	/** Absent from an older message, it stays null past the binding. */
 	static final Template BOUND_ADDED_LOCAL = Template
 			.of("{component} == null ? null : {binding}.fromWire({component}, {context})");
 
-	// ---- a group: three methods per group, keyed by its path, over its own
-	// classes
-
-	static final Template ENCODE_GROUP_FIELD = Template.of("write{path}({source}, encoder);");
-
-	static final Template DECODE_GROUP = Template
-			.of("java.util.List<{record}> {component} = read{path}(decoder.{property}());");
+	/**
+	 * A group's entries as the writer takes them: through the binding over them.
+	 */
+	static final Template BOUND_GROUP_SOURCE = Template.of("{binding}.toWire(value.{component}(), {context})");
 
 	/**
-	 * Absent below the acting version, as a field is; count zero is never read.
+	 * A group's or var-data's view, whose null the length refuses: the binding is
+	 * never handed null.
+	 */
+	static final Template NULLABLE_BOUND_COMPONENT = Template
+			.of("value.{component}() == null ? null : {binding}.toWire(value.{component}(), {context})");
+
+	// ---- a group: three methods per group, keyed by its path, over the reader's
+	// and the writer's stages
+
+	static final Template READ_GROUP_LOCAL = Template.of("java.util.List<{record}> {component} = read{path}();");
+
+	/**
+	 * Absent below the acting version, as a field is; the reader never comes to it.
 	 * sbe-tool names the group's static methods after its decoder class,
 	 * {@code legsDecoderSinceVersion()}.
 	 */
-	static final Template DECODE_ADDED_GROUP = Template.of(
-			"java.util.List<{record}> {component} = decoder.actingVersion() < {decoder}.{addedSince}() ? null : read{path}(decoder.{property}());"
+	static final Template READ_ADDED_GROUP_LOCAL = Template.of(
+			"java.util.List<{record}> {component} = reader.actingVersion() < {decoder}.{addedSince}() ? null : read{path}();"
 	);
 
 	/**
-	 * The entry's shapes are the message's, over the group's classes: the loop's
-	 * variable and local bear the names the field templates use, and the methods
-	 * are the codec's own, since a bound field reaches its binding. The body the
-	 * group is in sizes it.
+	 * The entries written each through the entry's chain, whose loop variable bears
+	 * the name the chain reads the components from.
 	 */
 	static final Template WRITE_GROUP = Template.of("""
-			private void write{path}(java.util.List<{record}> entries, {parent} parent) {
-				{encoder} encoder = parent.{property}Count(entries.size());
+			private {after} write{path}(java.util.List<{record}> entries, {stage} group) {
 				for ({record} value : entries) {
-					encoder.next();
 					{body}
 				}
+				return group.end();
 			}""");
 
+	/** As many entries as the header counts, each read before what it holds. */
 	static final Template READ_GROUP = Template.of("""
-			private java.util.List<{record}> read{path}({decoder} decoder) {
-				java.util.List<{record}> entries = new java.util.ArrayList<>(decoder.count());
-				while (decoder.hasNext()) {
-					decoder.next();
+			private java.util.List<{record}> read{path}() {
+				{header} group = ({header}) reader.next();
+				java.util.List<{record}> entries = new java.util.ArrayList<>(group.count());
+				for (int i = 0; i < group.count(); i++) {
+					{entry}
 					{reads}
 					entries.add(new {record}(
 							{arguments}
@@ -376,17 +304,17 @@ final class CodecTemplates {
 				return length;
 			}""");
 
-	// ---- var-data: methods per data member, keyed by its path, over its body's
-	// classes; its bytes counted without encoding
+	// ---- var-data: read through its stage's bound stage, counted by the writer
 
-	static final Template DECODE_DATA = Template.of("{face} {component} = {read};");
+	static final Template READ_DATA_LOCAL = Template
+			.of("{type} {component} = (({stage}) reader.next()).bound().value();");
 
 	/** Absent below the acting version, as a group is. */
-	static final Template DECODE_ADDED_DATA = Template.of(
-			"{face} {component} = decoder.actingVersion() < {decoder}.{addedSince}() ? null : {read};"
+	static final Template READ_ADDED_DATA_LOCAL = Template.of(
+			"{type} {component} = reader.actingVersion() < {decoder}.{addedSince}() ? null : (({stage}) reader.next()).bound().value();"
 	);
 
-	// ---- the shapes over them
+	// ---- the lengths over them
 
 	/** A group's or a data member's share of the length, at the message. */
 	static final Template LENGTH_TERM = Template.of(" + {length}({source})");

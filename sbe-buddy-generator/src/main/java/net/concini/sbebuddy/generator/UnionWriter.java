@@ -1,12 +1,12 @@
 package net.concini.sbebuddy.generator;
 
-import static net.concini.sbebuddy.generator.CodecTemplates.*;
+import static net.concini.sbebuddy.generator.UnionTemplates.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@link UnionModel} as Java source, through {@link CodecTemplates}: every
+ * A {@link UnionModel} as Java source, through {@link UnionTemplates}: every
  * method a switch over the cases, on the record's type to encode and on the
  * header's template id to decode, delegating to the member's codec.
  */
