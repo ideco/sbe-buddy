@@ -260,7 +260,8 @@ final class WriterWriter {
 
 	private String guard(Guard guard) {
 		return switch (guard) {
-			case Guard.Current current -> CURRENT.fill(current, "writer", writer);
+			case Guard.Current current -> (current.first().equals(current.last()) ? CURRENT_AT : CURRENT)
+					.fill(current, "writer", writer);
 			case Guard.Open open -> OPEN.fill(open);
 		};
 	}

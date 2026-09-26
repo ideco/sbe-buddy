@@ -27,6 +27,9 @@ final class WriterStepTemplates {
 
 	static final Template CURRENT = Template.of("{writer}.this.current(At.{first}, At.{last}, \"{stage}\");");
 
+	/** The guard where the range is one position, the check an identity. */
+	static final Template CURRENT_AT = Template.of("{writer}.this.current(At.{first}, \"{stage}\");");
+
 	static final Template OPEN = Template.of("""
 			if (next == null) {
 				throw new IllegalStateException("{writer} has ended");
