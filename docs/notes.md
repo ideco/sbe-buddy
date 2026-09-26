@@ -156,7 +156,11 @@ alternatives considered.
   The message decoder's `sbeSkip()` rewinds to the block and walks every
   group, each entry's `sbeSkip()` walking its own, and every var-data;
   `sbeDecodedLength()` calls it and restores the limit, so it needs a
-  wrapped decoder and disturbs nothing. (`JavaGenerator.java`,
+  wrapped decoder and disturbs the limit not at all; it does re-wrap every
+  group decoder on its way, so a group decoder mid-iteration reads
+  `hasNext()` false afterwards, and a walk that is inside a group must
+  measure on a second decoder instance. A group decoder's `index` is a
+  private field with no accessor. (`JavaGenerator.java`,
   `generateDecoderGroups`, `generateEncoderGroups`,
   `generateGroupDecoderProperty`, `generateGroupEncoderProperty`,
   `generateGroupDecoderClassHeader`, `generateGroupEncoderClassHeader`,
@@ -566,6 +570,12 @@ alternatives considered.
   `FileObject.toUri()` it resolves a relative `href` next to the document,
   in a directory and inside a jar alike. (Spike against
   `XmlSchemaParser.parse(InputSource, ParserOptions)`, 2026-09-24.)
+* A class may not implement an interface nested in itself: `class W
+  implements W.Stage` is "cyclic inheritance involving W", with the
+  class's other members then failing to resolve. A typestate whose stage
+  interfaces are nested in the writer is implemented by inner classes of
+  it, never by the writer. (javac 21, the hand-written `NewOrderWriter`
+  of `sbe-buddy-example`, 2026-09-26.)
 
 ## JDK 25
 

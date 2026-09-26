@@ -36,12 +36,32 @@ Decided here, where the sketch left room:
 - **Generated for every message of the IR,** `ir.messages()` ordered by
   template id, never `annotated.messages()`: the readers and writers do
   not need a record. Only `bound()` does.
-- **Liveness is a `boolean live` per stage object,** set by the reader
-  when it opens the stage and cleared when it leaves it. Stages are
-  singletons of the reader, so one flag does what a slot per nesting
-  level would, with less machinery, and it accepts the same edge: an entry kept
-  across its group's `next()` reads the new entry. Every accessor, bound
-  ones included, begins `if (!live) throw new IllegalStateException("<Stage> is not open")`.
+- **Liveness is read off the reader's position.** The reader keeps one
+  `enum At` of its positions in wire order (`BEFORE_ROOT_BLOCK`,
+  `ROOT_BLOCK`, each group's header and entry, an `AFTER_<Group>`
+  where a stage can rest past nested content, `END`), and a stage is
+  open while the position lies in its contiguous range: the root block
+  from `ROOT_BLOCK` to `END`, a header from its own position to the last
+  inside its group, an entry likewise, a var-data at its position alone.
+  Every accessor, bound ones included, begins with that one range check,
+  `IllegalStateException("<Stage> is not open")`. Nothing is set or
+  cleared, the position is the single source of truth, and it accepts the
+  same edge as a flag would: an entry kept across its group's `next()`
+  reads the new entry. Step 0 found this simpler to write than a flag per
+  stage; the generator emits the enum from the stage list.
+- **`skip()` is for the current stage only,** `IllegalStateException("<Stage> is not the current stage")`
+  on any other: pruning from inside a stage's nested content would have to
+  finish that content first, and nobody needs it.
+- **A var-data is passed over on arrival.** Reaching its stage records
+  its start and length and calls `skip<Data>()`, so the limit is always
+  past what was visited; reads set the limit back to the start, go
+  through sbe-tool's `get<Data>`/`wrap<Data>`, and restore it. So
+  `decodedLength()` is `ENCODED_LENGTH + decoder.encodedLength()` whenever
+  `hasNext()` is false, and otherwise `sbeDecodedLength()` on a second
+  decoder the reader keeps, because on the reader's own it would re-wrap
+  the group decoders mid-walk (`notes.md`).
+- **`index()` is counted by the reader,** since the group decoder keeps
+  its index private; reset when the group opens.
 - **`next()` is generated per stage, `hasNext()` is side-effect free.**
   Each stage kind has a fixed successor rule (below); `next()` performs
   the moves, `hasNext()` only asks the open group decoders' `hasNext()`
@@ -57,6 +77,19 @@ Decided here, where the sketch left room:
   sketch's `byte[]` null image is an optimisation a JMH run may add later.
   Constants are not written; every other field of the block, mapped or
   not, gets its null value, then the chain overwrites what it sets.
+- **One object per block, the root block's an inner class too:** javac
+  refuses a class implementing its own nested interfaces (`notes.md`), so
+  `wrap()` returns a private `RootBlockStage`, never the writer.
+- **A set is a required step with a sub-chain,** `<Set>Writer<N>` with the
+  choices in any order and `end()` back to `N`; an empty set is
+  `.execInst().end()`. Its choices are unordered, so unlike a composite it
+  needs the `end()`.
+- **A `char` array step takes the whole value:** `String`, `CharSequence`
+  and `put<Field>(byte[], int)`, as sbe-tool's setters; the indexed
+  setter is not a step, a field is written whole or not at all.
+- **The wire var-data stage has no `String` accessor:** `length()`,
+  `copyTo(MutableDirectBuffer, int)`, `copyTo(byte[], int)`,
+  `wrap(DirectBuffer)`; the `String` is the record's, on `bound().value()`.
 - **A composite in the writer is a chain of every member in wire order,**
   constants skipped, an optional member offering `<m>(value)` and
   `<m>Null()`, the last member returning the enclosing stage `N` through
@@ -233,9 +266,10 @@ generated into `<package>.sbe` beside sbe-tool's flyweights.
   on the component, or on the package where no record exists.
 - The generated reader exactly as `flyweights.md`'s shape: `Iterable` and
   `Iterator` of its sealed `Stage`, `wrap(DirectBuffer, int)`, `rewind()`,
-  `decodedLength()` (after iteration ended: `ENCODED_LENGTH + decoder.encodedLength()`,
-  no re-skip; else `sbeDecodedLength()`), `header()`, `actingVersion()`;
-  stages with `live`, `skip()`, `index()` on entries, `count()` on headers,
+  `decodedLength()` (`ENCODED_LENGTH + decoder.encodedLength()` once
+  `hasNext()` is false; else `sbeDecodedLength()` on the second decoder),
+  `header()`, `actingVersion()`; the `At` enum and the range check on
+  every accessor, `skip()`, `index()` on entries, `count()` on headers,
   var-data with `length()`, `copyTo(MutableDirectBuffer, int)`,
   `copyTo(byte[], int)`, `wrap(DirectBuffer)`, reading through saved and
   restored `limit()`. No `bound()` yet.
@@ -309,8 +343,8 @@ generated class.
   the schema, in `<package>.sbe`, the chain of every member.
 - Null values on open through `FaceWriter`'s null writers.
 - `header()`, and the run-time check: a kept stage calling a method after
-  the writer moved past it is `IllegalStateException`, the same `live`
-  flag.
+  the writer moved past it is `IllegalStateException`, the writer's own
+  `At` position, one value per stage.
 
 **Tests.**
 
@@ -352,8 +386,8 @@ record maps, carrying the record's components through `Faces`.
   the codec's `DECODE_OPTIONAL_FIELD`/`DECODE_ADDED_FIELD` logic), a
   `BindingContext` constant per bound component, helpers collected into
   the reader and writer classes.
-- Reader: `<Stage>Bound` classes, singletons, `live` shared with their
-  stage, every accessor applying the binding on each call, never cached.
+- Reader: `<Stage>Bound` classes, singletons, checking their stage's
+  range, every accessor applying the binding on each call, never cached.
   A var-data's bound stage has `value()`.
 - Writer: `<Stage>Bound` interfaces mirroring the wire chain with the
   record's types, `bound()` on every wire stage and `wire()` on every
@@ -424,7 +458,7 @@ difference.
 
 **Measure.** Run `TradingBenchmark` on `main` and on the branch; the
 numbers go in the PR description. If decode or encode is more than 10%
-slower, gate the `live` check behind a `static final boolean` read once
+slower, gate the range check behind a `static final boolean` read once
 from the system property `sbebuddy.checks` (default `true`), as
 sbe-tool's bounds checks are, and measure again with it off; both numbers
 in the description. Do not remove the check.
