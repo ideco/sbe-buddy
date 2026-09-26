@@ -23,17 +23,28 @@ final class Faces {
 	sealed interface Face {
 
 		/**
-		 * A record component on a field or a composite member; {@code bound} is the
-		 * binding in front of it, or null.
+		 * A record component on a field or a composite member, {@code property} on its
+		 * flyweight: the leaf the codec and the flyweights write and read. {@code type}
+		 * is the component's type as code names it, the binding's view where one is in
+		 * front of it: {@code binding} is the field holding it and {@code context} the
+		 * constant it is handed, both or neither null.
 		 */
-		record Mapped(String component, Shape shape, Absence absence, @Nullable Bound bound) implements Face {
+		record Mapped(
+				String component,
+				String property,
+				String type,
+				Shape shape,
+				Absence absence,
+				@Nullable String binding,
+				@Nullable String context
+		) implements Face {
 		}
 
 		/**
-		 * A null writer: a field or member written as its null value, an array's in
-		 * every element, and never read.
+		 * A null writer: the field or member {@code property} written as its null
+		 * value, an array's in every element, and never read.
 		 */
-		record Null(Shape shape) implements Face {
+		record Null(String property, Shape shape) implements Face {
 		}
 	}
 
@@ -251,6 +262,49 @@ final class Faces {
 
 		/** The length check before bytes reach their flyweight. */
 		record Bytes() implements Helper {
+		}
+
+		/**
+		 * A composite type's write and read, over its own flyweights: {@code members}
+		 * in wire order, each written as its component or its null value, and those the
+		 * record's components map in the order its constructor takes them.
+		 */
+		record CompositePair(
+				String compositeClass,
+				String record,
+				String encoder,
+				String decoder,
+				List<Face> members,
+				List<Face.Mapped> constructorOrder
+		) implements Helper {
+
+			public CompositePair {
+				members = List.copyOf(members);
+				constructorOrder = List.copyOf(constructorOrder);
+			}
+		}
+
+		/**
+		 * The methods of one var-data member at {@code path} of the block over
+		 * {@code encoder} and {@code decoder}: {@code length}, which counts it as
+		 * {@code content} needs, refusing what the flyweight would, the write through
+		 * it, and for bytes the read. {@code bulk} is the name the flyweight's
+		 * {@code put} and {@code get} take, {@code charset} the constant for text in
+		 * another encoding, or null, and {@code lengthEncoder} the flyweight of the
+		 * encoding, whose length type holds the maximum.
+		 */
+		record Data(
+				String path,
+				String component,
+				String property,
+				String bulk,
+				String length,
+				Content content,
+				@Nullable String charset,
+				String encoder,
+				String decoder,
+				String lengthEncoder
+		) implements Helper {
 		}
 	}
 }

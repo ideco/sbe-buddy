@@ -37,7 +37,7 @@ final class WriterWriter {
 		this.flyweights = flyweights;
 		this.writer = writer;
 		this.headerClass = headerClass;
-		this.faces = new FaceWriter(flyweights);
+		this.faces = new FaceWriter(flyweights, "");
 	}
 
 	static String write(WriterModel.Message model) {

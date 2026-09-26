@@ -4,8 +4,6 @@ import java.util.List;
 
 import org.jspecify.annotations.Nullable;
 
-import net.concini.sbebuddy.generator.Faces.Absence;
-import net.concini.sbebuddy.generator.Faces.Content;
 import net.concini.sbebuddy.generator.Faces.Shape;
 
 /**
@@ -64,19 +62,8 @@ record CodecModel(
 
 	sealed interface Member {
 
-		/**
-		 * A record component on a field or a composite member; {@code binding} is the
-		 * codec's field for the binding in front of it and {@code context} the constant
-		 * it is handed, both or neither null.
-		 */
-		record Field(
-				String component,
-				String property,
-				Shape shape,
-				Absence absence,
-				@Nullable String binding,
-				@Nullable String context
-		) implements Member {
+		/** A record component on a field or a composite member: its leaf. */
+		record Field(Faces.Face.Mapped leaf) implements Member {
 		}
 
 		/**
@@ -105,18 +92,14 @@ record CodecModel(
 		}
 
 		/**
-		 * Var-data, read into a local of its component's name before the constructor;
-		 * {@code charset} is the codec's constant for text in another encoding, or
-		 * null; {@code addedSince} is the flyweight's since-version method when the
-		 * data was appended above the baseline, or null; {@code binding} and
-		 * {@code context} as on a field.
+		 * Var-data, read into a local of its component's name before the constructor,
+		 * through the methods of its {@code leaf}; {@code addedSince} is the
+		 * flyweight's since-version method when the data was appended above the
+		 * baseline, or null; {@code binding} and {@code context} as on a group.
 		 */
 		record Data(
 				String component,
-				String property,
-				String path,
-				Content content,
-				@Nullable String charset,
+				Faces.Helper.Data leaf,
 				@Nullable String addedSince,
 				@Nullable String binding,
 				@Nullable String context
@@ -126,17 +109,12 @@ record CodecModel(
 
 	/**
 	 * A method the codec declares once, however many members call it, in the order
-	 * the walk first met each: a leaf's helper, or the methods of a composite type,
-	 * a group or var-data.
+	 * the walk first met each: a leaf's helper, or the methods of a group.
 	 */
 	sealed interface Helper {
 
-		/** A method a leaf's shape calls. */
+		/** A method a leaf calls. */
 		record Leaf(Faces.Helper helper) implements Helper {
-		}
-
-		/** The write and read pair of a composite type, over its own body. */
-		record CompositePair(String compositeClass, String record, Body body) implements Helper {
 		}
 
 		/**
@@ -144,17 +122,6 @@ record CodecModel(
 		 * {@code parent} is the encoder of the body the group is in, which sizes it.
 		 */
 		record GroupMethods(Member.Group group, String parent) implements Helper {
-		}
-
-		/**
-		 * The length and write methods of one var-data member, and for bytes its read,
-		 * over the body's flyweights: {@code bulk} is the name the flyweight's
-		 * {@code put} and {@code get} take, and {@code lengthEncoder} the flyweight of
-		 * the encoding, whose length type holds the maximum.
-		 */
-		record DataMethods(Member.Data data, String encoder, String decoder, String bulk, String lengthEncoder)
-				implements
-					Helper {
 		}
 	}
 }

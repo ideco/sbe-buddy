@@ -106,18 +106,12 @@ final class Join {
 	 * flyweight; {@code type} is its type's token, the field's second, a member's
 	 * own. {@code face} is null where no record maps the message, for a constant no
 	 * component carries, and for a composite field the codec does not cover;
-	 * {@code helpers} are the methods its shape calls, and {@code composite} the
-	 * composite its shape goes through, joined once per message however many fields
-	 * use it.
+	 * {@code helpers} are the methods its shape calls, a composite's pair after the
+	 * methods its members call.
 	 */
-	record Field(
-			Token token,
-			Token type,
-			String property,
-			@Nullable Face face,
-			List<Helper> helpers,
-			@Nullable Composite composite
-	) implements Node {
+	record Field(Token token, Token type, String property, @Nullable Face face, List<Helper> helpers)
+			implements
+				Node {
 
 		Field {
 			helpers = List.copyOf(helpers);
@@ -144,23 +138,21 @@ final class Join {
 
 	/**
 	 * Var-data at {@code path}, which names its methods; {@code addedSince} as on a
-	 * group, {@code lengthEncoder} the flyweight of its encoding, whose length type
-	 * holds the maximum, and {@code varData} the encoding's member of that name,
-	 * which carries the character encoding. {@code component}, {@code content} and
-	 * {@code bound} are null where no record maps the message; {@code charset} is
-	 * the constant for text in another encoding, or null; {@code helpers} are the
-	 * methods its content calls.
+	 * group, and {@code varData} the encoding's member of that name, which carries
+	 * the character encoding. {@code component}, {@code leaf}, its methods,
+	 * {@code type}, the component's type as code names it, and {@code bound} are
+	 * null where no record maps the message; {@code helpers} are the methods its
+	 * content calls, its own last.
 	 */
 	record Data(
 			Token token,
 			String property,
 			String path,
 			@Nullable String addedSince,
-			String lengthEncoder,
 			Token varData,
 			Annotated.@Nullable Data component,
-			@Nullable Content content,
-			@Nullable String charset,
+			Helper.@Nullable Data leaf,
+			@Nullable String type,
 			Faces.@Nullable Bound bound,
 			List<Helper> helpers
 	) implements Node {
@@ -330,8 +322,8 @@ final class Join {
 						if (shape != null) {
 							nulls.add(
 									new Field(
-											field.token(), field.type(), field.property(), new Face.Null(shape),
-											List.of(), null
+											field.token(), field.type(), field.property(),
+											new Face.Null(field.property(), shape), List.of()
 									)
 							);
 						}
@@ -501,11 +493,11 @@ final class Join {
 		}
 		return new Field(
 				field, typeTokens.get(0), property,
-				new Face.Mapped(
-						name, shape, withoutNullValue(absence(field, component.javaType(), owner), shape, field, owner),
-						bound
+				mapped(
+						name, property, component.javaType(), shape,
+						withoutNullValue(absence(field, component.javaType(), owner), shape, field, owner), bound
 				),
-				used, compositeOf(shape, typeTokens)
+				used
 		);
 	}
 
@@ -517,15 +509,15 @@ final class Join {
 	private Field unmapped(Token field, List<Token> typeTokens, List<Annotated.Field> unmapped, Owner owner) {
 		String property = JavaUtil.formatPropertyName(field.name());
 		if (message == null) {
-			return new Field(field, typeTokens.get(0), property, null, List.of(), null);
+			return new Field(field, typeTokens.get(0), property, null, List.of());
 		}
 		Token type = typeTokens.get(0);
 		if (type.signal() == Signal.BEGIN_COMPOSITE) {
 			codecProblem(lacking("an unmapped field of a composite"));
-			return new Field(field, typeTokens.get(0), property, null, List.of(), null);
+			return new Field(field, typeTokens.get(0), property, null, List.of());
 		}
 		if (constant(field)) {
-			return new Field(field, typeTokens.get(0), property, null, List.of(), null);
+			return new Field(field, typeTokens.get(0), property, null, List.of());
 		}
 		Annotated.Field declared = unmappedField(unmapped, field);
 		if (declared == null) {
@@ -539,7 +531,7 @@ final class Join {
 			case BEGIN_SET -> new Shape.Set(JavaUtil.formatClassName(type.applicableTypeName()));
 			default -> throw new IllegalStateException(field.name() + " is a field of " + type.signal());
 		};
-		return new Field(field, type, property, new Face.Null(shape), List.of(), null);
+		return new Field(field, type, property, new Face.Null(property, shape), List.of());
 	}
 
 	/** A primitive takes its null value in one call, an array in every element. */
@@ -596,9 +588,7 @@ final class Join {
 		String lengthEncoder = flyweights + "." + JavaUtil.formatClassName(tokens.get(1).applicableTypeName())
 				+ "Encoder";
 		if (data == null) {
-			return new Data(
-					token, property, path, addedSince, lengthEncoder, tokens.get(3), null, null, null, null, List.of()
-			);
+			return new Data(token, property, path, addedSince, tokens.get(3), null, null, null, null, List.of());
 		}
 		if (!faces.data(data, tokens.get(1), tokens.get(3))) {
 			return null;
@@ -629,8 +619,15 @@ final class Join {
 				return null;
 			}
 		}
+		String bulk = Generators.toUpperFirstChar(property);
+		String length = Character.toLowerCase(path.charAt(0)) + path.substring(1) + "Length";
+		Helper.Data leaf = new Helper.Data(
+				path, data.javaName(), property, bulk, length, content, charset, owner.encoder(), owner.decoder(),
+				lengthEncoder
+		);
+		use(new Key(Helper.Data.class, path), () -> leaf, used);
 		return new Data(
-				token, property, path, addedSince, lengthEncoder, tokens.get(3), data, content, charset, bound, used
+				token, property, path, addedSince, tokens.get(3), data, leaf, typeName(data.javaType()), bound, used
 		);
 	}
 
@@ -765,14 +762,11 @@ final class Join {
 			case ENCODING -> encoding(type, owner, property, component, used);
 			case BEGIN_ENUM -> enumeration(typeTokens, declared(declaration, Annotated.Enum.class, component), used);
 			case BEGIN_SET -> set(typeTokens, declared(declaration, Annotated.Set.class, component), used);
-			case BEGIN_COMPOSITE -> composite(typeTokens, declared(declaration, Annotated.Composite.class, component));
+			case BEGIN_COMPOSITE -> composite(
+					typeTokens, declared(declaration, Annotated.Composite.class, component), used
+			);
 			default -> throw new IllegalStateException("a field of " + type.signal());
 		};
-	}
-
-	/** The composite a shape goes through, joined by {@link #composite}. */
-	private @Nullable Composite compositeOf(Shape shape, List<Token> typeTokens) {
-		return shape instanceof Shape.Composite ? composites.get(typeTokens.get(0).applicableTypeName()) : null;
 	}
 
 	/**
@@ -895,14 +889,36 @@ final class Join {
 
 	/**
 	 * A composite goes through the pair of its type, joined once per message, the
-	 * first time a field uses it.
+	 * first time a field uses it, and declared after the methods its members call.
 	 */
-	private Shape.Composite composite(List<Token> tokens, Annotated.Composite composite) {
+	private Shape.Composite composite(List<Token> tokens, Annotated.Composite composite, List<Helper> used) {
 		String compositeClass = JavaUtil.formatClassName(tokens.get(0).applicableTypeName());
 		String typeName = tokens.get(0).applicableTypeName();
-		if (!composites.containsKey(typeName)) {
-			composites.put(typeName, compositeBody(tokens, composite, compositeClass));
+		Composite joined = composites.get(typeName);
+		if (joined == null) {
+			joined = compositeBody(tokens, composite, compositeClass);
+			composites.put(typeName, joined);
 		}
+		List<Face> members = new ArrayList<>();
+		for (Field member : joined.members()) {
+			used.addAll(member.helpers());
+			if (member.face() != null) {
+				members.add(member.face());
+			}
+		}
+		List<Face.Mapped> constructorOrder = new ArrayList<>();
+		for (Field member : joined.constructorOrder()) {
+			if (member.face() instanceof Face.Mapped mapped) {
+				constructorOrder.add(mapped);
+			}
+		}
+		Composite body = joined;
+		use(
+				new Key(Helper.CompositePair.class, typeName),
+				() -> new Helper.CompositePair(
+						compositeClass, body.record(), body.encoder(), body.decoder(), members, constructorOrder
+				), used
+		);
 		return new Shape.Composite(compositeClass);
 	}
 
@@ -924,8 +940,8 @@ final class Join {
 			String property = JavaUtil.formatPropertyName(token.name());
 			Annotated.Member member = member(composite, token.name());
 			if (member == null) {
-				Face face = constant(token) ? null : new Face.Null(unmappedEncoding(token, owner, property));
-				members.add(new Field(token, token, property, face, List.of(), null));
+				Face face = constant(token) ? null : new Face.Null(property, unmappedEncoding(token, owner, property));
+				members.add(new Field(token, token, property, face, List.of()));
 				continue;
 			}
 			matched.add(member);
@@ -958,8 +974,11 @@ final class Join {
 			if (shape != null) {
 				Field field = new Field(
 						token, token, property,
-						new Face.Mapped(name, shape, absence(token, javaTypeOf(member), owner), bound),
-						used, compositeOf(shape, memberTokens)
+						mapped(
+								name, property, javaTypeOf(member), shape, absence(token, javaTypeOf(member), owner),
+								bound
+						),
+						used
 				);
 				members.add(field);
 				byMember.put(member, field);
@@ -1079,6 +1098,59 @@ final class Join {
 			}
 		}
 		return literal.append('"').toString();
+	}
+
+	/** A component's leaf, its binding's field and context where it has one. */
+	private static Face.Mapped mapped(
+			String component, String property, Annotated.JavaType javaType, Shape shape, Absence absence,
+			Faces.@Nullable Bound bound
+	) {
+		return new Face.Mapped(
+				component, property, typeName(javaType), shape, absence, bound == null ? null : bound.binding(),
+				bound == null ? null : bound.context()
+		);
+	}
+
+	/**
+	 * A component's type as code names it: a box and a declared class qualified, a
+	 * {@code String} as it is, and any other type as javac wrote it.
+	 */
+	static String typeName(Annotated.JavaType javaType) {
+		return switch (javaType) {
+			case Annotated.Primitive primitive -> primitive.boxed()
+					? "java.lang." + box(primitive.kind())
+					: primitive.kind().name().toLowerCase(Locale.ROOT);
+			case Annotated.Text text -> "String";
+			case Annotated.Bytes bytes -> "byte[]";
+			case Annotated.Array array -> array.kind().name().toLowerCase(Locale.ROOT) + "[]";
+			case Annotated.Declared declared -> qualifiedName(declared.declaration());
+			case Annotated.ListOfRecord list -> "java.util.List<" + list.qualifiedName() + ">";
+			case Annotated.SetOf set -> "java.util.Set<" + qualifiedName(set.declaration()) + ">";
+			case Annotated.Other other -> other.javaName();
+			case Annotated.Unmapped unmapped -> throw new IllegalStateException("an unmapped field has no type");
+		};
+	}
+
+	private static String box(Annotated.JavaPrimitive kind) {
+		return switch (kind) {
+			case BYTE -> "Byte";
+			case SHORT -> "Short";
+			case INT -> "Integer";
+			case LONG -> "Long";
+			case FLOAT -> "Float";
+			case DOUBLE -> "Double";
+			case CHAR -> "Character";
+			case BOOLEAN -> "Boolean";
+		};
+	}
+
+	private static String qualifiedName(Annotated.Declaration declaration) {
+		return switch (declaration) {
+			case Annotated.Enum enumeration -> enumeration.qualifiedName();
+			case Annotated.Set set -> set.qualifiedName();
+			case Annotated.Composite composite -> composite.qualifiedName();
+			case Annotated.Type type -> throw new IllegalStateException(type.javaName() + " is not a component's type");
+		};
 	}
 
 	// ---- the annotation a token came from, by wire name

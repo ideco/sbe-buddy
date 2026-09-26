@@ -1,7 +1,6 @@
 package net.concini.sbebuddy.generator;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -10,7 +9,6 @@ import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
-import uk.co.real_logic.sbe.generation.Generators;
 import uk.co.real_logic.sbe.generation.java.JavaUtil;
 import uk.co.real_logic.sbe.ir.Ir;
 import uk.co.real_logic.sbe.ir.Token;
@@ -24,14 +22,13 @@ import net.concini.sbebuddy.generator.Faces.Face;
  * One message's {@link CodecModel}: the message {@link Join joined} with its
  * record, then its bodies built from the tree in wire and constructor order,
  * and the helpers its members call collected, each once, in the order the tree
- * first uses it, a composite's pair after its members' helpers and a group's
- * methods after its entry's. A message with an error gets no model.
+ * first uses it, a group's methods after its entry's. A message with an error
+ * gets no model.
  */
 final class CodecWalk {
 
 	private final List<Helper> helpers = new ArrayList<>();
 	private final Set<Faces.Helper> leaves = new HashSet<>();
-	private final Set<Join.Composite> pairs = Collections.newSetFromMap(new IdentityHashMap<>());
 	private final Map<Object, Member> members = new IdentityHashMap<>();
 
 	private CodecWalk() {
@@ -125,7 +122,7 @@ final class CodecWalk {
 			wireOrder.add(group(group, block));
 		}
 		for (Join.Data data : block.data()) {
-			wireOrder.add(data(data, block));
+			wireOrder.add(data(data));
 		}
 		return new Body(block.encoder(), block.decoder(), wireOrder, constructorOrder(block.constructorOrder()));
 	}
@@ -153,41 +150,13 @@ final class CodecWalk {
 		}
 		Member member = switch (face) {
 			case Face.Mapped mapped -> {
-				Join.Composite composite = field.composite();
-				if (composite != null) {
-					pair(composite);
-				}
 				field.helpers().forEach(this::leaf);
-				Faces.Bound bound = mapped.bound();
-				yield new Member.Field(
-						mapped.component(), field.property(), mapped.shape(), mapped.absence(),
-						bound == null ? null : bound.binding(), bound == null ? null : bound.context()
-				);
+				yield new Member.Field(mapped);
 			}
-			case Face.Null unmapped -> new Member.Unmapped(field.property(), unmapped.shape());
+			case Face.Null unmapped -> new Member.Unmapped(unmapped.property(), unmapped.shape());
 		};
 		members.put(field, member);
 		return member;
-	}
-
-	/**
-	 * A composite type's pair, declared once, after the helpers its members call.
-	 */
-	private void pair(Join.Composite composite) {
-		if (!pairs.add(composite)) {
-			return;
-		}
-		List<Member> wireOrder = new ArrayList<>();
-		for (Join.Field field : composite.members()) {
-			Member member = member(field);
-			if (member != null) {
-				wireOrder.add(member);
-			}
-		}
-		Body body = new Body(
-				composite.encoder(), composite.decoder(), wireOrder, constructorOrder(composite.constructorOrder())
-		);
-		helpers.add(new Helper.CompositePair(composite.name(), composite.record(), body));
 	}
 
 	private void leaf(Faces.Helper helper) {
@@ -209,20 +178,13 @@ final class CodecWalk {
 		return member;
 	}
 
-	private Member.Data data(Join.Data data, Join.Block parent) {
+	private Member.Data data(Join.Data data) {
 		Annotated.Data component = mapped(data.component(), data.property());
 		data.helpers().forEach(this::leaf);
 		Faces.Bound bound = data.bound();
 		Member.Data member = new Member.Data(
-				component.javaName(), data.property(), data.path(), mapped(data.content(), data.property()),
-				data.charset(), data.addedSince(), bound == null ? null : bound.binding(),
-				bound == null ? null : bound.context()
-		);
-		helpers.add(
-				new Helper.DataMethods(
-						member, parent.encoder(), parent.decoder(), Generators.toUpperFirstChar(data.property()),
-						data.lengthEncoder()
-				)
+				component.javaName(), mapped(data.leaf(), data.property()), data.addedSince(),
+				bound == null ? null : bound.binding(), bound == null ? null : bound.context()
 		);
 		members.put(data, member);
 		return member;

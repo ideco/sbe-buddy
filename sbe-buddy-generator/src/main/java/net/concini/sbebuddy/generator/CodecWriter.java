@@ -11,7 +11,6 @@ import org.jspecify.annotations.Nullable;
 import net.concini.sbebuddy.generator.CodecModel.Body;
 import net.concini.sbebuddy.generator.CodecModel.Helper;
 import net.concini.sbebuddy.generator.CodecModel.Member;
-import net.concini.sbebuddy.generator.Faces.Content;
 
 /**
  * A {@link CodecModel} as Java source, through {@link CodecTemplates}, each
@@ -28,7 +27,7 @@ final class CodecWriter {
 
 	private CodecWriter(CodecModel model) {
 		this.model = model;
-		this.faces = new FaceWriter(model.flyweights());
+		this.faces = new FaceWriter(model.flyweights(), "");
 	}
 
 	static String write(CodecModel model) {
@@ -95,7 +94,7 @@ final class CodecWriter {
 		if (!header.nulls().isEmpty()) {
 			List<String> nulls = new ArrayList<>();
 			for (Member.Unmapped unmapped : header.nulls()) {
-				nulls.add(faces.writeNull(body.encoder(), unmapped));
+				nulls.add(faces.writeNull(body.encoder(), unmapped.property(), unmapped.shape()));
 			}
 			methods.add(WRITE_NULL_HEADER.fill("encoder", body.encoder(), "members", String.join("\n", nulls)));
 		}
@@ -109,35 +108,23 @@ final class CodecWriter {
 		List<String> writes = new ArrayList<>();
 		for (Member member : body.wireOrder()) {
 			writes.add(switch (member) {
-				case Member.Field field -> write(body, field);
-				case Member.Unmapped unmapped -> faces.writeNull(body.encoder(), unmapped);
+				case Member.Field field -> faces
+						.write(field.leaf(), "encoder", body.encoder(), SOURCE.fill(field.leaf()));
+				case Member.Unmapped unmapped -> faces.writeNull(body.encoder(), unmapped.property(), unmapped.shape());
 				case Member.Group group -> ENCODE_CHECKED_FIELD.fill(
-						group, "call",
+						group, "value", SOURCE.fill(group), "call",
 						ENCODE_GROUP_FIELD.fill(
-								group, "source", group.binding() == null ? SOURCE.fill(group) : BOUND_SOURCE.fill(group)
+								group, "source",
+								group.binding() == null
+										? SOURCE.fill(group)
+										: BOUND_SOURCE.fill(group, "value", SOURCE.fill(group))
 						)
 				);
-				case Member.Data data -> ENCODE_DATA_FIELD.fill(data, "source", nullableSource(data, data.binding()));
+				case Member.Data data -> faces
+						.writeData(data.leaf(), data.binding(), data.context(), "encoder", SOURCE.fill(data));
 			});
 		}
 		return String.join("\n", writes);
-	}
-
-	/**
-	 * Decided by the component: an optional field takes the null value for null,
-	 * any other reference refuses it, and a primitive is written as it is.
-	 */
-	private String write(Body body, Member.Field field) {
-		String source = field.binding() == null ? SOURCE.fill(field) : BOUND_SOURCE.fill(field);
-		return switch (field.absence()) {
-			case NONE -> faces.write(body, field, field.shape(), source);
-			case REQUIRED, ADDED -> ENCODE_CHECKED_FIELD
-					.fill(field, "call", faces.write(body, field, field.shape(), source));
-			case NO_NULL_VALUE, ADDED_NO_NULL_VALUE -> field.binding() == null
-					? ENCODE_NO_NULL_VALUE_FIELD.fill(field, "call", faces.write(body, field, field.shape(), source))
-					: faces.write(body, field, field.shape(), source);
-			case OPTIONAL -> faces.writeOptional(body, field, source);
-		};
 	}
 
 	// ---- reading a body
@@ -147,32 +134,13 @@ final class CodecWriter {
 		List<String> arguments = new ArrayList<>();
 		for (Member member : body.constructorOrder()) {
 			arguments.add(switch (member) {
-				case Member.Field field -> read(body, field);
+				case Member.Field field -> faces.read(field.leaf(), "decoder", body.decoder());
 				case Member.Group group -> boundLocal(group, group.binding(), group.addedSince());
 				case Member.Data data -> boundLocal(data, data.binding(), data.addedSince());
 				case Member.Unmapped unmapped -> throw notRead(unmapped.property());
 			});
 		}
 		return String.join(",\n", arguments);
-	}
-
-	/**
-	 * Decided by the wire: the null value for an optional field, whatever its
-	 * version, since below the acting version the getter returns it; the version
-	 * for a field appended above the baseline, which a required field may hold the
-	 * null value of.
-	 */
-	private String read(Body body, Member.Field field) {
-		String read = faces.read(field, field.shape());
-		if (field.binding() != null) {
-			// The null value and the version are decided before the binding is called.
-			read = BOUND_READ.fill(field, "read", read);
-		}
-		return switch (field.absence()) {
-			case NONE, REQUIRED, NO_NULL_VALUE -> read;
-			case OPTIONAL -> DECODE_OPTIONAL_FIELD.fill("isNull", faces.isNull(body, field), "read", read);
-			case ADDED, ADDED_NO_NULL_VALUE -> DECODE_ADDED_FIELD.fill(field, "decoder", body.decoder(), "read", read);
-		};
 	}
 
 	/**
@@ -187,12 +155,13 @@ final class CodecWriter {
 						? DECODE_GROUP.fill(group)
 						: DECODE_ADDED_GROUP.fill(group, "decoder", body.decoder());
 				case Member.Data data -> {
-					String read = data.content() == Content.BYTES ? DECODE_BYTES.fill(data) : DECODE_TEXT.fill(data);
+					String read = faces.readData(data.leaf(), "decoder");
+					String face = FaceWriter.face(data.leaf().content());
 					yield data.addedSince() == null
-							? DECODE_DATA.fill(data, "face", face(data), "read", read)
-							: DECODE_ADDED_DATA.fill(data, "face", face(data), "decoder", body.decoder(), "read", read);
+							? DECODE_DATA.fill(data, "face", face, "read", read)
+							: DECODE_ADDED_DATA.fill(data, "face", face, "decoder", body.decoder(), "read", read);
 				}
-				case Member.Field field -> throw notVariable(field.component());
+				case Member.Field field -> throw notVariable(field.leaf().component());
 				case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 			});
 		}
@@ -204,17 +173,7 @@ final class CodecWriter {
 	private String helper(Helper helper) {
 		return switch (helper) {
 			case Helper.Leaf leaf -> faces.helper(leaf.helper());
-			case Helper.CompositePair composite -> String.join(
-					"\n\n",
-					WRITE_COMPOSITE.fill(
-							composite, "encoder", composite.body().encoder(), "members", writes(composite.body())
-					),
-					READ_COMPOSITE.fill(
-							composite, "decoder", composite.body().decoder(), "members", arguments(composite.body())
-					)
-			);
 			case Helper.GroupMethods methods -> groupMethods(methods);
-			case Helper.DataMethods methods -> dataMethods(methods);
 		};
 	}
 
@@ -246,46 +205,6 @@ final class CodecWriter {
 		);
 	}
 
-	/**
-	 * The length, write and read of one var-data member, each checking what its
-	 * content needs.
-	 */
-	private String dataMethods(Helper.DataMethods methods) {
-		Member.Data data = methods.data();
-		String length = lengthOf(data.path());
-		String count = switch (data.content()) {
-			case BYTES -> COUNT_BYTES.fill(methods, "component", data.component());
-			case ASCII -> COUNT_ASCII.fill(methods, "component", data.component());
-			case UTF_8 -> COUNT_UTF_8.fill(methods, "component", data.component());
-			case ENCODED -> COUNT_ENCODED
-					.fill(methods, "component", data.component(), "charset", String.valueOf(data.charset()));
-		};
-		String lengthMethod = DATA_LENGTH.fill(
-				methods, "length", length, "face", face(data), "component", data.component(), "property",
-				data.property(), "count", count
-		);
-		if (data.content() == Content.ENCODED) {
-			return String.join(
-					"\n\n", lengthMethod,
-					WRITE_ENCODED_TEXT.fill(
-							methods, "path", data.path(), "component", data.component(), "charset",
-							String.valueOf(data.charset())
-					)
-			);
-		}
-		if (data.content() != Content.BYTES) {
-			return String.join(
-					"\n\n", lengthMethod,
-					WRITE_TEXT.fill(methods, "path", data.path(), "length", length, "property", data.property())
-			);
-		}
-		return String.join(
-				"\n\n", lengthMethod,
-				WRITE_DATA_BYTES.fill(methods, "path", data.path(), "length", length),
-				READ_DATA_BYTES.fill(methods, "path", data.path(), "property", data.property())
-		);
-	}
-
 	/** The members that follow the block, groups and var-data, in wire order. */
 	private static List<Member> variable(Body body) {
 		List<Member> variable = new ArrayList<>();
@@ -303,11 +222,14 @@ final class CodecWriter {
 	 */
 	private static String lengthTerm(Template term, Member member) {
 		return switch (member) {
-			case Member.Group group -> term
-					.fill(group, "length", lengthOf(group.path()), "source", nullableSource(group, group.binding()));
-			case Member.Data data -> term
-					.fill(data, "length", lengthOf(data.path()), "source", nullableSource(data, data.binding()));
-			case Member.Field field -> throw notVariable(field.component());
+			case Member.Group group -> term.fill(
+					group, "length", lengthOf(group.path()), "source",
+					nullableSource(group, group.binding(), group.context())
+			);
+			case Member.Data data -> term.fill(
+					data, "length", data.leaf().length(), "source", nullableSource(data, data.binding(), data.context())
+			);
+			case Member.Field field -> throw notVariable(field.leaf().component());
 			case Member.Unmapped unmapped -> throw notVariable(unmapped.property());
 		};
 	}
@@ -317,8 +239,11 @@ final class CodecWriter {
 	 * binding's view of it, a null component passed on as null for the method to
 	 * refuse.
 	 */
-	private static String nullableSource(Record member, @Nullable String binding) {
-		return binding == null ? SOURCE.fill(member) : NULLABLE_BOUND_SOURCE.fill(member);
+	private static String nullableSource(Record member, @Nullable String binding, @Nullable String context) {
+		return binding == null
+				? SOURCE.fill(member)
+				: NULLABLE_BOUND_SOURCE
+						.fill("value", SOURCE.fill(member), "binding", binding, "context", String.valueOf(context));
 	}
 
 	/**
@@ -335,10 +260,6 @@ final class CodecWriter {
 	/** {@code legsLength} for the path {@code Legs}. */
 	private static String lengthOf(String path) {
 		return Character.toLowerCase(path.charAt(0)) + path.substring(1) + "Length";
-	}
-
-	private static String face(Member.Data data) {
-		return data.content() == Content.BYTES ? "byte[]" : "String";
 	}
 
 	private static IllegalStateException notVariable(String name) {
