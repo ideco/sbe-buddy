@@ -131,7 +131,7 @@ final class SchemaEquivalenceTest {
 				),
 				new Difference(
 						List.of(new Segment("message", "Replace")),
-						"the schema has a message \"Replace\" (id 3) and no record maps it"
+						"the schema has a message \"Replace\" (id 3) and no record maps it; add one, or declare the package partial"
 				)
 		);
 		assertThat(SchemaEquivalence.differences(schema, SCHEMA)).extracting(Difference::message).contains(
@@ -190,6 +190,49 @@ final class SchemaEquivalenceTest {
 		assertThatThrownBy(() -> SchemaEquivalence.differences(SCHEMA, SCHEMA.replace("id=\"2\">", "id=\"70000\">")))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("70000");
+	}
+
+	@Test
+	void aPartialComparisonLetsTheSchemaHoldMessagesAndDeclarationsTheAnnotationsLack() {
+		String rendered = SCHEMA.replaceAll("(?s)\\s*<sbe:message name=\"Cancel\".*?</sbe:message>", "")
+				.replaceAll("(?s)\\s*<set name=\"Flags\".*?</set>", "");
+
+		assertThat(SchemaEquivalence.differences(rendered, SCHEMA, true)).isEmpty();
+		assertThat(SchemaEquivalence.differences(rendered, SCHEMA)).extracting(Difference::message)
+				.containsExactlyInAnyOrder(
+						"the schema has a message \"Cancel\" (id 2) and no record maps it; add one, or declare the package partial",
+						"the schema has a set \"Flags\" and no declaration maps it"
+				);
+	}
+
+	@Test
+	void aPartialComparisonStillComparesEverythingTheAnnotationsSay() {
+		String rendered = SCHEMA.replaceAll("(?s)\\s*<sbe:message name=\"Cancel\".*?</sbe:message>", "")
+				.replace(
+						"<field name=\"orderId\" id=\"1\" type=\"int64\"/>\n        <field name=\"qty\"",
+						"<field name=\"orderId\" id=\"1\" type=\"int32\"/>\n        <field name=\"qty\""
+				)
+				.replace(
+						"</sbe:messageSchema>",
+						"<sbe:message name=\"Extra\" id=\"9\"><field name=\"x\" id=\"1\" type=\"int8\"/></sbe:message>\n</sbe:messageSchema>"
+				);
+
+		assertThat(SchemaEquivalence.differences(rendered, SCHEMA, true)).containsExactlyInAnyOrder(
+				new Difference(
+						List.of(new Segment("message", "Order"), new Segment("field", "orderId")),
+						"the schema has type=\"int64\", not \"int32\""
+				),
+				new Difference(List.of(new Segment("message", "Extra")), "the schema has no message named \"Extra\"")
+		);
+	}
+
+	@Test
+	void aPartialRenderedDocumentMayHoldNoMessage() {
+		String rendered = SCHEMA.replaceAll("(?s)\\s*<sbe:message .*</sbe:message>", "");
+
+		assertThat(SchemaEquivalence.differences(rendered, SCHEMA, true)).isEmpty();
+		assertThatThrownBy(() -> SchemaEquivalence.differences(rendered, SCHEMA))
+				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	/**

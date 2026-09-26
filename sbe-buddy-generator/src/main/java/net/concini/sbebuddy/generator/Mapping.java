@@ -62,6 +62,9 @@ public final class Mapping {
 	}
 
 	private Schema schema(Annotated annotated) {
+		if (annotated.partial() && annotated.resource().isEmpty()) {
+			problem(annotated, "partial maps some messages of a resource; name the resource");
+		}
 		String headerType = declare(header);
 		headerRules();
 		for (Annotated.Declaration declaration : annotated.types()) {

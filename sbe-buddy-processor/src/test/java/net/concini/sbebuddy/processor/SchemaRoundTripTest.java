@@ -36,7 +36,8 @@ import net.concini.sbebuddy.generator.SchemaXmlAssert;
  * repository is compiled code-first with its resource spliced out and writes
  * its resource back, equivalent. The switch is the one member spliced into each
  * {@code package-info}, and the schema each package wrote is served from a
- * class-path directory, as a checked-in resource would be.
+ * class-path directory, as a checked-in resource would be. A partial package
+ * reads its resource in both runs, and generates the same sources in both.
  */
 final class SchemaRoundTripTest {
 
@@ -95,12 +96,13 @@ final class SchemaRoundTripTest {
 	/**
 	 * The package-info as it is, or with its {@code resource} spliced out of its
 	 * {@code @SbeSchema}, that resource noted under the path its schema is written
-	 * to, so the schema written code-first can be held against it.
+	 * to, so the schema written code-first can be held against it. A partial
+	 * package stays as it is: its records cannot write the whole resource.
 	 */
 	private Path writingItsSchema(Path packageInfo, Map.Entry<Path, Path> root, Map<String, Path> frozen) {
 		String source = read(packageInfo);
 		Matcher resource = RESOURCE.matcher(source);
-		if (!resource.find()) {
+		if (!resource.find() || source.contains(PARTIAL)) {
 			return packageInfo;
 		}
 		Path packageDirectory = root.getKey().relativize(packageInfo.getParent());
@@ -115,14 +117,20 @@ final class SchemaRoundTripTest {
 
 	/**
 	 * The package-info with {@code resource = "schema.xml"} spliced into its
-	 * {@code @SbeSchema}, written under the temporary directory.
+	 * {@code @SbeSchema}, written under the temporary directory; a partial package
+	 * as it is, reading its own resource in both runs.
 	 */
 	private Path readingItsSchema(Path packageInfo) {
 		String source = read(packageInfo);
+		if (source.contains(PARTIAL)) {
+			return packageInfo;
+		}
 		String switched = source.replace("@SbeSchema(", "@SbeSchema(resource = \"schema.xml\", ");
 		assertThat(switched).as(packageInfo.toString()).isNotEqualTo(source);
 		return write(directory.resolve("schema-first-sources"), packageInfo.toString().replace("..", "up"), switched);
 	}
+
+	private static final String PARTIAL = "partial = true";
 
 	/** {@code resource = "…"} in a member list, with the comma either side. */
 	private static final Pattern RESOURCE = Pattern.compile("(, )?resource = \"([^\"]+)\"(, )?");

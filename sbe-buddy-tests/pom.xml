@@ -73,5 +73,8 @@
     <!-- Proof, not product: never deployed. -->
     <maven.deploy.skip>true</maven.deploy.skip>
     <module.name>net.concini.sbebuddy.tests</module.name>
+    <!-- A package that is a package-info.java alone, as flyweightsonly is on
+         purpose, is one javadoc refuses: "No source files for package". -->
+    <excludePackageNames>corpus.flyweightsonly</excludePackageNames>
   </properties>
 </project>

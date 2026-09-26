@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The schema corpus.partialmapping reads, of which its records map one
+     message: Quote and Heartbeat have flyweights and no codec, and Price,
+     which only Quote reaches, has no declaration. -->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="corpus.partialmapping" id="1" version="0">
+    <types>
+        <composite name="messageHeader">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+        <enum name="Side" encodingType="char">
+            <validValue name="BUY">1</validValue>
+            <validValue name="SELL">2</validValue>
+        </enum>
+        <type name="Symbol" primitiveType="char" length="8"/>
+        <composite name="Price">
+            <type name="mantissa" primitiveType="int64"/>
+            <type name="exponent" primitiveType="int8"/>
+        </composite>
+    </types>
+    <sbe:message name="Order" id="1">
+        <field name="orderId" id="1" type="int64"/>
+        <field name="side" id="2" type="Side"/>
+        <field name="symbol" id="3" type="Symbol"/>
+        <field name="quantity" id="4" type="int32"/>
+    </sbe:message>
+    <sbe:message name="Quote" id="2">
+        <field name="symbol" id="3" type="Symbol"/>
+        <field name="bid" id="5" type="Price"/>
+        <field name="ask" id="6" type="Price"/>
+    </sbe:message>
+    <sbe:message name="Heartbeat" id="3">
+        <field name="sequence" id="7" type="uint64"/>
+    </sbe:message>
+</sbe:messageSchema>

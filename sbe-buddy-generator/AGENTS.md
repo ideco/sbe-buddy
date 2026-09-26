@@ -59,7 +59,8 @@ Problem          a mistake on a node of either model
   tests apply too, through `SchemaXmlAssert`, so what the corpus proves
   against its oracles the compiler proves against a resource. Each
   difference names a path, and `Generator` puts it on the schema node the
-  path reaches.
+  path reaches. Partial, it skips what only the resource has, and reads the
+  rendered document against sbe.xsd with the messages optional.
 - It compares the schema with its baseline: `SchemaEvolution`, on the
   rendered document against the baseline's, sharing `SchemaEquivalence`'s
   parsing and paths. Nothing is matched by name there: messages by id,

@@ -48,7 +48,8 @@ the writing. Schema-first takes the same steps 1 to 3, then holds the
 rendered document against the resource `@SbeSchema` names: the two must
 be one schema, the XSD's defaults filled, declarations and messages matched
 by name and everything else in sequence, and each difference is a problem
-on the node it is on. With none, the resource is the document steps 4 to 7
+on the node it is on; a partial package leaves out what its records do not
+map. With none, the resource is the document steps 4 to 7
 take, and nothing is written to the class output: the resource is the
 schema and ships from where the user put it. A baseline `@SbeSchema` names
 is read the same way in either mode and, once sbe-tool accepts the

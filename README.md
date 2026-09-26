@@ -129,6 +129,10 @@ the schema's NewOrder has a field "locateReqd" no component carries; add it, or 
 A schema sbe-buddy wrote can also be checked in and used as the resource.
 Removing `resource` later goes back to generating it.
 
+With `partial = true` the records map only the messages the code needs. The
+rest get sbe-tool's flyweights and no codec, and with no records at all the
+package gives the flyweights and the baseline check alone.
+
 ## Setup
 
 JDK 21 or newer. Releases are on Maven Central under `net.concini`.

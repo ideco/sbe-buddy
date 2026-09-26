@@ -12,7 +12,8 @@ import java.lang.annotation.Target;
  * <p>
  * By default, annotated Java declarations define the schema and its XML is
  * generated. When {@link #resource()} is set, the complete declaration must
- * match the existing XML schema, which is then used for generation.
+ * match the existing XML schema, which is then used for generation; with
+ * {@link #partial()}, the declaration may cover only some of its messages.
  * </p>
  *
  * <p>
@@ -70,11 +71,12 @@ public @interface SbeSchema {
 	 *
 	 * <p>
 	 * When set, the schema described by the annotations must match the resource,
-	 * including every message, member, type and schema attribute. The comparison
-	 * accounts for XSD defaults and ignores the order of top-level type
-	 * declarations and messages. Every other order must match: the members of
-	 * messages, groups and composites, and enum values and set choices. The
-	 * resource's {@code package} must be this Java package.
+	 * including every message, member, type and schema attribute, unless
+	 * {@link #partial()} leaves some messages out. The comparison accounts for XSD
+	 * defaults and ignores the order of top-level type declarations and messages.
+	 * Every other order must match: the members of messages, groups and composites,
+	 * and enum values and set choices. The resource's {@code package} must be this
+	 * Java package.
 	 * </p>
 	 *
 	 * <p>
@@ -84,6 +86,20 @@ public @interface SbeSchema {
 	 * </p>
 	 */
 	String resource() default "";
+
+	/**
+	 * Whether the records map only some messages of the {@link #resource()}.
+	 *
+	 * <p>
+	 * A message without a record gets flyweights and no codec, and a type needs a
+	 * declaration only where a record reaches it. A message that has a record is
+	 * still mapped whole, and everything the annotations declare must match the
+	 * resource. With no records at all, the package generates flyweights and checks
+	 * its {@link #baseline()}. Requires a resource: a schema generated from the
+	 * annotations holds exactly what they declare.
+	 * </p>
+	 */
+	boolean partial() default false;
 
 	/**
 	 * The classpath resource containing the schema version this schema must stay
