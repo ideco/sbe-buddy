@@ -34,19 +34,19 @@ with a dispatching codec, the one Java-side feature. Then what makes the
 codec worth using: a binding on any component, told what the schema says
 about it, so a record holds its own types over any wire the schema declares,
 and a realistic FIX-like order-entry schema as the proof that the whole
-thing holds.
+thing holds. Then reading in place: views, records over the part of a
+message a reader wants, decode-only; and typed flyweights generated from
+records and views, which read the same components where they lie, in wire
+order by construction, without allocating.
 sbe-buddy stays agnostic of FIX: `sbe.xsd` and sbe-tool are the contract,
 and FIX's datatypes are a user's schema like any other. The target Java representation of all of it is
 `type-mappings.md`.
 
 ## Out of scope
 
-RPC (`rpc.md`), Aeron transport, typed flyweights, tooling over sbe-tool's
-schema corpus. Merging schemas: a package's schema is written from its
-annotations or read from a resource, never assembled from both. Views:
-records over part of a message, decode-only. Schema-first maps whole
-messages: all of the resource's, so that a package can go back to writing
-it, or, declared partial, the ones its records choose.
+RPC (`rpc.md`), Aeron transport, tooling over sbe-tool's schema corpus.
+Merging schemas: a package's schema is written from its annotations or
+read from a resource, never assembled from both.
 sbe-tool's own `JavaDtoGenerator` is the nearest prior art
 to the codec: it generates its own DTO classes from the IR, where sbe-buddy
 maps to the user's records, with bindings, `null` for absence and
@@ -159,6 +159,12 @@ user's binding's to decide. No built-in bindings.
 
 * [x] 25. Mapping some messages: `@SbeSchema(partial = true)` lets a schema-first package map the messages it chooses, none included; each mapped message is still compared whole, the rest get flyweights and no codec, types need declarations only where a record reaches them, and the baseline check holds the resource
 
+**Reading in place.** A record decides what is read; the codec builds it,
+and a typed flyweight reads the same components where they lie.
+
+* [ ] 26. Views: a record over part of a message, decode-only. The fields, groups and var-data it leaves out are skipped rather than declared; its codec decodes and has no encode. Schema-first, whole messages stay the rule for records that encode
+* [ ] 27. Typed flyweights from records and views: over sbe-tool's flyweights, a stage per block, group entry and var-data, each reachable only from the one before, so wire order holds by construction; sealed where the acting version decides what follows; `skip()` on every stage; the components' bindings applied; nothing allocated
+
 **The API pass.**
 
-* [ ] 26. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
+* [ ] 28. Whatever feels awkward in the annotations and the codec once 21 works: names, `Problem` wording, javadoc, what the api exports. The running example in `type-mappings.md` compiles verbatim
