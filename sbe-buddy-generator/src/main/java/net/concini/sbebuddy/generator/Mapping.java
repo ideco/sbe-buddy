@@ -49,27 +49,19 @@ public final class Mapping {
 	private final Map<Object, Object> origins = new IdentityHashMap<>();
 	private final List<Schema.Declaration> types = new ArrayList<>();
 	private final Map<Annotated.Declaration, String> wireNames = new IdentityHashMap<>();
-	private final int baselineVersion;
 	private final Annotated.Composite header;
 
-	private Mapping(int baselineVersion, Annotated.Composite header) {
-		this.baselineVersion = baselineVersion;
+	private Mapping(Annotated.Composite header) {
 		this.header = header;
 	}
 
 	public static Mapped map(Annotated annotated) {
-		Mapping mapping = new Mapping(annotated.baselineVersion(), annotated.headerType());
+		Mapping mapping = new Mapping(annotated.headerType());
 		Schema schema = mapping.schema(annotated);
 		return new Mapped(schema, List.copyOf(mapping.problems), Collections.unmodifiableMap(mapping.origins));
 	}
 
 	private Schema schema(Annotated annotated) {
-		if (baselineVersion < 0 || baselineVersion > annotated.version()) {
-			problem(
-					annotated, "a baselineVersion is 0 to the schema's version " + annotated.version() + ", not "
-							+ baselineVersion
-			);
-		}
 		String headerType = declare(header);
 		headerRules();
 		for (Annotated.Declaration declaration : annotated.types()) {
@@ -95,7 +87,7 @@ public final class Mapping {
 	}
 
 	private Schema.Message message(Annotated.Message message) {
-		Body body = body(message, message.components(), message.unmapped(), message.layout(), baselineVersion);
+		Body body = body(message, message.components(), message.unmapped(), message.layout());
 		Schema.Message result = new Schema.Message(
 				name(message, message.name(), message.javaName()),
 				id(message, message.id()),
@@ -118,12 +110,10 @@ public final class Mapping {
 	/**
 	 * Fields, then groups, then data: the XSD orders them, so a component out of
 	 * order is a problem. The order is the layout when there is one, declaration
-	 * order otherwise. {@code baseline} is the version below which nothing in this
-	 * body is read: the schema's, or a group's own where that is higher.
+	 * order otherwise.
 	 */
 	private Body body(
-			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout,
-			int baseline
+			Object node, List<Annotated.Component> components, List<Annotated.Field> unmapped, List<String> layout
 	) {
 		List<Schema.Field> fields = new ArrayList<>();
 		List<Schema.Group> groups = new ArrayList<>();
@@ -134,13 +124,13 @@ public final class Mapping {
 					if (!groups.isEmpty() || !data.isEmpty()) {
 						problem(field, "a field must come before every group and data");
 					}
-					fields.add(field(field, baseline));
+					fields.add(field(field));
 				}
 				case Annotated.Group group -> {
 					if (!data.isEmpty()) {
 						problem(group, "a group must come before every data");
 					}
-					groups.add(group(group, baseline));
+					groups.add(group(group));
 				}
 				case Annotated.Data datum -> data.add(data(datum));
 			}
@@ -221,7 +211,7 @@ public final class Mapping {
 		};
 	}
 
-	private Schema.Field field(Annotated.Field field, int baseline) {
+	private Schema.Field field(Annotated.Field field) {
 		if (field.javaType() instanceof Annotated.Unmapped && field.name().isEmpty()) {
 			problem(field, "an unmapped field needs a name");
 		}
@@ -250,15 +240,9 @@ public final class Mapping {
 		return result;
 	}
 
-	/**
-	 * An entry exists only in a message whose version carries the group, so inside
-	 * it nothing below the group's own version is ever read.
-	 */
-	private Schema.Group group(Annotated.Group group, int baseline) {
+	private Schema.Group group(Annotated.Group group) {
 		String dimensionType = declare(group.dimensionType());
-		Body body = body(
-				group, group.components(), group.unmapped(), group.layout(), Math.max(baseline, group.sinceVersion())
-		);
+		Body body = body(group, group.components(), group.unmapped(), group.layout());
 		Schema.Group result = new Schema.Group(
 				name(group, group.name(), group.javaName()),
 				id(group, group.id()),

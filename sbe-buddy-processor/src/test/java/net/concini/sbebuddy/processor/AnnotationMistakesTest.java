@@ -94,19 +94,22 @@ final class AnnotationMistakesTest {
 	@Test
 	void aFieldAddedAboveTheBaselineCanBeAbsent() {
 		assertErrors(
-				schema(2, 1), inMessage("@SbeField(id = 1, sinceVersion = 2) int quantity"),
-				error("int quantity", "int cannot hold null, but the field can be absent; use Integer")
+				EVOLVING,
+				inMessage(
+						ORDER_V1.replace(
+								"@SbeGroup(",
+								"@SbeField(id = 7, sinceVersion = 2) int account,\n@SbeGroup("
+						), RELEASED
+				),
+				error("int account", "int cannot hold null, but the field can be absent; use Integer")
 		);
 	}
 
 	@Test
 	void aFieldAddedAtTheBaselineIsNeverAbsent() {
 		assertWarnings(
-				schema(2, 1),
-				inMessage(
-						"@SbeField(id = 1, sinceVersion = 1) int quantity,\n@SbeField(id = 2, sinceVersion = 1) Long price"
-				),
-				error("Long price", "Long is boxed although the field is never absent")
+				EVOLVING, inMessage(ORDER_V1.replace("int quantity", "Integer quantity"), RELEASED),
+				error("Integer quantity", "Integer is boxed although the field is never absent")
 		);
 	}
 
@@ -114,7 +117,7 @@ final class AnnotationMistakesTest {
 	void aFieldAtItsGroupsVersionIsNeverAbsent() {
 		// The group's guard fires first: an entry exists only where the field does.
 		assertWarnings(
-				schema(2, 0),
+				schema(2),
 				inMessage(
 						"@SbeGroup(id = 2, sinceVersion = 2) List<Leg> legs",
 						"record Leg(@SbeField(id = 3, sinceVersion = 2) int legId, @SbeField(id = 4, sinceVersion = 2) Long ratio) {}"
@@ -126,7 +129,7 @@ final class AnnotationMistakesTest {
 	@Test
 	void aFieldAddedAboveItsGroupsVersionCanBeAbsent() {
 		assertErrors(
-				schema(3, 0),
+				schema(3),
 				inMessage(
 						"@SbeGroup(id = 2, sinceVersion = 2) List<Leg> legs",
 						"record Leg(\n@SbeField(id = 3, sinceVersion = 3) int legId\n) {}"
@@ -149,7 +152,7 @@ final class AnnotationMistakesTest {
 	@Test
 	void aConstantIsNeverAbsent() {
 		assertClean(
-				schema(2, 0),
+				schema(2),
 				inMessage(
 						"@SbeField(id = 1, primitiveType = CHAR, presence = CONSTANT, valueRef = \"Side.Buy\", sinceVersion = 2) byte side",
 						SIDE
@@ -509,7 +512,7 @@ final class AnnotationMistakesTest {
 		String source = inMessage("@SbeField(id = 1, primitiveType = UINT64, timeUnit = \"nanosecond\") long sentAt");
 		Javac.Result result = Javac.compile(
 				List.of(
-						Javac.unit("mistakes/package-info.java", schema(0, 0)),
+						Javac.unit("mistakes/package-info.java", schema(0)),
 						Javac.unit("mistakes/Order.java", source)
 				),
 				new SbeProcessor(), List.of("-Xlint:deprecation")
@@ -604,7 +607,7 @@ final class AnnotationMistakesTest {
 	@Test
 	void aCompositeCannotBeExtendedInALaterVersion() {
 		assertErrors(
-				schema(1, 0),
+				schema(1),
 				inMessage(
 						"@SbeField(id = 1) Pad pad",
 						"""
@@ -623,7 +626,7 @@ final class AnnotationMistakesTest {
 	@Test
 	void aCompositesRefCannotBeNewerThanItsComposite() {
 		assertErrors(
-				schema(1, 0),
+				schema(1),
 				inMessage(
 						"@SbeField(id = 1) Pad pad",
 						"@SbeType(primitiveType = INT32) final class Qty {}",
@@ -643,7 +646,7 @@ final class AnnotationMistakesTest {
 	@Test
 	void aCompositeArrivingInALaterVersionBringsItsMembersAlong() {
 		assertClean(
-				schema(1, 0),
+				schema(1),
 				inMessage(
 						"@SbeField(id = 1, sinceVersion = 1) Pad pad",
 						"""
@@ -691,13 +694,15 @@ final class AnnotationMistakesTest {
 
 	@Test
 	void aBaselineAboveTheSchemasVersionIsAProblem() {
-		Javac.Result result = compile(schema(1, 2), inMessage("@SbeField(id = 1) int qty"));
+		Javac.Result result = compile(
+				EVOLVING.replace("version = 2", "version = 0"),
+				inMessage(ORDER_V1.replace(", sinceVersion = 1", ""), RELEASED)
+		);
 
-		assertThat(result.errors()).singleElement().satisfies(error -> {
-			assertThat(error.getMessage(null)).isEqualTo("a baselineVersion is 0 to the schema's version 1, not 2");
-			assertThat(error.getSource()).isNotNull();
-			assertThat(error.getSource().getName()).endsWith("package-info.java");
-		});
+		assertThat(result.errors()).extracting(error -> error.getMessage(null)).containsExactlyInAnyOrder(
+				"the baseline is version 1, above the schema's 0", "the baseline has sinceVersion=\"1\" here, not \"0\""
+		);
+		assertThat(result.errors().get(0).getSource().getName()).endsWith("package-info.java");
 		assertThat(result.outputs()).isEmpty();
 	}
 
@@ -1163,6 +1168,180 @@ final class AnnotationMistakesTest {
 		);
 	}
 
+	// ---- the baseline
+
+	@Test
+	void theBaselineAtALaterVersionCompilesClean() {
+		assertClean(EVOLVING, inMessage(ORDER_V1, RELEASED));
+	}
+
+	@Test
+	void whatSbeAllowsCompilesClean() {
+		assertClean(
+				EVOLVING,
+				inMessage(
+						ORDER_V1.replace("long orderId", "long clOrdId")
+								.replace("int quantity", "Integer quantity")
+								.replace("sinceVersion = 1)", "sinceVersion = 1, presence = OPTIONAL)")
+								.replace(
+										"@SbeGroup(",
+										"@SbeField(id = 7, sinceVersion = 2) Integer account,\n@SbeGroup("
+								),
+						SIDE.replace("}", ", @SbeEnumValue(value = \"X\", sinceVersion = 2) Short }"), FLAGS, LEG_V1,
+						CANCEL.replace("Cancel(", "CancelOrder(")
+				)
+		);
+	}
+
+	@Test
+	void aFieldRetiredAsUnmappedCompilesClean() {
+		assertClean(
+				EVOLVING,
+				message(
+						"""
+								@SbeMessage(id = 1, layout = {"orderId", "side", "flags", "quantity", "legs"},
+								unmapped = @SbeField(id = 4, name = "flags", type = Flags.class))""",
+						ORDER_V1.replace("@SbeField(id = 4) Set<Flags> flags,\n", ""), RELEASED
+				)
+		);
+	}
+
+	@Test
+	void aBaselineNotOnTheClassPathIsAProblemOnTheSchema() {
+		Javac.Result result = compile(EVOLVING.replace("order-v1.xml", "nowhere.xml"), inMessage(ORDER_V1, RELEASED));
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getMessage(null)).isEqualTo("no baseline mistakes/nowhere.xml on the class path");
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void theSchemaKeepsTheBaselinesId() {
+		Javac.Result result = compile(EVOLVING.replace("id = 1", "id = 3"), inMessage(ORDER_V1, RELEASED));
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getMessage(null)).isEqualTo("the baseline is schema 1, not 3; a schema keeps its id");
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void aMessageOfTheBaselineThatIsGoneIsAProblemOnTheSchema() {
+		Javac.Result result = compile(EVOLVING, inMessage(ORDER_V1, SIDE, FLAGS, LEG_V1));
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getMessage(null)).isEqualTo(
+					"the baseline has a message \"Cancel\" (id 2) and the schema none with that id; a message stays, deprecated if it is retired"
+			);
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void aMemberOfTheBaselineThatIsGoneIsAProblemOnTheRecord() {
+		assertErrors(
+				EVOLVING,
+				inMessage(
+						ORDER_V1.replace(",\n@SbeField(id = 2, sinceVersion = 1) int quantity", "")
+								.replace(",\n@SbeGroup(id = 5) List<Leg> legs", ""),
+						RELEASED
+				),
+				error(
+						"@SbeMessage(id = 1)",
+						"the baseline's Order has a field \"quantity\" (id 2) the schema lacks; a field stays, unmapped if the record retires it"
+				),
+				error(
+						"@SbeMessage(id = 1)",
+						"the baseline's Order has a group \"legs\" (id 5) the schema lacks; a group stays"
+				)
+		);
+	}
+
+	@Test
+	void anAppendedFieldStatesAVersionAboveTheBaselines() {
+		assertErrors(
+				EVOLVING,
+				inMessage(
+						ORDER_V1.replace(
+								"@SbeGroup(",
+								"@SbeField(id = 7, sinceVersion = 1) int account,\n@SbeGroup("
+						), RELEASED
+				),
+				error("int account", "a field the baseline lacks needs a sinceVersion above the baseline's version 1")
+		);
+	}
+
+	@Test
+	void aFieldKeepsItsIdAndItsType() {
+		assertErrors(
+				EVOLVING,
+				inMessage(
+						ORDER_V1.replace("@SbeField(id = 1) long orderId", "@SbeField(id = 11) long orderId")
+								.replace("@SbeField(id = 3) Side side", "@SbeField(id = 3) int side"),
+						RELEASED.replace("int legId", "long legId")
+				),
+				error(
+						"@SbeField(id = 11) long orderId",
+						"the baseline has a field \"orderId\" (id 1) here, not id 11; the id is its identity, and a field that means something else is appended as a new one"
+				),
+				error("int side", "the type differs from the baseline's: enum \"Side\", not int32"),
+				error("record Leg", "the type differs from the baseline's: int32, not int64")
+		);
+	}
+
+	@Test
+	void anEnumValueStaysAndOneAddedStatesItsVersion() {
+		assertErrors(
+				EVOLVING,
+				inMessage(
+						ORDER_V1,
+						SIDE.replace("@SbeEnumValue(\"S\") Sell", "@SbeEnumValue(\"X\") Short"), FLAGS, LEG_V1, CANCEL
+				),
+				error(
+						"Side side",
+						"the type differs from the baseline's: enum \"Side\" has the value \"S\" (Sell), which the schema's lacks; values stay, deprecated if they are retired"
+				)
+		);
+		assertErrors(
+				EVOLVING,
+				inMessage(ORDER_V1, SIDE.replace("}", ", @SbeEnumValue(\"X\") Short }"), FLAGS, LEG_V1, CANCEL),
+				error(
+						"Side side",
+						"the type differs from the baseline's: enum \"Side\" lacks the value \"X\" (Short), which needs a sinceVersion above the baseline's version 1"
+				)
+		);
+	}
+
+	/**
+	 * The schema of the evolution snippets at version 2, against version 1,
+	 * {@code order-v1.xml} beside this test's resources.
+	 */
+	private static final String EVOLVING = """
+			@SbeSchema(id = 1, version = 2, baseline = "order-v1.xml", codecs = false)
+			package mistakes;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
+
+	/** The components of {@code Order} as version 1 released them. */
+	private static final String ORDER_V1 = """
+			@SbeField(id = 1) long orderId,
+			@SbeField(id = 3) Side side,
+			@SbeField(id = 4) Set<Flags> flags,
+			@SbeField(id = 2, sinceVersion = 1) int quantity,
+			@SbeGroup(id = 5) List<Leg> legs""";
+
+	private static final String LEG_V1 = "record Leg(@SbeField(id = 6) int legId) {}";
+
+	private static final String CANCEL = "@SbeMessage(id = 2) record Cancel(@SbeField(id = 1) long orderId) {}";
+
+	/** Everything else version 1 released beside {@code Order}. */
+	private static final String RELEASED = SIDE + "\n" + FLAGS + "\n" + LEG_V1 + "\n" + CANCEL;
+
 	/** The venue's schema, {@code venue.xml} beside this test's resources. */
 	private static final String SCHEMA_FIRST = """
 			@SbeSchema(id = 7, version = 2, resource = "venue.xml")
@@ -1211,14 +1390,14 @@ final class AnnotationMistakesTest {
 
 			""";
 
-	/** The schema of the snippets, at a version and baseline, without codecs. */
-	private static String schema(int version, int baseline) {
+	/** The schema of the snippets, at a version, without codecs. */
+	private static String schema(int version) {
 		return """
-				@SbeSchema(id = 1, version = %d, baselineVersion = %d, codecs = false)
+				@SbeSchema(id = 1, version = %d, codecs = false)
 				package mistakes;
 
 				import net.concini.sbebuddy.SbeSchema;
-				""".formatted(version, baseline);
+				""".formatted(version);
 	}
 
 	/** The schema of the snippets with codecs, which a union needs. */
@@ -1265,7 +1444,7 @@ final class AnnotationMistakesTest {
 	}
 
 	private static void assertErrors(String source, Expected... expected) {
-		assertErrors(schema(0, 0), source, expected);
+		assertErrors(schema(0), source, expected);
 	}
 
 	/**
@@ -1279,7 +1458,7 @@ final class AnnotationMistakesTest {
 	}
 
 	private static void assertWarnings(String source, Expected... expected) {
-		assertWarnings(schema(0, 0), source, expected);
+		assertWarnings(schema(0), source, expected);
 	}
 
 	/** No error, exactly these warnings, and everything written. */
@@ -1292,7 +1471,7 @@ final class AnnotationMistakesTest {
 	}
 
 	private static Javac.Result assertClean(String source) {
-		return assertClean(schema(0, 0), source);
+		return assertClean(schema(0), source);
 	}
 
 	/** Neither error nor warning, and everything written. */
