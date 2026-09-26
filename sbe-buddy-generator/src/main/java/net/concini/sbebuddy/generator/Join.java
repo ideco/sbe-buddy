@@ -103,14 +103,16 @@ final class Join {
 
 	/**
 	 * A field of a block or a member of a composite, named {@code property} on its
-	 * flyweight. {@code face} is null where no record maps the message, for a
-	 * constant no component carries, and for a composite field the codec does not
-	 * cover; {@code helpers} are the methods its shape calls, and {@code composite}
-	 * the composite its shape goes through, joined once per message however many
-	 * fields use it.
+	 * flyweight; {@code type} is its type's token, the field's second, a member's
+	 * own. {@code face} is null where no record maps the message, for a constant no
+	 * component carries, and for a composite field the codec does not cover;
+	 * {@code helpers} are the methods its shape calls, and {@code composite} the
+	 * composite its shape goes through, joined once per message however many fields
+	 * use it.
 	 */
 	record Field(
 			Token token,
+			Token type,
 			String property,
 			@Nullable Face face,
 			List<Helper> helpers,
@@ -325,7 +327,10 @@ final class Join {
 						Shape shape = nullShape(mapped, field.property(), headerClass);
 						if (shape != null) {
 							nulls.add(
-									new Field(field.token(), field.property(), new Face.Null(shape), List.of(), null)
+									new Field(
+											field.token(), field.type(), field.property(), new Face.Null(shape),
+											List.of(), null
+									)
 							);
 						}
 					}
@@ -493,7 +498,7 @@ final class Join {
 			return null;
 		}
 		return new Field(
-				field, property,
+				field, typeTokens.get(0), property,
 				new Face.Mapped(
 						name, shape, withoutNullValue(absence(field, component.javaType(), owner), shape, field, owner),
 						bound
@@ -510,15 +515,15 @@ final class Join {
 	private Field unmapped(Token field, List<Token> typeTokens, List<Annotated.Field> unmapped, Owner owner) {
 		String property = JavaUtil.formatPropertyName(field.name());
 		if (message == null) {
-			return new Field(field, property, null, List.of(), null);
+			return new Field(field, typeTokens.get(0), property, null, List.of(), null);
 		}
 		Token type = typeTokens.get(0);
 		if (type.signal() == Signal.BEGIN_COMPOSITE) {
 			codecProblem(lacking("an unmapped field of a composite"));
-			return new Field(field, property, null, List.of(), null);
+			return new Field(field, typeTokens.get(0), property, null, List.of(), null);
 		}
 		if (constant(field)) {
-			return new Field(field, property, null, List.of(), null);
+			return new Field(field, typeTokens.get(0), property, null, List.of(), null);
 		}
 		Annotated.Field declared = unmappedField(unmapped, field);
 		if (declared == null) {
@@ -532,7 +537,7 @@ final class Join {
 			case BEGIN_SET -> new Shape.Set(JavaUtil.formatClassName(type.applicableTypeName()));
 			default -> throw new IllegalStateException(field.name() + " is a field of " + type.signal());
 		};
-		return new Field(field, property, new Face.Null(shape), List.of(), null);
+		return new Field(field, type, property, new Face.Null(shape), List.of(), null);
 	}
 
 	/** A primitive takes its null value in one call, an array in every element. */
@@ -914,7 +919,7 @@ final class Join {
 			Annotated.Member member = member(composite, token.name());
 			if (member == null) {
 				Face face = constant(token) ? null : new Face.Null(unmappedEncoding(token, owner, property));
-				members.add(new Field(token, property, face, List.of(), null));
+				members.add(new Field(token, token, property, face, List.of(), null));
 				continue;
 			}
 			matched.add(member);
@@ -946,7 +951,8 @@ final class Join {
 			Shape shape = shape(token, memberTokens, declarationOf(member), name, owner, used);
 			if (shape != null) {
 				Field field = new Field(
-						token, property, new Face.Mapped(name, shape, absence(token, javaTypeOf(member), owner), bound),
+						token, token, property,
+						new Face.Mapped(name, shape, absence(token, javaTypeOf(member), owner), bound),
 						used, compositeOf(shape, memberTokens)
 				);
 				members.add(field);

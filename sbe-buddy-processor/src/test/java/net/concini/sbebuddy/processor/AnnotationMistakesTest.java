@@ -1415,6 +1415,54 @@ final class AnnotationMistakesTest {
 		assertThat(result.outputs()).isEmpty();
 	}
 
+	// ---- names the flyweight reader takes
+
+	@Test
+	void aGroupNamedAsTheReadersStageIsAProblem() {
+		assertErrors(
+				inMessage("@SbeGroup(id = 1) List<Leg> stage", LEG),
+				error("List<Leg> stage", "the group \"stage\" clashes with the reader's Stage; rename it")
+		);
+	}
+
+	@Test
+	void aVarDataNamedAsAGroupsEntryIsAProblem() {
+		assertErrors(
+				inMessage(
+						"@SbeGroup(id = 1) List<Leg> fills,\n@SbeData(id = 2, type = VarStringEncoding.class) String fillsEntry",
+						LEG
+				),
+				error("String fillsEntry", "the data \"fillsEntry\" clashes with the reader's FillsEntry; rename it")
+		);
+	}
+
+	@Test
+	void aFieldNamedAsAnEntrysIndexIsAProblem() {
+		assertErrors(
+				inMessage("@SbeGroup(id = 1) List<Leg> legs", "record Leg(@SbeField(id = 2) int index) {}"),
+				error("int index", "the field \"index\" clashes with the reader's LegsEntry.index(); rename it")
+		);
+	}
+
+	@Test
+	void aClashInAMessageNoRecordMapsIsAProblemOnTheSchema() {
+		Javac.Result result = compile(
+				"""
+						@SbeSchema(id = 7, version = 0, resource = "clash.xml", partial = true)
+						package mistakes;
+
+						import net.concini.sbebuddy.SbeSchema;
+						""", inMessage("@SbeField(id = 1) long orderId")
+		);
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getMessage(null))
+					.isEqualTo("the group \"stage\" clashes with the reader's Stage; rename it");
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
 	/** The venue's schema, mapped in part. */
 	private static final String PARTIAL = """
 			@SbeSchema(id = 7, version = 2, resource = "venue.xml", partial = true)

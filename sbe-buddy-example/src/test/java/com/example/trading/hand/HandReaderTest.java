@@ -17,12 +17,14 @@ import com.example.trading.NewOrder;
 import com.example.trading.NewOrderCodec;
 import com.example.trading.Samples;
 import com.example.trading.SessionHeader;
-import com.example.trading.hand.NewOrderReader.Parties;
-import com.example.trading.hand.NewOrderReader.PartiesEntry;
-import com.example.trading.hand.NewOrderReader.PartySubIds;
-import com.example.trading.hand.NewOrderReader.PartySubIdsEntry;
-import com.example.trading.hand.NewOrderReader.RootBlock;
+import com.example.trading.sbe.CancelRejectReader;
 import com.example.trading.sbe.CxlRejReason;
+import com.example.trading.sbe.NewOrderReader;
+import com.example.trading.sbe.NewOrderReader.Parties;
+import com.example.trading.sbe.NewOrderReader.PartiesEntry;
+import com.example.trading.sbe.NewOrderReader.PartySubIds;
+import com.example.trading.sbe.NewOrderReader.PartySubIdsEntry;
+import com.example.trading.sbe.NewOrderReader.RootBlock;
 import com.example.trading.sbe.OrdStatus;
 import com.example.trading.sbe.OrdType;
 import com.example.trading.sbe.PartyRole;
@@ -30,10 +32,11 @@ import com.example.trading.sbe.Side;
 import com.example.trading.sbe.TimeInForce;
 
 /**
- * The hand-written readers over what the codecs write: the stages come in wire
+ * The generated readers over what the codecs write: the stages come in wire
  * order, read what the samples hold, prune on {@code skip()}, answer while the
  * reader is inside them and not after, and a var-data reads as often as wanted.
- * The generated readers must pass this unchanged.
+ * Written against the hand-written readers of this package first, and passed
+ * unchanged by the generated ones; the imports name them over this package's.
  */
 final class HandReaderTest {
 

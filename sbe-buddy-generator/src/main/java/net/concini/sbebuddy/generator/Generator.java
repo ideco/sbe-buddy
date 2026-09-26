@@ -295,7 +295,11 @@ public final class Generator {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-		List<Problem> problems = CodecEmitter.emit(ir, annotated, evolution.baseline(), staged);
+		List<Problem> problems = new ArrayList<>(CodecEmitter.emit(ir, annotated, evolution.baseline(), staged));
+		if (problems.stream().anyMatch(Problem::isError)) {
+			return problems;
+		}
+		problems.addAll(FlyweightEmitter.emit(ir, annotated, evolution.baseline(), schema, staged));
 		if (problems.stream().anyMatch(Problem::isError)) {
 			return problems;
 		}

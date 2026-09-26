@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A schema the schema-first snippets of AnnotationMistakesTest map in part:
+     Order is mapped, and Cancel, which no record maps, has a group whose
+     reader's stage would be named Stage. -->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="mistakes" id="7" version="0">
+    <types>
+        <composite name="messageHeader">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+        <composite name="groupSizeEncoding">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="numInGroup" primitiveType="uint16"/>
+        </composite>
+    </types>
+    <sbe:message name="Order" id="1">
+        <field name="orderId" id="1" type="int64"/>
+    </sbe:message>
+    <sbe:message name="Cancel" id="2">
+        <field name="orderId" id="1" type="int64"/>
+        <group name="stage" id="2">
+            <field name="legId" id="3" type="int32"/>
+        </group>
+    </sbe:message>
+</sbe:messageSchema>
