@@ -220,16 +220,26 @@ public final class GroupsReader implements Iterable<GroupsReader.Stage>, java.ut
 	 */
 	private static final boolean CHECKS = !"false".equals(System.getProperty("sbebuddy.checks"));
 
+	// Small enough to inline at every accessor: the positions compared by
+	// ordinal, the message built only on the way out.
 	private void open(At first, At last, String stage) {
-		if (CHECKS && (at.compareTo(first) < 0 || at.compareTo(last) > 0)) {
-			throw new IllegalStateException(stage + " is not open");
+		if (CHECKS && (at.ordinal() < first.ordinal() || at.ordinal() > last.ordinal())) {
+			throw notOpen(stage);
 		}
 	}
 
 	private void current(At expected, String stage) {
 		if (CHECKS && at != expected) {
-			throw new IllegalStateException(stage + " is not the current stage");
+			throw notCurrent(stage);
 		}
+	}
+
+	private static IllegalStateException notOpen(String stage) {
+		return new IllegalStateException(stage + " is not open");
+	}
+
+	private static IllegalStateException notCurrent(String stage) {
+		return new IllegalStateException(stage + " is not the current stage");
 	}
 
 	/**

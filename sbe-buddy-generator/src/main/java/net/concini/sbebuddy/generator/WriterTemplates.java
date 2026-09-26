@@ -61,10 +61,22 @@ final class WriterTemplates {
 						 */
 						private static final boolean CHECKS = !"false".equals(System.getProperty("sbebuddy.checks"));
 
+						// Small enough to inline at every step: the positions compared by ordinal,
+						// the message built only on the way out.
 						private void current(At first, At last, String stage) {
-							if (CHECKS && (at.compareTo(first) < 0 || at.compareTo(last) > 0)) {
-								throw new IllegalStateException(stage + " is not the current stage");
+							if (CHECKS && (at.ordinal() < first.ordinal() || at.ordinal() > last.ordinal())) {
+								throw notCurrent(stage);
 							}
+						}
+
+						private void current(At expected, String stage) {
+							if (CHECKS && at != expected) {
+								throw notCurrent(stage);
+							}
+						}
+
+						private static IllegalStateException notCurrent(String stage) {
+							return new IllegalStateException(stage + " is not the current stage");
 						}
 
 						private static void nullHeader({flyweights}.{headerClass}Encoder encoder) {

@@ -169,10 +169,22 @@ public final class GroupsWriter {
 	 */
 	private static final boolean CHECKS = !"false".equals(System.getProperty("sbebuddy.checks"));
 
+	// Small enough to inline at every step: the positions compared by ordinal,
+	// the message built only on the way out.
 	private void current(At first, At last, String stage) {
-		if (CHECKS && (at.compareTo(first) < 0 || at.compareTo(last) > 0)) {
-			throw new IllegalStateException(stage + " is not the current stage");
+		if (CHECKS && (at.ordinal() < first.ordinal() || at.ordinal() > last.ordinal())) {
+			throw notCurrent(stage);
 		}
+	}
+
+	private void current(At expected, String stage) {
+		if (CHECKS && at != expected) {
+			throw notCurrent(stage);
+		}
+	}
+
+	private static IllegalStateException notCurrent(String stage) {
+		return new IllegalStateException(stage + " is not the current stage");
 	}
 
 	private static void nullHeader(corpus.groups.sbe.MessageHeaderEncoder encoder) {
@@ -200,20 +212,20 @@ public final class GroupsWriter {
 
 		@Override
 		public RootBlockBoundStage bound() {
-			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			GroupsWriter.this.current(At.ROOT_BLOCK, "RootBlock");
 			return rootBlockBoundStage;
 		}
 
 		@Override
 		public RootBlock orderId(long value) {
-			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			GroupsWriter.this.current(At.ROOT_BLOCK, "RootBlock");
 			encoder.orderId(value);
 			return this;
 		}
 
 		@Override
 		public Legs legs() {
-			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			GroupsWriter.this.current(At.ROOT_BLOCK, "RootBlock");
 			legsEncoder = encoder.legsCount(corpus.groups.sbe.GroupsEncoder.LegsEncoder.countMaxValue());
 			at = At.LEGS;
 			return legsStage;
@@ -221,7 +233,7 @@ public final class GroupsWriter {
 
 		@Override
 		public Fills fills() {
-			GroupsWriter.this.current(At.AFTER_LEGS, At.AFTER_LEGS, "AfterLegs");
+			GroupsWriter.this.current(At.AFTER_LEGS, "AfterLegs");
 			fillsEncoder = encoder.fillsCount(corpus.groups.sbe.GroupsEncoder.FillsEncoder.countMaxValue());
 			at = At.FILLS;
 			return fillsStage;
@@ -229,7 +241,7 @@ public final class GroupsWriter {
 
 		@Override
 		public int length() {
-			GroupsWriter.this.current(At.AFTER_FILLS, At.AFTER_FILLS, "AfterFills");
+			GroupsWriter.this.current(At.AFTER_FILLS, "AfterFills");
 			return corpus.groups.sbe.MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength();
 		}
 	}
@@ -238,14 +250,14 @@ public final class GroupsWriter {
 
 		@Override
 		public RootBlock orderId(long value) {
-			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			GroupsWriter.this.current(At.ROOT_BLOCK, "RootBlock");
 			encoder.orderId(value);
 			return rootBlockStage;
 		}
 
 		@Override
 		public RootBlockStage wire() {
-			GroupsWriter.this.current(At.ROOT_BLOCK, At.ROOT_BLOCK, "RootBlock");
+			GroupsWriter.this.current(At.ROOT_BLOCK, "RootBlock");
 			return rootBlockStage;
 		}
 	}
@@ -254,7 +266,7 @@ public final class GroupsWriter {
 
 		@Override
 		public LegsEntryLegId entry() {
-			GroupsWriter.this.current(At.LEGS, At.LEGS, "Legs");
+			GroupsWriter.this.current(At.LEGS, "Legs");
 			legsEncoder.next();
 			GroupsWriter.nulls(legsEncoder);
 			at = At.LEGS_ENTRY;
@@ -263,7 +275,7 @@ public final class GroupsWriter {
 
 		@Override
 		public AfterLegs end() {
-			GroupsWriter.this.current(At.LEGS, At.LEGS, "Legs");
+			GroupsWriter.this.current(At.LEGS, "Legs");
 			legsEncoder.resetCountToIndex();
 			at = At.AFTER_LEGS;
 			return rootBlockStage;
@@ -274,27 +286,27 @@ public final class GroupsWriter {
 
 		@Override
 		public LegsEntryBoundStage bound() {
-			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			GroupsWriter.this.current(At.LEGS_ENTRY, "LegsEntry");
 			return legsEntryBoundStage;
 		}
 
 		@Override
 		public LegsEntryLegRatio legId(int value) {
-			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			GroupsWriter.this.current(At.LEGS_ENTRY, "LegsEntry");
 			legsEncoder.legId(value);
 			return this;
 		}
 
 		@Override
 		public LegsEntry legRatio(short value) {
-			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			GroupsWriter.this.current(At.LEGS_ENTRY, "LegsEntry");
 			legsEncoder.legRatio(value);
 			return this;
 		}
 
 		@Override
 		public Allocations allocations() {
-			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			GroupsWriter.this.current(At.LEGS_ENTRY, "LegsEntry");
 			allocationsEncoder = legsEncoder.allocationsCount(corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder.countMaxValue());
 			at = At.ALLOCATIONS;
 			return allocationsStage;
@@ -305,14 +317,14 @@ public final class GroupsWriter {
 
 		@Override
 		public LegsEntry legId(int value) {
-			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			GroupsWriter.this.current(At.LEGS_ENTRY, "LegsEntry");
 			legsEncoder.legId(value);
 			return legsEntryStage;
 		}
 
 		@Override
 		public LegsEntryStage wire() {
-			GroupsWriter.this.current(At.LEGS_ENTRY, At.LEGS_ENTRY, "LegsEntry");
+			GroupsWriter.this.current(At.LEGS_ENTRY, "LegsEntry");
 			return legsEntryStage;
 		}
 	}
@@ -341,13 +353,13 @@ public final class GroupsWriter {
 
 		@Override
 		public AllocationsEntryBoundStage bound() {
-			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			return allocationsEntryBoundStage;
 		}
 
 		@Override
 		public AllocationsEntry account(int value) {
-			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsEncoder.account(value);
 			return this;
 		}
@@ -364,7 +376,7 @@ public final class GroupsWriter {
 
 		@Override
 		public AllocationsEntry share(int value) {
-			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsEncoder.share(value);
 			return this;
 		}
@@ -374,14 +386,14 @@ public final class GroupsWriter {
 
 		@Override
 		public AllocationsEntryBound account(int value) {
-			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsEncoder.account(value);
 			return this;
 		}
 
 		@Override
 		public AllocationsEntryBound share(java.lang.Integer value) {
-			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			allocationsEncoder.share(value == null ? corpus.groups.sbe.GroupsEncoder.LegsEncoder.AllocationsEncoder.shareNullValue() : value);
 			return this;
 		}
@@ -398,7 +410,7 @@ public final class GroupsWriter {
 
 		@Override
 		public AllocationsEntryStage wire() {
-			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, At.ALLOCATIONS_ENTRY, "AllocationsEntry");
+			GroupsWriter.this.current(At.ALLOCATIONS_ENTRY, "AllocationsEntry");
 			return allocationsEntryStage;
 		}
 	}
@@ -427,13 +439,13 @@ public final class GroupsWriter {
 
 		@Override
 		public FillsEntryBoundStage bound() {
-			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			GroupsWriter.this.current(At.FILLS_ENTRY, "FillsEntry");
 			return fillsEntryBoundStage;
 		}
 
 		@Override
 		public Fills price(long value) {
-			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			GroupsWriter.this.current(At.FILLS_ENTRY, "FillsEntry");
 			fillsEncoder.price(value);
 			return fillsStage;
 		}
@@ -443,7 +455,7 @@ public final class GroupsWriter {
 
 		@Override
 		public Fills price(java.math.BigDecimal value) {
-			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			GroupsWriter.this.current(At.FILLS_ENTRY, "FillsEntry");
 			if (value == null) {
 				throw new IllegalArgumentException("price is required");
 			}
@@ -453,7 +465,7 @@ public final class GroupsWriter {
 
 		@Override
 		public FillsEntryStage wire() {
-			GroupsWriter.this.current(At.FILLS_ENTRY, At.FILLS_ENTRY, "FillsEntry");
+			GroupsWriter.this.current(At.FILLS_ENTRY, "FillsEntry");
 			return fillsEntryStage;
 		}
 	}
