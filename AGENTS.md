@@ -18,6 +18,7 @@ sbe-buddy-api          what users compile against: annotations, Codec, TypeBindi
 sbe-buddy-processor    javac elements to the annotations as data; the only place javac appears
 sbe-buddy-example      a realistic annotated schema with its oracle; the integration proof
 sbe-buddy-tests        the corpus compiled by the real build: a schema package, its oracle and its round trips per case, run against the generated code
+sbe-buddy-benchmarks   JMH benchmarks of the example's codecs, run by hand; not deployed
 reference/             sbe-tool's sources as a git submodule, for reading only
 ```
 
