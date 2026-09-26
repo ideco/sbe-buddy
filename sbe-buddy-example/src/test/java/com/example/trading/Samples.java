@@ -17,18 +17,18 @@ import com.example.trading.NewOrder.PartySubId;
  * One of each message, and the edge values: a market order without prices and
  * parties, a report without a trade, ids at their full length.
  */
-final class Samples {
+public final class Samples {
 
-	static final Instant TIME = Instant.parse("2026-09-24T08:30:00.123456789Z");
+	public static final Instant TIME = Instant.parse("2026-09-24T08:30:00.123456789Z");
 
 	/** Twenty characters, the whole of a {@code ClOrdId}. */
-	static final String ORDER = "ORD-0000000000000001";
+	public static final String ORDER = "ORD-0000000000000001";
 
-	static final String REPLACEMENT = "ORD-0000000000000002";
+	public static final String REPLACEMENT = "ORD-0000000000000002";
 
-	static final String CANCEL = "ORD-0000000000000003";
+	public static final String CANCEL = "ORD-0000000000000003";
 
-	static final NewOrder LIMIT_ORDER = new NewOrder(
+	public static final NewOrder LIMIT_ORDER = new NewOrder(
 			ORDER, "ACCT-0001", "ACME", Side.BUY, OrdType.LIMIT, TimeInForce.DAY, EnumSet.of(ExecInst.POST_ONLY),
 			SecurityIdSource.EXCHANGE_SYMBOL, TIME, 700, new BigDecimal("99.6100"), null,
 			List.of(
@@ -37,18 +37,18 @@ final class Samples {
 			)
 	);
 
-	static final NewOrder MARKET_ORDER = new NewOrder(
+	public static final NewOrder MARKET_ORDER = new NewOrder(
 			ORDER, "ACCT-0001", "ACME", Side.SELL, OrdType.MARKET, TimeInForce.IMMEDIATE_OR_CANCEL,
 			EnumSet.noneOf(ExecInst.class), SecurityIdSource.EXCHANGE_SYMBOL, TIME, 300, null, null, List.of()
 	);
 
-	static final ReplaceOrder REPLACE = new ReplaceOrder(
+	public static final ReplaceOrder REPLACE = new ReplaceOrder(
 			ORDER, REPLACEMENT, "ACME", Side.BUY, OrdType.LIMIT, 800, new BigDecimal("99.6200"), TIME
 	);
 
-	static final CancelOrder CANCEL_ORDER = new CancelOrder(REPLACEMENT, CANCEL, "ACME", Side.BUY, TIME);
+	public static final CancelOrder CANCEL_ORDER = new CancelOrder(REPLACEMENT, CANCEL, "ACME", Side.BUY, TIME);
 
-	static final ExecutionReport FILL = new ExecutionReport(
+	public static final ExecutionReport FILL = new ExecutionReport(
 			"VENUE-0000000042", ORDER, "EXEC-00000000007", ExecType.TRADE, OrdStatus.PARTIALLY_FILLED, "ACME",
 			Side.BUY, 500, 200, 50, new BigDecimal("99.6100"), true, LocalDate.of(2026, 9, 24), YearMonth.of(2026, 12),
 			TIME, fills(
@@ -57,22 +57,22 @@ final class Samples {
 			)
 	);
 
-	static final ExecutionReport ACKNOWLEDGEMENT = new ExecutionReport(
+	public static final ExecutionReport ACKNOWLEDGEMENT = new ExecutionReport(
 			"VENUE-0000000042", ORDER, "EXEC-00000000001", ExecType.NEW, OrdStatus.NEW, "ACME", Side.BUY, 700, 0, 0,
 			null, null, LocalDate.of(2026, 9, 24), YearMonth.of(2026, 12), TIME, fills()
 	);
 
-	static final CancelReject CANCEL_REJECT = new CancelReject(
+	public static final CancelReject CANCEL_REJECT = new CancelReject(
 			"VENUE-0000000042", CANCEL, REPLACEMENT, OrdStatus.FILLED, CxlRejReason.TOO_LATE, "Ordre déjà exécuté"
 	);
 
-	static final Reject REJECT = new Reject(
+	public static final Reject REJECT = new Reject(
 			17, BusinessRejectReason.NOT_AUTHORIZED, "Not authorised to trade ACME — ask your desk"
 	);
 
-	static final List<OrderEntry> ENTRIES = List.of(LIMIT_ORDER, MARKET_ORDER, REPLACE, CANCEL_ORDER);
+	public static final List<OrderEntry> ENTRIES = List.of(LIMIT_ORDER, MARKET_ORDER, REPLACE, CANCEL_ORDER);
 
-	static final List<OrderEvent> EVENTS = List.of(FILL, ACKNOWLEDGEMENT, CANCEL_REJECT, REJECT);
+	public static final List<OrderEvent> EVENTS = List.of(FILL, ACKNOWLEDGEMENT, CANCEL_REJECT, REJECT);
 
 	private Samples() {
 	}

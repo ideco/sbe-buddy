@@ -165,10 +165,12 @@ var-data that would clash is an error on its node.
   switches flat; `index()` on an entry says where it is. No end stage.
 - **Unread is skipped, `skip()` prunes.** Moving on passes over whatever
   the current stage holds and was not read, through sbe-tool's
-  `skip<Data>()` and `sbeSkip()`; an unread var-data costs one addition.
+  `skip<Data>()` and `sbeSkip()`; a var-data is passed over the moment its
+  stage arrives, one addition, its start and length kept for reading.
   That is not optional: the reader must move past it to reach the next
   stage. `skip()` is the reader's choice on top: what the stage contains
-  never comes. `default -> stage.skip()` is a mistake the guide names: the
+  never comes, and only the current stage can be asked.
+  `default -> stage.skip()` is a mistake the guide names: the
   group header lands in `default`, is pruned, and the `case` for its
   entries never runs. `default` stays empty.
 - **`default` is safe.** With sbe-tool, ignoring a group is how a reader
@@ -183,10 +185,11 @@ var-data that would clash is an error on its node.
   empty var-data a stage with a length of 0.
 - **A group or var-data absent from an older version never comes.** Its
   case simply does not run.
-- **A var-data reads again and again.** The stage saves `decoder.limit()`,
-  reads through sbe-tool's `get<Data>` and restores the limit; the limit
-  moves only when the reader does. No prefix is decoded by the reader,
-  and nothing is cached.
+- **A var-data reads again and again.** The stage knows where it starts
+  from its arrival; a read sets the limit there, goes through sbe-tool's
+  `get<Data>` or `wrap<Data>` and restores the limit. No prefix is
+  decoded by the reader, and nothing is cached but the start and the
+  length.
 - **The reader owns the control.** It is `Iterable` and its own iterator,
   as sbe-tool's group decoders are; `rewind()` and `decodedLength()`
   delegate to sbe-tool's `sbeRewind()` and `sbeDecodedLength()`. A stage
@@ -196,10 +199,9 @@ var-data that would clash is an error on its node.
   moved on: the root block for the whole message, an entry while the
   reader is at it or inside its nested groups and var-data, a group header
   while the reader is inside the group, a var-data while it is current.
-  Stages are singletons of the reader, so each carries a `live` flag the
-  reader sets when it opens the stage and clears when it leaves it, and
-  every accessor, the bound stage's included, checks it with one
-  comparison. So a nested entry may read the fields of
+  The reader keeps its position as one enum in wire order, and a stage is
+  open while the position lies in its range, which every accessor, the
+  bound stage's included, checks first. So a nested entry may read the fields of
   the entry holding it, and a union's common fields answer after the fills
   were read. An entry is one object advanced and answers for the entry its
   group is on, so a reference kept across its group's `next()` reads the
@@ -280,16 +282,19 @@ int length = writer.wrap(buffer, offset)   // only orderId(long)
   `PriceWriter<N>` and `exponent(int)` returns `N`, a phantom generic,
   erased, one preallocated object per site. The step also takes the face
   record, `price(Price)`, the allocation being the caller's.
-- **Bound writing.** Every wire stage has `bound()` returning its bound
-  counterpart, every bound stage `wire()`; it is the same object, so
-  hopping is free at any step: `.orderId(42).bound().price(bigDecimal)`
+- **Bound writing.** Every wire stage that takes a value has `bound()`
+  returning its bound twin, every bound stage `wire()`; the twin is a
+  second preallocated object per block, not the same one, because the
+  wire and bound setters of a `String` field share a signature and differ
+  only in what they return, which one class cannot implement twice. Hopping
+  is still free at any step: `.orderId(42).bound().price(bigDecimal)`
   runs `PRICE_BINDING.toWire`. A composite with a binding is one bound
   step. A group binding over the whole collection has nothing to apply to,
   as on the reader.
 - **Staleness.** The types make the straight path correct; the run-time
   check is for a kept reference only, a block-complete stage calling
-  `fills()` after `note()`: the same `live` flag as the reader's stages,
-  never a check for completeness.
+  `fills()` after `note()`: the writer's position, as the reader's, never
+  a check for completeness.
 
 ## The codec over them
 
