@@ -432,6 +432,21 @@ derives the sequence the way the OTF walk does, and `notes.md` cites it.
 - **Indexes.** Recorded offsets want a way back in, `reader.at(offset)`.
 - **Measuring.** The liveness check and the null template are both
   choices a JMH run may reverse without touching the API.
+- **The fill on open.** Step 5 measured most of encode's cost over the
+  old codec in the fill: every field is written as its null value, then
+  again by the chain. The options, if that cost comes to matter:
+  - a null image written with one `putBytes`, as above, which keeps the
+    block well formed while it is written;
+  - filling only what a chain may skip, the optional fields and those the
+    bound chain passes over: tried and reverted, since a cast past the
+    required steps then leaves them unwritten, and the block is no longer
+    well formed while it is written;
+  - a mask of the optional fields set, and the rest filled as the chain
+    leaves the block, which writes every byte once;
+  - optional fields in wire order too, each step filling the fields it
+    jumps over, with a position per field that also takes over the
+    liveness check and refuses the cast. It reverses optionals in any
+    order, and wants its own step.
 - **Trying it by hand.** The shape wants trying on `trading`'s
   `ExecutionReport`, hand-written over its flyweights in a test, before
   anything is generated; the writer chain three levels deep most of all.
