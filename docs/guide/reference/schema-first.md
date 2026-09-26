@@ -70,4 +70,4 @@ A partial package cannot go back to code-first: the records would write a schema
 
 ## What it is not
 
-Mapping part of a message, the fields of a venue's message that a client reads, is a different thing: the record would not be able to write the message back. That is a view, decode-only, and not built yet.
+Mapping part of a message, the fields of a venue's message that a client reads, is not a thing a record does: the record would not be able to write the message back. Reading part of a message is what the typed flyweights are for, planned and not built yet; a record maps a message whole, and its bindings need the whole record.
