@@ -119,6 +119,56 @@ Decided here, where the sketch left room:
   `Object`, `the field "index" clashes with the reader's LegsEntry.index();
   rename it`.
 
+Step 3 decided, where the plan named no shape:
+
+- **The writer's model is its own,** `WriterModel`, laid out by
+  `WriterWalk` from the same join and written by `WriterWriter` through
+  `WriterTemplates`, `WriterStepTemplates` and `SubWriterTemplates`: the
+  reader's model has nothing a writer reads, and one file over both passed
+  what reads well. The writer is walked only after the message's reader
+  walked clean, so a name both take is reported once.
+- **An entry returns to its group.** An entry's last group or var-data
+  returns the group's stage; an entry complete with optional fields and
+  nothing after them is `<Group>Entry extends <Group>`, taking the next
+  `entry()` or the `end()` itself; with neither, its last required field
+  returns the group's stage. So a group's `entry()` and `end()` are open
+  between entries and after the last field of an entry holding nothing
+  more, the range `<GROUP>` to `<GROUP>_ENTRY`, and a stage kept for a loop
+  of entries works.
+- **The stage after a group or var-data is `After<Name>`,** as step 0's
+  `AfterParties`, carrying the next one, or `length()` after the root
+  block's last. The objects behind the stages are `RootBlockStage`,
+  `<Group>Stage` and `<Group>EntryStage`, and a field `stage` clashes with
+  the first: `the field "stage" clashes with the writer's RootBlockStage;
+  rename it`, the reader's error with the writer's name, as is a step that
+  would take a method its object has, `length()` beside an optional
+  composite `length`.
+- **Steps keep sbe-tool's names,** var-data's too: `<data>(String)` where
+  its type has a character encoding, `<data>(CharSequence)` in ASCII, and
+  `put<Data>` over a `DirectBuffer` and a `byte[]`, where step 0's
+  `CancelRejectWriter` had `text(byte[], …)`. An array other than a string
+  is sbe-tool's `put<Field>(v0, …)` for two to four elements and the bulk
+  `put<Field>` for `uint8`; one with neither, `quotes`' `uint32[5]`, is
+  `put<Field>(<face>[] src, int srcOffset)`, element by element.
+- **A composite's sub-chain** is `<Composite>Writer<N>` with its first
+  member on the class and each later one a nested stage `<Member><N>`,
+  implemented by one inner `Chain`; a composite of one member has no
+  `Chain`. A sub-chain once ended refuses, `"<Writer> has ended"`, as step
+  0's did.
+- **Null values** are one `nulls(<Encoder>)` overload per block and per
+  composite the message holds, the header's own members in `nullHeader`;
+  `FaceWriter.writeNull` takes the property and the shape, which the walk
+  builds from the token, and writes a composite through its overload.
+- **The hand-written writers stay until step 4,** as the readers did:
+  `HandBoundTest` writes through their bound stages. `HandWriterTest` runs
+  against the generated ones.
+- **`WriterRoundTripTest` is `WriterAssert`,** called by each case's own
+  `@Test`: the chain's length and bytes, the bytes around them untouched,
+  and the codec reading the value back. `groups` and `vardata` write their
+  richest round trip rather than their first, which is empty. The goldens
+  are `GroupsWriter.java` and `QuoteWriter.java`, a composite's sub-chain
+  with nested composites, a ref and a set.
+
 ### The successor of each stage
 
 The reader's whole control is this table, generated per message. "Level"

@@ -38,6 +38,7 @@ One compilation of an `@SbeSchema` package runs:
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
 7  Ir ⋈ Annotated ──► codec sources   ours      the join: Join with FaceRules, then CodecWalk, CodecModel, CodecWriter over FaceWriter, UnionWriter
    Ir ⋈ Annotated ──► readers         ours      the same join per message of the IR, then FlyweightWalk, FlyweightModel, ReaderWriter
+   Ir ⋈ Annotated ──► writers         ours      the same join again, then WriterWalk, WriterModel, WriterWriter over FaceWriter's null writers
 8  the document ──► schema.xml        ours      the schema ships in the jar               code-first
 ```
 
@@ -86,6 +87,10 @@ Closed grammars, each one file of nested records.
   the accessors each delegates to sbe-tool's flyweights, the positions the
   reader passes through in wire order and the step that moves it on from
   each.
+* **`WriterModel`** is what a message's writer is made of: its stages as
+  interfaces in chain order, the objects implementing them and their
+  methods, the positions the writer passes through, and the null values
+  each block is filled with; and the sub-chain of a composite or a set.
 
 Models carry no positions. Discovery maps each `Annotated` node to its javac
 `Element` and `AnnotationMirror`, Mapping each `Schema` node to the
@@ -129,6 +134,11 @@ Three layers, in the order a mistake meets them.
   message joined as the codec joins it, laid out as a `FlyweightModel` in
   the order `OtfMessageDecoder` walks a message, and written from it. They
   run after the codecs, whose join reports the problems a record has.
+* **Writers** are generated beside the readers, for the same messages: the
+  same join laid out as a `WriterModel`, a stage per required field and one
+  per group and per what follows it, and written from it, the null values
+  through `FaceWriter` as the codec writes an unmapped field. Each composite
+  and set a writer's step opens gets its sub-chain once per package.
 
 ## The codec contract
 

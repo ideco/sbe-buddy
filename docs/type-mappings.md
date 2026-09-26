@@ -459,6 +459,77 @@ the flyweights are, and so is everything in it.
   maps the message. So is a field whose accessor would be `skip`, `bound`,
   an entry's `index`, or a method of `Object`.
 
+## Typed flyweights: the writer
+
+Every message of the schema gets `<Message>Writer` beside its reader, over
+sbe-tool's encoder, a record or not. It writes the current version, every
+field, group and var-data of it, as a chain of stages: each stage is an
+interface whose methods are the only ways on, so a message written in the
+wrong order, or left incomplete, does not compile.
+
+* **The chain.** `wrap(buffer, offset)` returns the stage of the root
+  block's first required field. Each required field of a block, in wire
+  order, is a stage `<Block><Field>`, `RootBlockClOrdId` or
+  `PartiesEntryPartyId`, whose step returns the next. Past the required
+  fields is the stage where the block is complete, `RootBlock` or
+  `PartiesEntry`: its optional fields, in any order, each returning it,
+  and the first group or var-data of the block. A group is a stage named
+  after it, `Parties`, with `entry()`, which returns its entry's first
+  stage, and `end()`, which returns what follows the group. What follows a
+  group or var-data is `After<Name>`, `AfterParties`, with the next group
+  or var-data, and on the root block's last one `length()`, the bytes
+  written, header included. An entry's last group or var-data, and an entry
+  holding none, returns to its group: an entry complete with optional
+  fields and nothing after them extends the group's stage, so it takes the
+  next `entry()` or the `end()` directly; with neither, the entry's last
+  required field returns the group's stage. A root block with nothing after
+  its fields has `length()` on `RootBlock`.
+* **A field's step is sbe-tool's whole-value setter,** named and typed as
+  the encoder's: a primitive's `<field>(value)`; a `char` array's
+  `<field>(String)`, `<field>(CharSequence)` in ASCII and
+  `put<Field>(byte[], int)`; another array's `put<Field>(v0, …)` where it
+  has two to four elements and, for `uint8`, `put<Field>` over a `byte[]`
+  and a `DirectBuffer`, else `put<Field>(<face>[] src, int srcOffset)`,
+  element by element; an enum's `<field>(Enum)`. A var-data's are
+  `<data>(String)` where its type has a character encoding,
+  `<data>(CharSequence)` in ASCII, and `put<Data>` over a `DirectBuffer`
+  and a `byte[]` with an offset and a length. Constants have no step.
+* **A composite or a set opens a sub-chain.** `price()` returns
+  `PriceEncodingWriter<N>`, generated once per composite in the package, `N`
+  the stage the chain continues with: every member but the constants, in
+  wire order, the first on the class and each later one a stage
+  `PriceEncodingWriter.<Member><N>`, an optional member offering
+  `<member>Null()` beside its value, the last returning `N`. A set is
+  `<Set>Writer<N>`: its choices, `<choice>(boolean)`, in any order, then
+  `end()`. A sub-chain ended is `IllegalStateException("<Writer> has
+  ended")`.
+* **Null values on open.** `wrap` writes the header through sbe-tool's
+  `wrapAndApplyHeader`, which writes its standard four, and the header's own
+  members as their null values; `header()` is sbe-tool's header encoder,
+  for whoever sets them. Every block is filled with its fields' null values
+  when it opens, the root block by `wrap`, an entry by `entry()`, a
+  composite member by member, a set cleared, so what the chain leaves unset
+  is null on the wire.
+* **Counts are settled at the end.** A group opens with room for its
+  maximum count and `end()` writes the count of the entries written; a
+  group with no `entry()` is written with a count of 0.
+* **A kept stage refuses once the writer moved on.** Each stage's methods
+  want the writer where the stage is, else `IllegalStateException("<Stage>
+  is not the current stage")`: a block's fields while it is being written, a
+  group's `entry()` and `end()` between its entries, and after the last
+  field of an entry that holds nothing more. An entry kept across its
+  group's `entry()` writes the new entry.
+* **Names a writer takes.** A field, group or var-data whose stage would
+  take a name the writer already has, `RootBlockStage` for a field `stage`,
+  or whose step would take one of its object's methods, `length()` beside
+  an optional composite `length`, is an error, `the field "stage" clashes
+  with the writer's RootBlockStage; rename it`, on its component, and on the
+  package where no record maps the message. The writer's own names are
+  `At`, its own, `String`, `CharSequence`, `Override`,
+  `IllegalStateException` and the classes behind its stages,
+  `RootBlockStage`, `<Group>Stage` and `<Group>EntryStage`; a sub-chain's
+  are `N`, `Chain`, its own and the same from java.lang.
+
 ## Running example, complete
 
 The whole surface in one picture; documentation, not a fixture. The

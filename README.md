@@ -97,7 +97,7 @@ can lack is nullable in the record. A released version's XML can be checked
 in and named as the `baseline`: the compiler holds the schema against it
 under SBE's extension rules, and the codecs read from its version.
 
-## Reading in place
+## Reading and writing in place
 
 Beside sbe-tool's flyweights, every message gets a reader over them that
 hands the message out as a sequence of stages in wire order, so a group or
@@ -113,7 +113,21 @@ for (ExecutionReportReader.Stage stage : reader.wrap(buffer, offset)) {
 }
 ```
 
-Readers need no record, so a message the records leave out gets one too.
+Every message gets a writer too, a chain whose stages offer only the next
+step, so a message written out of order, or left incomplete, does not
+compile:
+
+```java
+int length = writer.wrap(buffer, offset)
+        .orderId(42L)
+        .legs()
+            .entry().legId(1).allocations().end()
+        .end()
+        .length();
+```
+
+Readers and writers need no record, so a message the records leave out gets
+them too.
 
 ## Staying close to SBE
 

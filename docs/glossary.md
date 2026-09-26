@@ -87,7 +87,18 @@ not a record maps it. A reader is mutable and reused, one per thread.
 
 One step of a reader: the root block, a group's header, one of the group's
 entries, or a var-data. A stage answers while the reader is inside it, and
-`skip()` prunes what it contains.
+`skip()` prunes what it contains. On a writer, a stage is what may be written
+next: a block's required field, the block complete, a group between its
+entries, or what follows a group or var-data.
+
+## Writer
+
+Generated code over sbe-tool's encoder that writes one message as a chain of
+stages, each offering only the next step, for every message of a schema,
+whether or not a record maps it; a message written out of order, or left
+incomplete, does not compile. A composite or a set field opens a sub-chain,
+`<Composite>Writer` or `<Set>Writer`. A writer is mutable and reused, one per
+thread.
 
 ## Codec
 
