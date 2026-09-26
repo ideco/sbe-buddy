@@ -1,12 +1,15 @@
 package net.concini.sbebuddy.generator;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
@@ -32,7 +35,9 @@ import org.xml.sax.SAXParseException;
  * default; declarations and messages match by name regardless of order,
  * everything else in sequence, because offsets follow declaration order. The
  * differences are phrased from the first document's side, the one the
- * annotations render: "the schema" is the second, the resource or the oracle.
+ * annotations render: "the schema" is the second, the resource or the oracle. A
+ * partial comparison lets the second hold messages and declarations the first
+ * lacks, and the first hold no message at all.
  */
 public final class SchemaEquivalence {
 
@@ -66,19 +71,47 @@ public final class SchemaEquivalence {
 	// Qualified because it collides with our Schema, whose documents are compared.
 	private static final javax.xml.validation.Schema XSD;
 
+	/**
+	 * sbe.xsd with a schema's messages optional, for the document rendered from a
+	 * partial package, which may map none; everything else as sbe.xsd has it.
+	 */
+	private static final javax.xml.validation.Schema WITHOUT_MESSAGES;
+
+	private static final String MESSAGES = "<xs:element ref=\"sbe:message\" maxOccurs=\"unbounded\"/>";
+
 	static {
-		try {
-			XSD = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI)
-					.newSchema(new StreamSource(SchemaEquivalence.class.getResourceAsStream("/fpl/sbe.xsd")));
+		try (InputStream xsd = SchemaEquivalence.class.getResourceAsStream("/fpl/sbe.xsd")) {
+			// sbe.xsd opens with a byte order mark, which a reader of text passes on.
+			String text = new String(Objects.requireNonNull(xsd, "sbe.xsd").readAllBytes(), StandardCharsets.UTF_8)
+					.replaceFirst("^\uFEFF", "");
+			if (!text.contains(MESSAGES)) {
+				throw new IllegalStateException("sbe.xsd no longer declares a schema's messages as " + MESSAGES);
+			}
+			SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+			XSD = factory.newSchema(new StreamSource(new StringReader(text)));
+			WITHOUT_MESSAGES = factory.newSchema(
+					new StreamSource(
+							new StringReader(
+									text.replace(
+											MESSAGES,
+											"<xs:element ref=\"sbe:message\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>"
+									)
+							)
+					)
+			);
 		} catch (SAXException e) {
 			throw new IllegalStateException(e);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
 		}
 	}
 
 	private final List<Difference> differences = new ArrayList<>();
 	private final List<Segment> path = new ArrayList<>();
+	private final boolean partial;
 
-	private SchemaEquivalence() {
+	private SchemaEquivalence(boolean partial) {
+		this.partial = partial;
 	}
 
 	/**
@@ -87,8 +120,20 @@ public final class SchemaEquivalence {
 	 * {@link IllegalArgumentException}.
 	 */
 	public static List<Difference> differences(String rendered, String schema) {
-		SchemaEquivalence equivalence = new SchemaEquivalence();
-		equivalence.root(parse(rendered).getDocumentElement(), parse(schema).getDocumentElement());
+		return differences(rendered, schema, false);
+	}
+
+	/**
+	 * The differences, and with {@code partial} none for a message or a declaration
+	 * only {@code schema} has: the rendered document is then a part of the schema,
+	 * which may hold no message.
+	 */
+	public static List<Difference> differences(String rendered, String schema, boolean partial) {
+		SchemaEquivalence equivalence = new SchemaEquivalence(partial);
+		equivalence.root(
+				parse(rendered, partial ? WITHOUT_MESSAGES : XSD).getDocumentElement(),
+				parse(schema).getDocumentElement()
+		);
 		return List.copyOf(equivalence.differences);
 	}
 
@@ -96,11 +141,15 @@ public final class SchemaEquivalence {
 	 * Parsed with sbe.xsd attached: validated, and the XSD's defaults filled in.
 	 */
 	static Document parse(String xml) {
+		return parse(xml, XSD);
+	}
+
+	private static Document parse(String xml, javax.xml.validation.Schema xsd) {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 		factory.setNamespaceAware(true);
 		factory.setIgnoringComments(true);
 		factory.setIgnoringElementContentWhitespace(true);
-		factory.setSchema(XSD);
+		factory.setSchema(xsd);
 		try {
 			DocumentBuilder builder = factory.newDocumentBuilder();
 			builder.setErrorHandler(new Strict());
@@ -130,7 +179,7 @@ public final class SchemaEquivalence {
 			}
 		}
 		for (Segment segment : schemaTypes.keySet()) {
-			if (!renderedTypes.containsKey(segment)) {
+			if (!partial && !renderedTypes.containsKey(segment)) {
 				differ(
 						segment, "the schema has " + article(segment.element()) + " " + segment.element() + " \""
 								+ segment.name() + "\" and no declaration maps it"
@@ -151,10 +200,11 @@ public final class SchemaEquivalence {
 			}
 		}
 		for (Map.Entry<Segment, Element> message : schemaMessages.entrySet()) {
-			if (!renderedMessages.containsKey(message.getKey())) {
+			if (!partial && !renderedMessages.containsKey(message.getKey())) {
 				differ(
 						message.getKey(), "the schema has a message \"" + message.getKey().name() + "\" (id "
-								+ message.getValue().getAttribute("id") + ") and no record maps it"
+								+ message.getValue().getAttribute("id")
+								+ ") and no record maps it; add one, or declare the package partial"
 				);
 			}
 		}

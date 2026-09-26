@@ -165,6 +165,7 @@ public final class Discovery {
 				schema.enumeration("byteOrder", ByteOrder.class),
 				codecs,
 				schema.string("resource"),
+				schema.flag("partial"),
 				schema.string("baseline")
 		);
 		remember(annotated, schemaPackage, schema.mirror);

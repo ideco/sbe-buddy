@@ -1039,7 +1039,9 @@ final class AnnotationMistakesTest {
 
 		assertThat(result.errors()).hasSize(1);
 		assertThat(result.errors().get(0).getMessage(null))
-				.isEqualTo("the schema has a message \"Cancel\" (id 2) and no record maps it");
+				.isEqualTo(
+						"the schema has a message \"Cancel\" (id 2) and no record maps it; add one, or declare the package partial"
+				);
 		assertThat(result.errors().get(0).getSource().getName()).endsWith("package-info.java");
 		assertThat(result.outputs()).isEmpty();
 	}
@@ -1341,6 +1343,85 @@ final class AnnotationMistakesTest {
 
 	/** Everything else version 1 released beside {@code Order}. */
 	private static final String RELEASED = SIDE + "\n" + FLAGS + "\n" + LEG_V1 + "\n" + CANCEL;
+
+	// ---- mapping some messages
+
+	@Test
+	void aPartialPackageMapsTheMessagesItChooses() {
+		assertClean(PARTIAL, inMessage(ORDER, VENUE_TYPES, VENUE_LEG));
+		assertClean(PARTIAL, HEADER + "@SbeMessage(id = 2) record Cancel(@SbeField(id = 1) long orderId) {}\n");
+	}
+
+	@Test
+	void aPartialPackageMayMapNoMessage() {
+		assertClean(PARTIAL, HEADER);
+	}
+
+	@Test
+	void aPartialPackageStillMapsAMessageWhole() {
+		assertErrors(
+				PARTIAL, inMessage(ORDER.replace("@SbeField(id = 5) Set<Flags> flags,\n", ""), VENUE_TYPES, VENUE_LEG),
+				error(
+						"@SbeMessage(id = 1)",
+						"the schema's Order has a field \"flags\" no component carries; add it, or declare it unmapped"
+				)
+		);
+	}
+
+	@Test
+	void aPartialPackageStillFindsWhatTheResourceLacks() {
+		assertErrors(
+				PARTIAL,
+				inMessage(
+						ORDER,
+						VENUE_TYPES.replace(
+								"@SbeEnumValue(\"2\") SELL", "@SbeEnumValue(\"2\") SELL, @SbeEnumValue(\"3\") SHORT"
+						),
+						VENUE_LEG, "@SbeMessage(id = 9) record Extra(@SbeField(id = 1) long orderId) {}"
+				),
+				error("record Extra", "the schema has no message named \"Extra\""),
+				error("enum Side", "the schema's Side has no value named \"SHORT\"")
+		);
+	}
+
+	@Test
+	void partialWithoutAResourceIsAProblemOnTheSchema() {
+		Javac.Result result = compile(
+				schema(0).replace("codecs = false", "codecs = false, partial = true"),
+				inMessage("@SbeField(id = 1) int qty")
+		);
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getMessage(null)).isEqualTo("partial maps some messages of a resource; name the resource");
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	@Test
+	void aPartialPackageHoldsItsWholeResourceAgainstTheBaseline() {
+		assertClean(PARTIAL.replace("partial = true", "partial = true, baseline = \"venue.xml\""), HEADER);
+
+		Javac.Result result = compile(
+				PARTIAL.replace("partial = true", "partial = true, baseline = \"venue-v1.xml\""), HEADER
+		);
+
+		assertThat(result.errors()).singleElement().satisfies(error -> {
+			assertThat(error.getMessage(null)).isEqualTo(
+					"the baseline's Cancel has a field \"reason\" (id 9) the schema lacks; a field stays, unmapped if the record retires it"
+			);
+			assertThat(error.getSource().getName()).endsWith("package-info.java");
+		});
+		assertThat(result.outputs()).isEmpty();
+	}
+
+	/** The venue's schema, mapped in part. */
+	private static final String PARTIAL = """
+			@SbeSchema(id = 7, version = 2, resource = "venue.xml", partial = true)
+			package mistakes;
+
+			import net.concini.sbebuddy.SbeSchema;
+			""";
 
 	/** The venue's schema, {@code venue.xml} beside this test's resources. */
 	private static final String SCHEMA_FIRST = """

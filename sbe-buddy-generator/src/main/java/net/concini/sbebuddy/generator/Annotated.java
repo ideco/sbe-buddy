@@ -17,7 +17,8 @@ import net.concini.sbebuddy.PrimitiveType;
  * {@code Class}. Nested types are used qualified, {@code Annotated.Field},
  * never imported. {@code resource} is the schema's XML on the class path, as
  * {@code @SbeSchema} names it, empty when the schema is written from these
- * annotations; {@code baseline} is the schema's baseline XML on the class path,
+ * annotations; {@code partial} whether the records map only some of its
+ * messages; {@code baseline} is the schema's baseline XML on the class path,
  * empty when there is none.
  */
 public record Annotated(
@@ -33,6 +34,7 @@ public record Annotated(
 		ByteOrder byteOrder,
 		boolean codecs,
 		String resource,
+		boolean partial,
 		String baseline
 ) {
 

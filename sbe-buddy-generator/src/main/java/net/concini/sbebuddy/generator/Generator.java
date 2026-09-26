@@ -106,7 +106,8 @@ public final class Generator {
 	public static List<Problem> generate(
 			Schema schema, Annotated annotated, @Nullable Resource baseline, DynamicPackageOutputManager output
 	) {
-		return generate(parse(document(schema), schema, schema.packageName()), schema, baseline, annotated, output);
+		String document = document(schema);
+		return generate(parse(document, schema, schema.packageName()), document, schema, baseline, annotated, output);
 	}
 
 	/**
@@ -114,9 +115,10 @@ public final class Generator {
 	 * {@code schema} is compared with the resource, its XIncludes resolved against
 	 * its URI, by {@link SchemaEquivalence}, and each difference is a problem on
 	 * the schema node it is on, or on the schema where no node corresponds; with
-	 * none, the resource is the document the rest of the pipeline takes, the
-	 * baseline as code-first holds it. A resource the XML parser or sbe.xsd refuses
-	 * is a problem naming the schema.
+	 * none, the resource is the document the rest of the pipeline takes, and the
+	 * one held against the baseline. A partial package compares only what its
+	 * records map. A resource the XML parser or sbe.xsd refuses is a problem naming
+	 * the schema.
 	 */
 	public static List<Problem> generate(
 			Schema schema, Resource resource, @Nullable Resource baseline, Annotated annotated,
@@ -130,14 +132,14 @@ public final class Generator {
 		}
 		List<SchemaEquivalence.Difference> differences;
 		try {
-			differences = SchemaEquivalence.differences(document(schema), included);
+			differences = SchemaEquivalence.differences(document(schema), included, annotated.partial());
 		} catch (IllegalArgumentException e) {
 			return List.of(new Problem(schema, "sbe.xsd: " + e.getMessage()));
 		}
 		if (!differences.isEmpty()) {
 			return problems(schema, differences);
 		}
-		return generate(parse(included, schema, schema.packageName()), schema, baseline, annotated, output);
+		return generate(parse(included, schema, schema.packageName()), included, schema, baseline, annotated, output);
 	}
 
 	private static List<Problem> problems(Schema schema, List<SchemaEquivalence.Difference> differences) {
@@ -153,11 +155,12 @@ public final class Generator {
 	}
 
 	/**
-	 * The schema held against its baseline, whose version the codecs then read
-	 * from; the schema's document is one sbe-tool accepted, so what sbe.xsd refuses
-	 * here is the baseline.
+	 * The document sbe-tool accepted held against the baseline, whose version the
+	 * codecs then read from; what sbe.xsd refuses here is the baseline. A
+	 * difference names the node its path reaches in {@code schema}, or the schema
+	 * where the path leaves what the records map.
 	 */
-	private static Evolution evolution(Schema schema, @Nullable Resource baseline) {
+	private static Evolution evolution(String document, Schema schema, @Nullable Resource baseline) {
 		if (baseline == null) {
 			return new Evolution(0, List.of());
 		}
@@ -165,7 +168,7 @@ public final class Generator {
 		List<SchemaEquivalence.Difference> differences;
 		try {
 			included = include(baseline.text(), baseline.systemId());
-			differences = SchemaEvolution.differences(document(schema), included);
+			differences = SchemaEvolution.differences(document, included);
 		} catch (SAXException | IllegalArgumentException e) {
 			return new Evolution(0, List.of(new Problem(schema, "the baseline: " + e.getMessage())));
 		}
@@ -269,14 +272,14 @@ public final class Generator {
 	}
 
 	private static List<Problem> generate(
-			Parsed parsed, Schema schema, @Nullable Resource baseline, Annotated annotated,
+			Parsed parsed, String document, Schema schema, @Nullable Resource baseline, Annotated annotated,
 			DynamicPackageOutputManager output
 	) {
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			return parsed.problems();
 		}
-		Evolution evolution = evolution(schema, baseline);
+		Evolution evolution = evolution(document, schema, baseline);
 		if (!evolution.problems().isEmpty()) {
 			return evolution.problems();
 		}
