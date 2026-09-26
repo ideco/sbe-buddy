@@ -10,6 +10,7 @@ docs/architecture.md   modules, the pipeline, the models, rules, generation, Cod
 docs/next.md           the increment being built now
 docs/notes.md          verified facts about sbe-tool, javac, Agrona and the build
 docs/guide/            the user guide: getting started, one page per construct, how-to, concepts
+docs/flyweights.md     the typed flyweights' first sketch, for increment 27
 docs/rpc.md            parked idea, out of scope
 
 sbe-buddy-generator    the core: the schema model, the annotations as data, the mapping between them, the XML, the codec emitter, the corpus; no javac

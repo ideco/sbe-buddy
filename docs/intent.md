@@ -163,7 +163,7 @@ user's binding's to decide. No built-in bindings.
 and a typed flyweight reads the same components where they lie.
 
 * [ ] 26. Views: a record over part of a message, decode-only. The fields, groups and var-data it leaves out are skipped rather than declared; its codec decodes and has no encode. Schema-first, whole messages stay the rule for records that encode
-* [ ] 27. Typed flyweights from records and views: over sbe-tool's flyweights, a stage per block, group entry and var-data, each reachable only from the one before, so wire order holds by construction; sealed where the acting version decides what follows; `skip()` on every stage; the components' bindings applied; nothing allocated
+* [ ] 27. Typed flyweights from records and views: over sbe-tool's flyweights, a stage per block, group entry and var-data, each reachable only from the one before, so wire order holds by construction; sealed where the acting version decides what follows; `skip()` on every stage; the components' bindings applied; nothing allocated. First sketched in `flyweights.md`
 
 **The API pass.**
 
