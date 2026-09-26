@@ -282,9 +282,12 @@ int length = writer.wrap(buffer, offset)   // only orderId(long)
   `PriceWriter<N>` and `exponent(int)` returns `N`, a phantom generic,
   erased, one preallocated object per site. The step also takes the face
   record, `price(Price)`, the allocation being the caller's.
-- **Bound writing.** Every wire stage has `bound()` returning its bound
-  counterpart, every bound stage `wire()`; it is the same object, so
-  hopping is free at any step: `.orderId(42).bound().price(bigDecimal)`
+- **Bound writing.** Every wire stage that takes a value has `bound()`
+  returning its bound twin, every bound stage `wire()`; the twin is a
+  second preallocated object per block, not the same one, because the
+  wire and bound setters of a `String` field share a signature and differ
+  only in what they return, which one class cannot implement twice. Hopping
+  is still free at any step: `.orderId(42).bound().price(bigDecimal)`
   runs `PRICE_BINDING.toWire`. A composite with a binding is one bound
   step. A group binding over the whole collection has nothing to apply to,
   as on the reader.

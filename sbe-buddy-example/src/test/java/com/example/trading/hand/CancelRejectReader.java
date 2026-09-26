@@ -16,7 +16,8 @@ import com.example.trading.sbe.SessionHeaderDecoder;
  * A {@code CancelReject} as the sequence of its stages: the root block, then
  * the var-data {@code text}. A var-data is passed over on arrival, its start
  * and length kept, so it reads again and again and the limit is always past
- * what the reader has visited.
+ * what the reader has visited. The bound stages carry the record's components;
+ * its enums share their names with sbe-tool's, so they are qualified.
  */
 public final class CancelRejectReader
 		implements
@@ -35,7 +36,9 @@ public final class CancelRejectReader
 	private final CancelRejectDecoder decoder = new CancelRejectDecoder();
 	private final CancelRejectDecoder measure = new CancelRejectDecoder();
 	private final RootBlock rootBlock = new RootBlock();
+	private final RootBlockBound rootBlockBound = new RootBlockBound();
 	private final Text text = new Text();
+	private final TextBound textBound = new TextBound();
 	private @Nullable DirectBuffer buffer;
 	private int textStart; // the limit on arrival at the text, where its prefix lies
 	private int textLength;
@@ -215,6 +218,11 @@ public final class CancelRejectReader
 			return decoder.cxlRejReasonRaw();
 		}
 
+		public RootBlockBound bound() {
+			open();
+			return rootBlockBound;
+		}
+
 		@Override
 		public void skip() {
 			current(At.ROOT_BLOCK, "RootBlock");
@@ -269,10 +277,97 @@ public final class CancelRejectReader
 			decoder.limit(limit);
 		}
 
+		public TextBound bound() {
+			open();
+			return textBound;
+		}
+
 		/** Nothing to prune. */
 		@Override
 		public void skip() {
 			current(At.TEXT, "Text");
 		}
+	}
+
+	/** {@code CancelReject}'s components of the root block. */
+	public final class RootBlockBound {
+
+		private RootBlockBound() {
+		}
+
+		public String orderId() {
+			rootBlock.open();
+			return decoder.orderId();
+		}
+
+		public String clOrdId() {
+			rootBlock.open();
+			return decoder.clOrdId();
+		}
+
+		public String origClOrdId() {
+			rootBlock.open();
+			return decoder.origClOrdId();
+		}
+
+		/** The record's unknown value for a wire value the schema does not name. */
+		public com.example.trading.OrdStatus ordStatus() {
+			rootBlock.open();
+			return decodeOrdStatus(decoder.ordStatusRaw());
+		}
+
+		public com.example.trading.CxlRejReason cxlRejReason() {
+			rootBlock.open();
+			return decodeCxlRejReason(decoder.cxlRejReasonRaw());
+		}
+
+		public RootBlock wire() {
+			rootBlock.open();
+			return rootBlock;
+		}
+	}
+
+	/**
+	 * The record's {@code text}: the {@code String} sbe-tool decodes, built on each
+	 * call.
+	 */
+	public final class TextBound {
+
+		private TextBound() {
+		}
+
+		public String value() {
+			text.open();
+			int limit = decoder.limit();
+			decoder.limit(textStart);
+			String value = decoder.text();
+			decoder.limit(limit);
+			return value;
+		}
+
+		public Text wire() {
+			text.open();
+			return text;
+		}
+	}
+
+	private static com.example.trading.OrdStatus decodeOrdStatus(byte raw) {
+		return switch (raw) {
+			case (byte) 48 -> com.example.trading.OrdStatus.NEW;
+			case (byte) 49 -> com.example.trading.OrdStatus.PARTIALLY_FILLED;
+			case (byte) 50 -> com.example.trading.OrdStatus.FILLED;
+			case (byte) 52 -> com.example.trading.OrdStatus.CANCELED;
+			case (byte) 56 -> com.example.trading.OrdStatus.REJECTED;
+			default -> com.example.trading.OrdStatus.UNKNOWN;
+		};
+	}
+
+	private static com.example.trading.CxlRejReason decodeCxlRejReason(short raw) {
+		return switch (raw) {
+			case (short) 0 -> com.example.trading.CxlRejReason.TOO_LATE;
+			case (short) 1 -> com.example.trading.CxlRejReason.UNKNOWN_ORDER;
+			case (short) 99 -> com.example.trading.CxlRejReason.OTHER;
+			default -> throw new IllegalArgumentException("CxlRejReason has no value " + raw);
+		};
 	}
 }

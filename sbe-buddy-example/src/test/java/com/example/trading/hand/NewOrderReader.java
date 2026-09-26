@@ -1,11 +1,25 @@
 package com.example.trading.hand;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 import org.agrona.DirectBuffer;
 import org.jspecify.annotations.Nullable;
 
+import net.concini.sbebuddy.BindingContext;
+import net.concini.sbebuddy.Presence;
+import net.concini.sbebuddy.PrimitiveType;
+
+import com.example.trading.ExecInst;
+import com.example.trading.PriceBinding;
+import com.example.trading.PriceEncoding;
+import com.example.trading.QtyBinding;
+import com.example.trading.QtyEncoding;
+import com.example.trading.UtcTimestampBinding;
 import com.example.trading.sbe.ExecInstDecoder;
 import com.example.trading.sbe.NewOrderDecoder;
 import com.example.trading.sbe.NewOrderDecoder.PartiesDecoder;
@@ -24,7 +38,11 @@ import com.example.trading.sbe.TimeInForce;
  * the root block, then {@code parties}, each entry followed by its
  * {@code partySubIds} and their entries. Hand-written as the shape the
  * generator will emit for every message; the stages are what
- * {@code flyweights.md} settles, one line per delegated field.
+ * {@code flyweights.md} settles, one line per delegated field. Each stage of a
+ * block the record maps has a {@code bound()} view: the record's components
+ * through their bindings, applied on each call, as the codec applies them. The
+ * record's enums share their names with sbe-tool's, imported here for the wire
+ * stages, so the bound stages qualify them.
  */
 public final class NewOrderReader implements Iterable<NewOrderReader.Stage>, Iterator<NewOrderReader.Stage> {
 
@@ -42,14 +60,36 @@ public final class NewOrderReader implements Iterable<NewOrderReader.Stage>, Ite
 		BEFORE_ROOT_BLOCK, ROOT_BLOCK, PARTIES, PARTIES_ENTRY, PARTY_SUB_IDS, PARTY_SUB_IDS_ENTRY, AFTER_PARTY_SUB_IDS, END
 	}
 
+	private static final BindingContext transactTimeContext = new BindingContext(
+			"transactTime", PrimitiveType.UINT64,
+			null, null, null, Presence.REQUIRED
+	);
+	private static final BindingContext orderQtyContext = new BindingContext(
+			"orderQty", null, null, null, null,
+			Presence.REQUIRED
+	);
+	private static final BindingContext priceContext = new BindingContext(
+			"price", null, null, null, null,
+			Presence.OPTIONAL
+	);
+	private static final BindingContext stopPxContext = new BindingContext(
+			"stopPx", null, null, null, null,
+			Presence.OPTIONAL
+	);
 	private final SessionHeaderDecoder header = new SessionHeaderDecoder();
 	private final NewOrderDecoder decoder = new NewOrderDecoder();
 	private final NewOrderDecoder measure = new NewOrderDecoder(); // decodedLength() mid-message, disturbing nothing
+	private final UtcTimestampBinding utcTimestampBinding = new UtcTimestampBinding();
+	private final QtyBinding qtyBinding = new QtyBinding();
+	private final PriceBinding priceBinding = new PriceBinding();
 	private final RootBlock rootBlock = new RootBlock();
+	private final RootBlockBound rootBlockBound = new RootBlockBound();
 	private final Parties parties = new Parties();
 	private final PartiesEntry partiesEntry = new PartiesEntry();
+	private final PartiesEntryBound partiesEntryBound = new PartiesEntryBound();
 	private final PartySubIds partySubIds = new PartySubIds();
 	private final PartySubIdsEntry partySubIdsEntry = new PartySubIdsEntry();
+	private final PartySubIdsEntryBound partySubIdsEntryBound = new PartySubIdsEntryBound();
 	private @Nullable DirectBuffer buffer;
 	private @Nullable PartiesDecoder partiesDecoder; // decoder.parties(), from the moment the group opens
 	private @Nullable PartySubIdsDecoder partySubIdsDecoder;
@@ -324,6 +364,12 @@ public final class NewOrderReader implements Iterable<NewOrderReader.Stage>, Ite
 			return decoder.stopPx();
 		}
 
+		/** The record's view of the block. */
+		public RootBlockBound bound() {
+			open();
+			return rootBlockBound;
+		}
+
 		/** The rest of the message: iteration ends. */
 		@Override
 		public void skip() {
@@ -408,6 +454,11 @@ public final class NewOrderReader implements Iterable<NewOrderReader.Stage>, Ite
 			return partiesDecoder.partyRoleRaw();
 		}
 
+		public PartiesEntryBound bound() {
+			open();
+			return partiesEntryBound;
+		}
+
 		/** The entry's sub ids: no {@code PartySubIds} comes for it. */
 		@Override
 		public void skip() {
@@ -483,11 +534,229 @@ public final class NewOrderReader implements Iterable<NewOrderReader.Stage>, Ite
 			return partySubIdsDecoder.partySubIdType();
 		}
 
+		public PartySubIdsEntryBound bound() {
+			open();
+			return partySubIdsEntryBound;
+		}
+
 		/** Nothing nested: nothing to prune. */
 		@Override
 		public void skip() {
 			current(At.PARTY_SUB_IDS_ENTRY, "PartySubIdsEntry");
 			partySubIdsDecoder.sbeSkip();
 		}
+	}
+
+	// ---- the bound stages: the record's components, bindings run on each call,
+	// never cached
+
+	/**
+	 * {@code NewOrder}'s components of the root block, absent ones {@code null}.
+	 */
+	public final class RootBlockBound {
+
+		private RootBlockBound() {
+		}
+
+		public String clOrdId() {
+			rootBlock.open();
+			return decoder.clOrdId();
+		}
+
+		public String account() {
+			rootBlock.open();
+			return decoder.account();
+		}
+
+		public String symbol() {
+			rootBlock.open();
+			return decoder.symbol();
+		}
+
+		public com.example.trading.Side side() {
+			rootBlock.open();
+			return decodeSide(decoder.sideRaw());
+		}
+
+		public com.example.trading.OrdType ordType() {
+			rootBlock.open();
+			return decodeOrdType(decoder.ordTypeRaw());
+		}
+
+		public com.example.trading.TimeInForce timeInForce() {
+			rootBlock.open();
+			return decodeTimeInForce(decoder.timeInForceRaw());
+		}
+
+		/** A set the record holds; built on each call. */
+		public Set<ExecInst> execInst() {
+			rootBlock.open();
+			return decodeExecInst(decoder.execInst());
+		}
+
+		public com.example.trading.SecurityIdSource securityIdSource() {
+			rootBlock.open();
+			return decodeSecurityIdSource(decoder.securityIdSourceRaw());
+		}
+
+		public Instant transactTime() {
+			rootBlock.open();
+			return utcTimestampBinding.fromWire(decoder.transactTime(), transactTimeContext);
+		}
+
+		/** The binding's, over the face record the reader builds for it. */
+		public long orderQty() {
+			rootBlock.open();
+			return qtyBinding.fromWire(readQtyEncoding(decoder.orderQty()), orderQtyContext);
+		}
+
+		/**
+		 * The binding decides absence from the face, as on an optional composite it
+		 * must.
+		 */
+		public @Nullable BigDecimal price() {
+			rootBlock.open();
+			return priceBinding.fromWire(readPriceEncoding(decoder.price()), priceContext);
+		}
+
+		public @Nullable BigDecimal stopPx() {
+			rootBlock.open();
+			return priceBinding.fromWire(readPriceEncoding(decoder.stopPx()), stopPxContext);
+		}
+
+		public RootBlock wire() {
+			rootBlock.open();
+			return rootBlock;
+		}
+	}
+
+	/** {@code NewOrder.Party}'s components of the entry's block. */
+	public final class PartiesEntryBound {
+
+		private PartiesEntryBound() {
+		}
+
+		public int index() {
+			partiesEntry.open();
+			return partiesIndex;
+		}
+
+		public String partyId() {
+			partiesEntry.open();
+			return partiesDecoder.partyId();
+		}
+
+		public com.example.trading.PartyRole partyRole() {
+			partiesEntry.open();
+			return decodePartyRole(partiesDecoder.partyRoleRaw());
+		}
+
+		public PartiesEntry wire() {
+			partiesEntry.open();
+			return partiesEntry;
+		}
+	}
+
+	/** {@code NewOrder.PartySubId}'s components. */
+	public final class PartySubIdsEntryBound {
+
+		private PartySubIdsEntryBound() {
+		}
+
+		public int index() {
+			partySubIdsEntry.open();
+			return partySubIdsIndex;
+		}
+
+		public String partySubId() {
+			partySubIdsEntry.open();
+			return partySubIdsDecoder.partySubId();
+		}
+
+		public short partySubIdType() {
+			partySubIdsEntry.open();
+			return partySubIdsDecoder.partySubIdType();
+		}
+
+		public PartySubIdsEntry wire() {
+			partySubIdsEntry.open();
+			return partySubIdsEntry;
+		}
+	}
+
+	// ---- the leaf conversions, as the codec has them
+
+	private static com.example.trading.Side decodeSide(byte raw) {
+		return switch (raw) {
+			case (byte) 49 -> com.example.trading.Side.BUY;
+			case (byte) 50 -> com.example.trading.Side.SELL;
+			case (byte) 53 -> com.example.trading.Side.SELL_SHORT;
+			default -> throw new IllegalArgumentException("Side has no value " + raw);
+		};
+	}
+
+	private static com.example.trading.OrdType decodeOrdType(byte raw) {
+		return switch (raw) {
+			case (byte) 49 -> com.example.trading.OrdType.MARKET;
+			case (byte) 50 -> com.example.trading.OrdType.LIMIT;
+			case (byte) 51 -> com.example.trading.OrdType.STOP;
+			case (byte) 52 -> com.example.trading.OrdType.STOP_LIMIT;
+			default -> throw new IllegalArgumentException("OrdType has no value " + raw);
+		};
+	}
+
+	private static com.example.trading.TimeInForce decodeTimeInForce(byte raw) {
+		return switch (raw) {
+			case (byte) 48 -> com.example.trading.TimeInForce.DAY;
+			case (byte) 49 -> com.example.trading.TimeInForce.GOOD_TILL_CANCEL;
+			case (byte) 51 -> com.example.trading.TimeInForce.IMMEDIATE_OR_CANCEL;
+			case (byte) 52 -> com.example.trading.TimeInForce.FILL_OR_KILL;
+			default -> throw new IllegalArgumentException("TimeInForce has no value " + raw);
+		};
+	}
+
+	private static Set<ExecInst> decodeExecInst(ExecInstDecoder wire) {
+		if ((wire.getRaw() & ~(1L << 0 | 1L << 1 | 1L << 2)) != 0) {
+			throw new IllegalArgumentException("ExecInst has a bit no choice names: " + wire.getRaw());
+		}
+		Set<ExecInst> value = EnumSet.noneOf(ExecInst.class);
+		if (wire.postOnly()) {
+			value.add(ExecInst.POST_ONLY);
+		}
+		if (wire.reduceOnly()) {
+			value.add(ExecInst.REDUCE_ONLY);
+		}
+		if (wire.allOrNone()) {
+			value.add(ExecInst.ALL_OR_NONE);
+		}
+		return value;
+	}
+
+	private static com.example.trading.SecurityIdSource decodeSecurityIdSource(byte raw) {
+		return switch (raw) {
+			case (byte) 52 -> com.example.trading.SecurityIdSource.ISIN;
+			case (byte) 56 -> com.example.trading.SecurityIdSource.EXCHANGE_SYMBOL;
+			default -> throw new IllegalArgumentException("SecurityIdSource has no value " + raw);
+		};
+	}
+
+	private static com.example.trading.PartyRole decodePartyRole(short raw) {
+		return switch (raw) {
+			case (short) 1 -> com.example.trading.PartyRole.EXECUTING_FIRM;
+			case (short) 3 -> com.example.trading.PartyRole.CLIENT_ID;
+			case (short) 11 -> com.example.trading.PartyRole.ENTERING_TRADER;
+			default -> throw new IllegalArgumentException("PartyRole has no value " + raw);
+		};
+	}
+
+	private static QtyEncoding readQtyEncoding(QtyEncodingDecoder decoder) {
+		return new QtyEncoding(decoder.mantissa(), decoder.exponent());
+	}
+
+	private static PriceEncoding readPriceEncoding(PriceEncodingDecoder decoder) {
+		return new PriceEncoding(
+				decoder.mantissa() == PriceEncodingDecoder.mantissaNullValue() ? null : decoder.mantissa(),
+				decoder.exponent()
+		);
 	}
 }

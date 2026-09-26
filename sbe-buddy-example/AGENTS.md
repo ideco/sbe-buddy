@@ -30,6 +30,6 @@ interop with sbe-tool; coverage belongs in sbe-buddy-tests.
   flyweights, and the reverse, across versions in both directions.
 - `src/test/java/com/example/trading/hand` holds the typed flyweights of
   increment 26 written by hand, `NewOrder` and `CancelReject`, a reader and
-  a writer each: the shape the generator must emit, and the tests it must
-  pass. Steps 2 and 3 of `docs/next.md` re-point the tests at the generated
-  classes and delete these.
+  a writer each with their bound stages: the shape the generator must
+  emit, and the tests it must pass. Steps 2 to 4 of `docs/next.md`
+  re-point the tests at the generated classes and delete these.

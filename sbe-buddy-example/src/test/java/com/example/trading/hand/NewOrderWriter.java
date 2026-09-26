@@ -1,8 +1,23 @@
 package com.example.trading.hand;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Set;
+
 import org.agrona.MutableDirectBuffer;
 import org.jspecify.annotations.Nullable;
 
+import net.concini.sbebuddy.BindingContext;
+import net.concini.sbebuddy.Presence;
+import net.concini.sbebuddy.PrimitiveType;
+
+import com.example.trading.ExecInst;
+import com.example.trading.PriceBinding;
+import com.example.trading.PriceEncoding;
+import com.example.trading.QtyBinding;
+import com.example.trading.QtyEncoding;
+import com.example.trading.UtcTimestampBinding;
+import com.example.trading.sbe.ExecInstEncoder;
 import com.example.trading.sbe.NewOrderEncoder;
 import com.example.trading.sbe.NewOrderEncoder.PartiesEncoder;
 import com.example.trading.sbe.NewOrderEncoder.PartiesEncoder.PartySubIdsEncoder;
@@ -22,6 +37,12 @@ import com.example.trading.sbe.TimeInForce;
  * implement its own nested interfaces), so a setter returns {@code this} typed
  * as what comes next and nothing is allocated. A block is filled with its null
  * values when it opens, so what the chain does not set is null on the wire.
+ * Every stage that takes a value has a bound twin taking the record's type
+ * through its binding, reached by {@code bound()} and left by {@code wire()};
+ * the twin is a second object per block, since wire and bound setters of a
+ * {@code String} field share a signature and differ in what they return. The
+ * record's enums share their names with sbe-tool's, imported for the wire
+ * stages, so they are qualified.
  */
 public final class NewOrderWriter {
 
@@ -29,6 +50,8 @@ public final class NewOrderWriter {
 	// block complete
 
 	public interface RootBlockClOrdId {
+		RootBlockClOrdIdBound bound();
+
 		RootBlockAccount clOrdId(String value);
 
 		RootBlockAccount clOrdId(CharSequence value);
@@ -37,6 +60,8 @@ public final class NewOrderWriter {
 	}
 
 	public interface RootBlockAccount {
+		RootBlockAccountBound bound();
+
 		RootBlockSymbol account(String value);
 
 		RootBlockSymbol account(CharSequence value);
@@ -45,6 +70,8 @@ public final class NewOrderWriter {
 	}
 
 	public interface RootBlockSymbol {
+		RootBlockSymbolBound bound();
+
 		RootBlockSide symbol(String value);
 
 		RootBlockSide symbol(CharSequence value);
@@ -53,27 +80,39 @@ public final class NewOrderWriter {
 	}
 
 	public interface RootBlockSide {
+		RootBlockSideBound bound();
+
 		RootBlockOrdType side(Side value);
 	}
 
 	public interface RootBlockOrdType {
+		RootBlockOrdTypeBound bound();
+
 		RootBlockTimeInForce ordType(OrdType value);
 	}
 
 	public interface RootBlockTimeInForce {
+		RootBlockTimeInForceBound bound();
+
 		RootBlockExecInst timeInForce(TimeInForce value);
 	}
 
 	public interface RootBlockExecInst {
+		RootBlockExecInstBound bound();
+
 		/** The set's choices, then {@code end()}. */
 		ExecInstWriter<RootBlockTransactTime> execInst();
 	}
 
 	public interface RootBlockTransactTime {
+		RootBlockTransactTimeBound bound();
+
 		RootBlockOrderQty transactTime(long value);
 	}
 
 	public interface RootBlockOrderQty {
+		RootBlockOrderQtyBound bound();
+
 		QtyEncodingWriter<RootBlock> orderQty();
 	}
 
@@ -82,6 +121,8 @@ public final class NewOrderWriter {
 	 * group.
 	 */
 	public interface RootBlock {
+		RootBlockBound bound();
+
 		PriceEncodingWriter<RootBlock> price();
 
 		PriceEncodingWriter<RootBlock> stopPx();
@@ -99,6 +140,8 @@ public final class NewOrderWriter {
 	}
 
 	public interface PartiesEntryPartyId {
+		PartiesEntryPartyIdBound bound();
+
 		PartiesEntryPartyRole partyId(String value);
 
 		PartiesEntryPartyRole partyId(CharSequence value);
@@ -107,6 +150,8 @@ public final class NewOrderWriter {
 	}
 
 	public interface PartiesEntryPartyRole {
+		PartiesEntryPartyRoleBound bound();
+
 		PartiesEntry partyRole(PartyRole value);
 	}
 
@@ -126,6 +171,8 @@ public final class NewOrderWriter {
 	}
 
 	public interface PartySubIdsEntryPartySubId {
+		PartySubIdsEntryPartySubIdBound bound();
+
 		PartySubIdsEntryPartySubIdType partySubId(String value);
 
 		PartySubIdsEntryPartySubIdType partySubId(CharSequence value);
@@ -134,8 +181,102 @@ public final class NewOrderWriter {
 	}
 
 	public interface PartySubIdsEntryPartySubIdType {
+		PartySubIdsEntryPartySubIdTypeBound bound();
+
 		/** The entry's last field; the entry is complete and the group takes over. */
 		PartySubIds partySubIdType(short value);
+	}
+
+	// ---- the bound twins: the record's types through the bindings, one per stage
+	// that takes a value
+
+	public interface RootBlockClOrdIdBound {
+		RootBlockAccountBound clOrdId(String value);
+
+		RootBlockClOrdId wire();
+	}
+
+	public interface RootBlockAccountBound {
+		RootBlockSymbolBound account(String value);
+
+		RootBlockAccount wire();
+	}
+
+	public interface RootBlockSymbolBound {
+		RootBlockSideBound symbol(String value);
+
+		RootBlockSymbol wire();
+	}
+
+	public interface RootBlockSideBound {
+		RootBlockOrdTypeBound side(com.example.trading.Side value);
+
+		RootBlockSide wire();
+	}
+
+	public interface RootBlockOrdTypeBound {
+		RootBlockTimeInForceBound ordType(com.example.trading.OrdType value);
+
+		RootBlockOrdType wire();
+	}
+
+	public interface RootBlockTimeInForceBound {
+		RootBlockExecInstBound timeInForce(com.example.trading.TimeInForce value);
+
+		RootBlockTimeInForce wire();
+	}
+
+	public interface RootBlockExecInstBound {
+		RootBlockTransactTimeBound execInst(Set<ExecInst> value);
+
+		RootBlockExecInst wire();
+	}
+
+	public interface RootBlockTransactTimeBound {
+		RootBlockOrderQtyBound transactTime(Instant value);
+
+		RootBlockTransactTime wire();
+	}
+
+	public interface RootBlockOrderQtyBound {
+		RootBlockBound orderQty(long value);
+
+		RootBlockOrderQty wire();
+	}
+
+	/** The root block complete, bound: {@code null} is the optional's absence. */
+	public interface RootBlockBound {
+		RootBlockBound price(@Nullable BigDecimal value);
+
+		RootBlockBound stopPx(@Nullable BigDecimal value);
+
+		Parties parties();
+
+		RootBlock wire();
+	}
+
+	public interface PartiesEntryPartyIdBound {
+		PartiesEntryPartyRoleBound partyId(String value);
+
+		PartiesEntryPartyId wire();
+	}
+
+	public interface PartiesEntryPartyRoleBound {
+		PartiesEntry partyRole(com.example.trading.PartyRole value);
+
+		PartiesEntryPartyRole wire();
+	}
+
+	public interface PartySubIdsEntryPartySubIdBound {
+		PartySubIdsEntryPartySubIdTypeBound partySubId(String value);
+
+		PartySubIdsEntryPartySubId wire();
+	}
+
+	public interface PartySubIdsEntryPartySubIdTypeBound {
+		PartySubIds partySubIdType(short value);
+
+		PartySubIdsEntryPartySubIdType wire();
 	}
 
 	/** After the last group: the message is complete. */
@@ -149,17 +290,39 @@ public final class NewOrderWriter {
 		BEFORE_ROOT_BLOCK, ROOT_BLOCK, PARTIES, PARTIES_ENTRY, PARTY_SUB_IDS, PARTY_SUB_IDS_ENTRY, AFTER_PARTIES
 	}
 
+	private static final BindingContext transactTimeContext = new BindingContext(
+			"transactTime", PrimitiveType.UINT64,
+			null, null, null, Presence.REQUIRED
+	);
+	private static final BindingContext orderQtyContext = new BindingContext(
+			"orderQty", null, null, null, null,
+			Presence.REQUIRED
+	);
+	private static final BindingContext priceContext = new BindingContext(
+			"price", null, null, null, null,
+			Presence.OPTIONAL
+	);
+	private static final BindingContext stopPxContext = new BindingContext(
+			"stopPx", null, null, null, null,
+			Presence.OPTIONAL
+	);
 	private final SessionHeaderEncoder header = new SessionHeaderEncoder();
 	private final NewOrderEncoder encoder = new NewOrderEncoder();
+	private final UtcTimestampBinding utcTimestampBinding = new UtcTimestampBinding();
+	private final QtyBinding qtyBinding = new QtyBinding();
+	private final PriceBinding priceBinding = new PriceBinding();
 	private final RootBlockStage rootBlock = new RootBlockStage();
+	private final RootBlockBoundStage rootBlockBound = new RootBlockBoundStage();
 	private final ExecInstWriter<RootBlockTransactTime> execInst = new ExecInstWriter<>();
 	private final QtyEncodingWriter<RootBlock> orderQty = new QtyEncodingWriter<>();
 	private final PriceEncodingWriter<RootBlock> price = new PriceEncodingWriter<>();
 	private final PriceEncodingWriter<RootBlock> stopPx = new PriceEncodingWriter<>();
 	private final PartiesStage parties = new PartiesStage();
 	private final PartiesEntryStage partiesEntry = new PartiesEntryStage();
+	private final PartiesEntryBoundStage partiesEntryBound = new PartiesEntryBoundStage();
 	private final PartySubIdsStage partySubIds = new PartySubIdsStage();
 	private final PartySubIdsEntryStage partySubIdsEntry = new PartySubIdsEntryStage();
+	private final PartySubIdsEntryBoundStage partySubIdsEntryBound = new PartySubIdsEntryBoundStage();
 	private @Nullable PartiesEncoder partiesEncoder; // encoder.partiesCount(...), from the moment the group opens
 	private @Nullable PartySubIdsEncoder partySubIdsEncoder;
 	private At at = At.BEFORE_ROOT_BLOCK;
@@ -223,6 +386,12 @@ public final class NewOrderWriter {
 				RootBlockOrderQty,
 				RootBlock,
 				AfterParties {
+
+		@Override
+		public RootBlockBoundStage bound() {
+			at(At.ROOT_BLOCK, "RootBlock");
+			return rootBlockBound;
+		}
 
 		@Override
 		public RootBlockAccount clOrdId(String value) {
@@ -385,6 +554,12 @@ public final class NewOrderWriter {
 	private final class PartiesEntryStage implements PartiesEntryPartyId, PartiesEntryPartyRole, PartiesEntry {
 
 		@Override
+		public PartiesEntryBoundStage bound() {
+			at(At.PARTIES_ENTRY, "PartiesEntry");
+			return partiesEntryBound;
+		}
+
+		@Override
 		public PartiesEntryPartyRole partyId(String value) {
 			at(At.PARTIES_ENTRY, "PartiesEntry");
 			partiesEncoder.partyId(value);
@@ -447,6 +622,12 @@ public final class NewOrderWriter {
 	private final class PartySubIdsEntryStage implements PartySubIdsEntryPartySubId, PartySubIdsEntryPartySubIdType {
 
 		@Override
+		public PartySubIdsEntryBoundStage bound() {
+			at(At.PARTY_SUB_IDS_ENTRY, "PartySubIdsEntry");
+			return partySubIdsEntryBound;
+		}
+
+		@Override
 		public PartySubIdsEntryPartySubIdType partySubId(String value) {
 			at(At.PARTY_SUB_IDS_ENTRY, "PartySubIdsEntry");
 			partySubIdsEncoder.partySubId(value);
@@ -473,6 +654,235 @@ public final class NewOrderWriter {
 			partySubIdsEncoder.partySubIdType(value);
 			at = At.PARTY_SUB_IDS;
 			return partySubIds;
+		}
+	}
+
+	// ---- the bound stages' objects, one per block, over the same encoders
+
+	private final class RootBlockBoundStage
+			implements
+				RootBlockClOrdIdBound,
+				RootBlockAccountBound,
+				RootBlockSymbolBound,
+				RootBlockSideBound,
+				RootBlockOrdTypeBound,
+				RootBlockTimeInForceBound,
+				RootBlockExecInstBound,
+				RootBlockTransactTimeBound,
+				RootBlockOrderQtyBound,
+				RootBlockBound {
+
+		@Override
+		public RootBlockAccountBound clOrdId(String value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.clOrdId(ascii(required(value, "clOrdId"), NewOrderEncoder.clOrdIdLength(), "clOrdId"));
+			return this;
+		}
+
+		@Override
+		public RootBlockSymbolBound account(String value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.account(ascii(required(value, "account"), NewOrderEncoder.accountLength(), "account"));
+			return this;
+		}
+
+		@Override
+		public RootBlockSideBound symbol(String value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.symbol(ascii(required(value, "symbol"), NewOrderEncoder.symbolLength(), "symbol"));
+			return this;
+		}
+
+		@Override
+		public RootBlockOrdTypeBound side(com.example.trading.Side value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.side(encodeSide(required(value, "side")));
+			return this;
+		}
+
+		@Override
+		public RootBlockTimeInForceBound ordType(com.example.trading.OrdType value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.ordType(encodeOrdType(required(value, "ordType")));
+			return this;
+		}
+
+		@Override
+		public RootBlockExecInstBound timeInForce(com.example.trading.TimeInForce value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.timeInForce(encodeTimeInForce(required(value, "timeInForce")));
+			return this;
+		}
+
+		@Override
+		public RootBlockTransactTimeBound execInst(Set<ExecInst> value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encodeExecInst(required(value, "execInst"), encoder.execInst());
+			return this;
+		}
+
+		@Override
+		public RootBlockOrderQtyBound transactTime(Instant value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			encoder.transactTime(utcTimestampBinding.toWire(required(value, "transactTime"), transactTimeContext));
+			return this;
+		}
+
+		@Override
+		public RootBlockBound orderQty(long value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			writeQtyEncoding(qtyBinding.toWire(value, orderQtyContext), encoder.orderQty());
+			return this;
+		}
+
+		@Override
+		public RootBlockBound price(@Nullable BigDecimal value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			writePriceEncoding(priceBinding.toWire(value, priceContext), encoder.price());
+			return this;
+		}
+
+		@Override
+		public RootBlockBound stopPx(@Nullable BigDecimal value) {
+			at(At.ROOT_BLOCK, "RootBlock");
+			writePriceEncoding(priceBinding.toWire(value, stopPxContext), encoder.stopPx());
+			return this;
+		}
+
+		@Override
+		public Parties parties() {
+			return rootBlock.parties();
+		}
+
+		@Override
+		public RootBlockStage wire() {
+			at(At.ROOT_BLOCK, "RootBlock");
+			return rootBlock;
+		}
+	}
+
+	private final class PartiesEntryBoundStage implements PartiesEntryPartyIdBound, PartiesEntryPartyRoleBound {
+
+		@Override
+		public PartiesEntryPartyRoleBound partyId(String value) {
+			at(At.PARTIES_ENTRY, "PartiesEntry");
+			partiesEncoder.partyId(ascii(required(value, "partyId"), PartiesEncoder.partyIdLength(), "partyId"));
+			return this;
+		}
+
+		@Override
+		public PartiesEntry partyRole(com.example.trading.PartyRole value) {
+			at(At.PARTIES_ENTRY, "PartiesEntry");
+			partiesEncoder.partyRole(encodePartyRole(required(value, "partyRole")));
+			return partiesEntry;
+		}
+
+		@Override
+		public PartiesEntryStage wire() {
+			at(At.PARTIES_ENTRY, "PartiesEntry");
+			return partiesEntry;
+		}
+	}
+
+	private final class PartySubIdsEntryBoundStage
+			implements
+				PartySubIdsEntryPartySubIdBound,
+				PartySubIdsEntryPartySubIdTypeBound {
+
+		@Override
+		public PartySubIdsEntryPartySubIdTypeBound partySubId(String value) {
+			at(At.PARTY_SUB_IDS_ENTRY, "PartySubIdsEntry");
+			partySubIdsEncoder.partySubId(
+					ascii(required(value, "partySubId"), PartySubIdsEncoder.partySubIdLength(), "partySubId")
+			);
+			return this;
+		}
+
+		@Override
+		public PartySubIds partySubIdType(short value) {
+			return partySubIdsEntry.partySubIdType(value);
+		}
+
+		@Override
+		public PartySubIdsEntryStage wire() {
+			at(At.PARTY_SUB_IDS_ENTRY, "PartySubIdsEntry");
+			return partySubIdsEntry;
+		}
+	}
+
+	// ---- the leaf conversions, as the codec has them
+
+	private static <T> T required(@Nullable T value, String field) {
+		if (value == null) {
+			throw new IllegalArgumentException(field + " is required");
+		}
+		return value;
+	}
+
+	private static String ascii(String value, int length, String field) {
+		if (value.length() > length) {
+			throw new IllegalArgumentException(field + " is longer than " + length + ": " + value);
+		}
+		for (int i = 0; i < value.length(); i++) {
+			if (value.charAt(i) > 127) {
+				throw new IllegalArgumentException(field + " is not ASCII: " + value);
+			}
+		}
+		return value;
+	}
+
+	private static Side encodeSide(com.example.trading.Side value) {
+		return switch (value) {
+			case BUY -> Side.BUY;
+			case SELL -> Side.SELL;
+			case SELL_SHORT -> Side.SELL_SHORT;
+		};
+	}
+
+	private static OrdType encodeOrdType(com.example.trading.OrdType value) {
+		return switch (value) {
+			case MARKET -> OrdType.MARKET;
+			case LIMIT -> OrdType.LIMIT;
+			case STOP -> OrdType.STOP;
+			case STOP_LIMIT -> OrdType.STOP_LIMIT;
+		};
+	}
+
+	private static TimeInForce encodeTimeInForce(com.example.trading.TimeInForce value) {
+		return switch (value) {
+			case DAY -> TimeInForce.DAY;
+			case GOOD_TILL_CANCEL -> TimeInForce.GOOD_TILL_CANCEL;
+			case IMMEDIATE_OR_CANCEL -> TimeInForce.IMMEDIATE_OR_CANCEL;
+			case FILL_OR_KILL -> TimeInForce.FILL_OR_KILL;
+		};
+	}
+
+	private static void encodeExecInst(Set<ExecInst> value, ExecInstEncoder wire) {
+		wire.clear();
+		wire.postOnly(value.contains(ExecInst.POST_ONLY));
+		wire.reduceOnly(value.contains(ExecInst.REDUCE_ONLY));
+		wire.allOrNone(value.contains(ExecInst.ALL_OR_NONE));
+	}
+
+	private static PartyRole encodePartyRole(com.example.trading.PartyRole value) {
+		return switch (value) {
+			case EXECUTING_FIRM -> PartyRole.EXECUTING_FIRM;
+			case CLIENT_ID -> PartyRole.CLIENT_ID;
+			case ENTERING_TRADER -> PartyRole.ENTERING_TRADER;
+		};
+	}
+
+	private static void writeQtyEncoding(QtyEncoding value, QtyEncodingEncoder encoder) {
+		encoder.mantissa(value.mantissa());
+		if (value.exponent() != encoder.exponent()) {
+			throw new IllegalArgumentException("exponent is the constant " + encoder.exponent());
+		}
+	}
+
+	private static void writePriceEncoding(PriceEncoding value, PriceEncodingEncoder encoder) {
+		encoder.mantissa(value.mantissa() == null ? PriceEncodingEncoder.mantissaNullValue() : value.mantissa());
+		if (value.exponent() != encoder.exponent()) {
+			throw new IllegalArgumentException("exponent is the constant " + encoder.exponent());
 		}
 	}
 }

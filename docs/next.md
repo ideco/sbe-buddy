@@ -79,7 +79,9 @@ Decided here, where the sketch left room:
   not, gets its null value, then the chain overwrites what it sets.
 - **One object per block, the root block's an inner class too:** javac
   refuses a class implementing its own nested interfaces (`notes.md`), so
-  `wrap()` returns a private `RootBlockStage`, never the writer.
+  `wrap()` returns a private `RootBlockStage`, never the writer. The
+  bound twin is a second object per block, `RootBlockBoundStage`, since
+  the wire and bound setters of a `String` field share a signature.
 - **A set is a required step with a sub-chain,** `<Set>Writer<N>` with the
   choices in any order and `end()` back to `N`; an empty set is
   `.execInst().end()`. Its choices are unordered, so unlike a composite it
@@ -147,9 +149,15 @@ test scope only:
 - `NewOrderReader` and `NewOrderWriter` by hand over
   `com.example.trading.sbe.NewOrderEncoder/Decoder`: nested groups
   (`parties` → `partySubIds`), enums, a set, a constant, `char` arrays,
-  composites, `layout` and explicit offsets. Wire stages only, no
-  `bound()`.
-- `CancelRejectReader` and `CancelRejectWriter`: var-data.
+  composites, `layout` and explicit offsets, with `bound()` on every
+  stage that carries data: the record's types through the enum pairs,
+  the set, `UtcTimestampBinding`, `QtyBinding` over a face record the
+  reader builds, `PriceBinding` deciding `null` from an optional
+  composite's face, the `BindingContext` constants and the leaf helpers
+  as the codec has them, on the writer a bound twin per stage with
+  `bound()`/`wire()` hops.
+- `CancelRejectReader` and `CancelRejectWriter`: var-data, `TextBound.value()`
+  and the bound `text(String)` through a reporting `CharsetEncoder`.
 - Exactly the API of `flyweights.md` and the decisions above: `Stage`
   sealed with `skip()`, `RootBlock`, `Parties`, `PartiesEntry`,
   `PartySubIds`, `PartySubIdsEntry`, `Text`; the writer's chain with
@@ -158,8 +166,8 @@ test scope only:
 - Until the api has `Stage`, a local `interface Stage { void skip(); }`
   in the same package; step 2 replaces it.
 
-**Tests**, `HandReaderTest` and `HandWriterTest` in the same package,
-over `Samples` values encoded with the codecs:
+**Tests**, `HandReaderTest`, `HandWriterTest` and `HandBoundTest` in the
+same package, over `Samples` values encoded with the codecs:
 
 - the reader visits exactly the expected sequence of stage classes for
   `LIMIT_ORDER` (two parties, sub ids in one) and for `CANCEL_REJECT`;
@@ -184,7 +192,14 @@ description.
 
 **Done when** both tests are green and the reviewer can read the chains.
 
-**Do not** generate anything, add `bound()`, or touch the generator.
+- The bound stages read the sample component by component, unset
+  optionals as `null`; the bound chain writes the codec's bytes; a chain
+  hops between wire and bound; a bound setter refuses what the codec
+  refuses with the codec's message, `null` on a required field, a string
+  too long, a price with too many decimals, an unknown enum value, a
+  character the charset lacks.
+
+**Do not** generate anything or touch the generator.
 
 ### Step 1: split the generator, no behaviour change
 
@@ -390,10 +405,14 @@ record maps, carrying the record's components through `Faces`.
   range, every accessor applying the binding on each call, never cached.
   A var-data's bound stage has `value()`.
 - Writer: `<Stage>Bound` interfaces mirroring the wire chain with the
-  record's types, `bound()` on every wire stage and `wire()` on every
-  bound one, the same object. A composite with a binding is one step
-  taking the bound value; without one, the step also takes the face
-  record.
+  record's types, `bound()` on every wire stage that takes a value and
+  `wire()` on every bound one, implemented by a second object per block
+  (a `String` field's wire and bound setters share a signature and differ
+  in return type, so one class cannot carry both). A composite with a
+  binding is one step taking the bound value; without one, the step also
+  takes the face record. Group stages and a block-complete stage with no
+  optional fields carry no data and have no twin. The shape is step 0's
+  `NewOrderWriter`, to match, not to invent.
 - A message without a record: no `bound()` anywhere, nothing else changes.
 
 **Tests.**
