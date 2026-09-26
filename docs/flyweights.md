@@ -1,8 +1,8 @@
 # Typed flyweights: the sketch
 
-Increment 26 in `intent.md`. Nobody builds from this file yet; it holds the
-shape as it was sketched, so the increment's `next.md` starts from it.
-Agents do not read it unless asked to.
+Increment 26 in `intent.md`: this is the design, `next.md` the build
+order. Read both before working on the increment; `next.md` decides where
+this file leaves room.
 
 ## The problem
 
@@ -196,9 +196,10 @@ var-data that would clash is an error on its node.
   moved on: the root block for the whole message, an entry while the
   reader is at it or inside its nested groups and var-data, a group header
   while the reader is inside the group, a var-data while it is current.
-  The reader keeps one slot per nesting level holding the stage open
-  there, and every accessor, the bound stage's included, checks its slot
-  with one reference comparison. So a nested entry may read the fields of
+  Stages are singletons of the reader, so each carries a `live` flag the
+  reader sets when it opens the stage and clears when it leaves it, and
+  every accessor, the bound stage's included, checks it with one
+  comparison. So a nested entry may read the fields of
   the entry holding it, and a union's common fields answer after the fills
   were read. An entry is one object advanced and answers for the entry its
   group is on, so a reference kept across its group's `next()` reads the
@@ -287,7 +288,7 @@ int length = writer.wrap(buffer, offset)   // only orderId(long)
   as on the reader.
 - **Staleness.** The types make the straight path correct; the run-time
   check is for a kept reference only, a block-complete stage calling
-  `fills()` after `note()`: the same slot per nesting level as the reader,
+  `fills()` after `note()`: the same `live` flag as the reader's stages,
   never a check for completeness.
 
 ## The codec over them
@@ -429,12 +430,12 @@ derives the sequence the way the OTF walk does, and `notes.md` cites it.
   nesting. The flat sequence answers it by its order.
 - **An end stage and control on the stages.** The reader ends iteration
   and knows the length; the counts give the structure to whoever wants it.
-- **A stale flag per stage.** An entry is one object advanced, so a flag
-  cannot tell the entry kept from the current one; the reader's slots can.
 - **A stage answers only while current.** Stricter than sbe-tool, which
   addresses blocks by offset, and it cost a nested entry its parent's
-  fields and a union its common fields past the root block. The slot per
-  nesting level is the same one comparison.
+  fields and a union its common fields past the root block. Under that
+  rule a flag per stage could not tell the entry kept from the current
+  one; under liveness that edge is accepted, and the flag is the rule's
+  whole mechanism.
 - **"The project never writes `default`".** The compile-time evolution
   check is the reader's to take; `default` is safe here, and a reader
   after one group has every reason to write it.
