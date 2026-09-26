@@ -163,8 +163,14 @@ public final class GroupsWriter {
 		return header;
 	}
 
+	/**
+	 * Whether the stage checks run, read once from {@code sbebuddy.checks}; on
+	 * unless it says {@code false}, as sbe-tool's bounds checks are switched.
+	 */
+	private static final boolean CHECKS = !"false".equals(System.getProperty("sbebuddy.checks"));
+
 	private void current(At first, At last, String stage) {
-		if (at.compareTo(first) < 0 || at.compareTo(last) > 0) {
+		if (CHECKS && (at.compareTo(first) < 0 || at.compareTo(last) > 0)) {
 			throw new IllegalStateException(stage + " is not the current stage");
 		}
 	}
