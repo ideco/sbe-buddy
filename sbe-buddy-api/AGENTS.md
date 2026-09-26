@@ -1,8 +1,8 @@
 # sbe-buddy-api
 
 What users compile against: the annotations, `PrimitiveType`, `Presence`,
-`ByteOrder`, SBE's framing composites, `Codec`, `TypeBinding` and
-`BindingContext`. Everything here is public API, so a change updates
+`ByteOrder`, SBE's framing composites, `Codec`, `TypeBinding`,
+`BindingContext`, and `Stage`, which every generated reader's stages extend. Everything here is public API, so a change updates
 `type-mappings.md` and the guide in the same commit.
 
 - No built-in bindings and no wire types for JDK types: whatever the api
@@ -15,7 +15,7 @@ What users compile against: the annotations, `PrimitiveType`, `Presence`,
   XSD's default reaches the model as absent and is omitted from the XML.
 - Annotations are retained at `CLASS`, so a declared type in a library jar
   still resolves, and nothing exists at runtime to reflect over.
-- Only generated code implements `Codec<T, H>`, so it may grow. `H` is the
+- Only generated code implements `Codec<T, H>` and `Stage`, so they may grow. `H` is the
   schema's header, a record implementing `MessageHeader`.
 - Agrona is the only runtime dependency. JSpecify is `optional`, so users do
   not inherit it.

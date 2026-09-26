@@ -441,6 +441,50 @@ alternatives considered.
   `generateEncoderFlyweightCode`, read 2026-09-23, and the header corpus
   case's dirty-buffer test.)
 
+* The message decoder's `limit()` and `limit(int)` are public, and every
+  group and var-data accessor, a group's included, reads and moves that one
+  limit: a group decoder has none of its own. `sbeRewind()` is `wrap(buffer,
+  offset, actingBlockLength, actingVersion)` again, the limit back at the end
+  of the root block. `wrapAndApplyHeader` throws `IllegalStateException(
+  "Invalid TEMPLATE_ID: " + templateId)` for another template. The message
+  decoder's `sbeSkip()` calls `sbeRewind()` first, then walks every group and
+  var-data. A group accessor, `decoder.fills()`, returns the same group
+  decoder object every time, a final field of its parent, after its public
+  `wrap(DirectBuffer)`, which reads the dimensions at the limit, moves the
+  limit past them and sets the index to 0. `skip<Data>()` moves the limit past
+  the length and the data and returns the data's length; `get<Data>(dst,
+  dstOffset, length)` over a `byte[]` or a `MutableDirectBuffer` and
+  `wrap<Data>(DirectBuffer)` read at the limit. (`JavaGenerator.java`,
+  `generateDecoderFlyweightCode`, `generateGroupDecoderClassHeader`,
+  `generateDataDecodeMethods` and `generateDecoderGroups`, read 2026-09-26;
+  the generated `NewOrderDecoder` of the example.)
+* The decoder's accessors of a field, which a stage delegates, by its type
+  token: a constant `ENCODING` its literal, a `char` one also indexed and in
+  bulk, `get<Field>(byte[], int, int)`, and a `String` where the value is
+  longer than one character, else a `byte`; otherwise by
+  `Token.matchOnLength`, a length of 1 a scalar getter and more an array's,
+  `<field>(int index)`, a `char` array adding `get<Field>(byte[], int)`,
+  `String <field>()` and, in ASCII, `get<Field>(Appendable)`, a `uint8`
+  array adding `get<Field>` over a `byte[]` and a `MutableDirectBuffer` and
+  `wrap<Field>(DirectBuffer)`, and a length of 0 nothing; an enum
+  `<field>()` and `<field>Raw()`, constant or not; a set and a composite the
+  flyweight named after the type token's `name()`, where an enum's class is
+  named after its `applicableTypeName()`. Only messages and types carry
+  `@Deprecated`, never an accessor. (`JavaGenerator.java`,
+  `generateDecoderFields`, `generatePrimitiveDecoder`,
+  `generatePrimitiveArrayPropertyDecode`, `generateConstPropertyMethods`,
+  `generateEnumDecoder`, `generateBitSetProperty`, `generateCompositeProperty`
+  and `generateDeclaration`; `Token.java`, read 2026-09-26.)
+* `OtfMessageDecoder.decode` walks a message as the readers do:
+  `onBeginMessage`, the root block's fields, then each group, `onGroupHeader`
+  with its count and per entry `onBeginGroup`, the entry's fields, its own
+  groups and var-data and `onEndGroup`, then each var-data, `onVarData` with
+  its length. Entries are stepped by the block length read from the wire. A
+  group or var-data whose token's version is above the acting version is
+  still reported, with a count or a length of 0, where the readers never
+  hand out its stage. (`OtfMessageDecoder.java`, read 2026-09-26, and
+  `ReaderSequenceTest`.)
+
 ## javac
 
 * The use of a deprecated annotation member is a

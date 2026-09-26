@@ -22,6 +22,12 @@ CodecModel       what a codec is made of around its leaves
 CodecWriter      a CodecModel to source, each leaf through FaceWriter
 CodecTemplates   the text of a codec around its leaves: the class, the header, lengths, groups, var-data, the union
 UnionModel       what a union's codec is made of: its members' codecs
+FlyweightWalk    a Join to a FlyweightModel: a reader's stages, positions and steps in wire order, and the names it takes
+FlyweightModel   what a message's reader is made of
+ReaderWriter     a FlyweightModel to source
+ReaderTemplates  the text of a reader: the class, its control, the methods that arrive at each stage, the steps
+ReaderStageTemplates the text of a reader's stages and the accessors they delegate
+FlyweightEmitter a reader for every message of the IR, then the output
 UnionWriter      a UnionModel to source
 Template         a text block with named placeholders
 CodecEmitter     the walk and the writer per message, a union's codec over them, then the output
@@ -118,6 +124,25 @@ Problem          a mistake on a node of either model
   `TEMPLATE_ID` constants to decode, once over every message beneath it.
 - Generated codecs use fully qualified names and no imports, and are not
   formatted afterwards. Keep them readable: they are read while debugging.
+
+## Readers
+
+- Every message of the IR gets a reader, `ir.messages()` in template id
+  order, a record or not. `FlyweightEmitter` runs after `CodecEmitter`, and
+  only when it reported no error: the reader joins each message with its
+  record the same way, and the join's problems are the codec emitter's.
+- The reader's order is `OtfMessageDecoder`'s: each position of the `At`
+  enum has one step, the level's next present group or var-data, else the
+  next entry of the group the level is an entry of, else what follows that
+  group. `ReaderSequenceTest` in sbe-buddy-tests holds every reader of the
+  corpus against it.
+- A stage's accessors are sbe-tool's decoder getters for the field, named
+  and typed as `JavaGenerator` names them, derived from the type token; a
+  new kind of field is a case in `FlyweightWalk.accessors`.
+- Every name the reader declares comes from the model. A group, var-data or
+  field that would take one the reader has is a `Problem`, never a rename.
+- `GroupsReader.java` is checked in as a golden in sbe-buddy-tests; a change
+  to the reader's text shows there, and `-Dgolden.update=true` rewrites it.
 
 ## Tests
 

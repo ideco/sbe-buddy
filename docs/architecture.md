@@ -37,6 +37,7 @@ One compilation of an `@SbeSchema` package runs:
 5  MessageSchema ──► Ir               sbe-tool  IrGenerator
 6  Ir ──► flyweight sources           sbe-tool  JavaGenerator
 7  Ir ⋈ Annotated ──► codec sources   ours      the join: Join with FaceRules, then CodecWalk, CodecModel, CodecWriter over FaceWriter, UnionWriter
+   Ir ⋈ Annotated ──► readers         ours      the same join per message of the IR, then FlyweightWalk, FlyweightModel, ReaderWriter
 8  the document ──► schema.xml        ours      the schema ships in the jar               code-first
 ```
 
@@ -81,6 +82,10 @@ Closed grammars, each one file of nested records.
   reads it, and so will the flyweights' bound stages.
 * **`CodecModel`** is what a codec is made of: bodies of members in wire and
   constructor order, each field a `Faces` leaf, and the methods they call.
+* **`FlyweightModel`** is what a message's reader is made of: its stages,
+  the accessors each delegates to sbe-tool's flyweights, the positions the
+  reader passes through in wire order and the step that moves it on from
+  each.
 
 Models carry no positions. Discovery maps each `Annotated` node to its javac
 `Element` and `AnnotationMirror`, Mapping each `Schema` node to the
@@ -119,6 +124,11 @@ Three layers, in the order a mistake meets them.
   `CodecModel` and written from it, each leaf by `FaceWriter`, so a codec
   calls what sbe-tool generated and holds no wire numbers. A union's codec
   is a `UnionModel` over its members' models.
+* **Readers** are generated for every message of the IR, a record or not,
+  into `<schema package>.sbe` beside the flyweights they delegate to: the
+  message joined as the codec joins it, laid out as a `FlyweightModel` in
+  the order `OtfMessageDecoder` walks a message, and written from it. They
+  run after the codecs, whose join reports the problems a record has.
 
 ## The codec contract
 

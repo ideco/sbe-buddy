@@ -97,6 +97,24 @@ can lack is nullable in the record. A released version's XML can be checked
 in and named as the `baseline`: the compiler holds the schema against it
 under SBE's extension rules, and the codecs read from its version.
 
+## Reading in place
+
+Beside sbe-tool's flyweights, every message gets a reader over them that
+hands the message out as a sequence of stages in wire order, so a group or
+var-data can no longer be read out of turn, and one left unread is passed
+over correctly:
+
+```java
+for (ExecutionReportReader.Stage stage : reader.wrap(buffer, offset)) {
+    switch (stage) {
+        case ExecutionReportReader.FillsEntry fill -> fillIds.add(fill.fillExecId());
+        default -> {}
+    }
+}
+```
+
+Readers need no record, so a message the records leave out gets one too.
+
 ## Staying close to SBE
 
 What a schema states remains explicit:

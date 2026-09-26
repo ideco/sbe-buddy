@@ -16,11 +16,12 @@ import corpus.partialmapping.sbe.MessageHeaderDecoder;
 import corpus.partialmapping.sbe.MessageHeaderEncoder;
 import corpus.partialmapping.sbe.QuoteDecoder;
 import corpus.partialmapping.sbe.QuoteEncoder;
+import corpus.partialmapping.sbe.QuoteReader;
 
 /**
  * A schema mapped in part: the one message with a record goes through its
  * codec, and the two without one go through the flyweights, which sbe-tool
- * generated for every message of the resource.
+ * generated for every message of the resource, and through their readers.
  */
 final class PartialMappingTest implements SchemaCase {
 
@@ -95,6 +96,18 @@ final class PartialMappingTest implements SchemaCase {
 		assertThat(quote.bid().mantissa()).isEqualTo(12_345L);
 		assertThat(quote.bid().exponent()).isEqualTo((byte) -2);
 		assertThat(heartbeat.sequence()).isEqualTo(7L);
+	}
+
+	@Test
+	void aMessageWithoutARecordHasAReader() {
+		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+		new QuoteEncoder().wrapAndApplyHeader(buffer, 0, new MessageHeaderEncoder()).bid().mantissa(12_345L)
+				.exponent((byte) -2);
+
+		QuoteReader.RootBlock quote = (QuoteReader.RootBlock) new QuoteReader().wrap(buffer, 0).next();
+
+		assertThat(quote.bid().mantissa()).isEqualTo(12_345L);
+		assertThat(quote.bid().exponent()).isEqualTo((byte) -2);
 	}
 
 	@Test
