@@ -65,6 +65,10 @@ public final class Generator {
 		}
 	}
 
+	/** An XML document read from the class path, with the URI it was read from. */
+	public record Resource(String text, String systemId) {
+	}
+
 	private final List<Problem> problems = new ArrayList<>();
 	private final int version;
 
@@ -90,26 +94,37 @@ public final class Generator {
 	 * with sbe-tool's text verbatim; a rule the join finds broken is a problem
 	 * naming its node. An output that fails to write is an
 	 * {@link UncheckedIOException}.
+	 *
+	 * <p>
+	 * With a {@code baseline}, the document is held against it by
+	 * {@link SchemaEvolution} once sbe-tool accepts it, each difference a problem
+	 * on the node it is on, and the codecs read from the baseline's version; a
+	 * baseline the XML parser or sbe.xsd refuses is a problem naming the schema.
+	 * Without one, they read from version 0.
+	 * </p>
 	 */
-	public static List<Problem> generate(Schema schema, Annotated annotated, DynamicPackageOutputManager output) {
-		return generate(parse(document(schema), schema, schema.packageName()), annotated, output);
+	public static List<Problem> generate(
+			Schema schema, Annotated annotated, @Nullable Resource baseline, DynamicPackageOutputManager output
+	) {
+		return generate(parse(document(schema), schema, schema.packageName()), schema, baseline, annotated, output);
 	}
 
 	/**
-	 * Steps 3 to 7 over a schema read from a resource, {@code systemId} its URI:
-	 * the document rendered from {@code schema} is compared with the resource, its
-	 * XIncludes resolved against the URI, by {@link SchemaEquivalence}, and each
-	 * difference is a problem on the schema node it is on, or on the schema where
-	 * no node corresponds; with none, the resource is the document the rest of the
-	 * pipeline takes. A resource the XML parser or sbe.xsd refuses is a problem
-	 * naming the schema.
+	 * Steps 3 to 7 over a schema read from a resource: the document rendered from
+	 * {@code schema} is compared with the resource, its XIncludes resolved against
+	 * its URI, by {@link SchemaEquivalence}, and each difference is a problem on
+	 * the schema node it is on, or on the schema where no node corresponds; with
+	 * none, the resource is the document the rest of the pipeline takes, the
+	 * baseline as code-first holds it. A resource the XML parser or sbe.xsd refuses
+	 * is a problem naming the schema.
 	 */
 	public static List<Problem> generate(
-			Schema schema, String resource, String systemId, Annotated annotated, DynamicPackageOutputManager output
+			Schema schema, Resource resource, @Nullable Resource baseline, Annotated annotated,
+			DynamicPackageOutputManager output
 	) {
 		String included;
 		try {
-			included = include(resource, systemId);
+			included = include(resource.text(), resource.systemId());
 		} catch (SAXException e) {
 			return List.of(new Problem(schema, String.valueOf(e.getMessage())));
 		}
@@ -120,13 +135,41 @@ public final class Generator {
 			return List.of(new Problem(schema, "sbe.xsd: " + e.getMessage()));
 		}
 		if (!differences.isEmpty()) {
-			List<Problem> problems = new ArrayList<>();
-			for (SchemaEquivalence.Difference difference : differences) {
-				problems.add(new Problem(node(schema, difference.path()), difference.message()));
-			}
-			return problems;
+			return problems(schema, differences);
 		}
-		return generate(parse(included, schema, schema.packageName()), annotated, output);
+		return generate(parse(included, schema, schema.packageName()), schema, baseline, annotated, output);
+	}
+
+	private static List<Problem> problems(Schema schema, List<SchemaEquivalence.Difference> differences) {
+		List<Problem> problems = new ArrayList<>();
+		for (SchemaEquivalence.Difference difference : differences) {
+			problems.add(new Problem(node(schema, difference.path()), difference.message()));
+		}
+		return problems;
+	}
+
+	/** The version the codecs read from, or the problems that stop them. */
+	private record Evolution(int baseline, List<Problem> problems) {
+	}
+
+	/**
+	 * The schema held against its baseline, whose version the codecs then read
+	 * from; the schema's document is one sbe-tool accepted, so what sbe.xsd refuses
+	 * here is the baseline.
+	 */
+	private static Evolution evolution(Schema schema, @Nullable Resource baseline) {
+		if (baseline == null) {
+			return new Evolution(0, List.of());
+		}
+		String included;
+		List<SchemaEquivalence.Difference> differences;
+		try {
+			included = include(baseline.text(), baseline.systemId());
+			differences = SchemaEvolution.differences(document(schema), included);
+		} catch (SAXException | IllegalArgumentException e) {
+			return new Evolution(0, List.of(new Problem(schema, "the baseline: " + e.getMessage())));
+		}
+		return new Evolution(SchemaEvolution.version(included), problems(schema, differences));
 	}
 
 	/**
@@ -225,10 +268,17 @@ public final class Generator {
 		}
 	}
 
-	private static List<Problem> generate(Parsed parsed, Annotated annotated, DynamicPackageOutputManager output) {
+	private static List<Problem> generate(
+			Parsed parsed, Schema schema, @Nullable Resource baseline, Annotated annotated,
+			DynamicPackageOutputManager output
+	) {
 		Ir ir = parsed.ir();
 		if (ir == null) {
 			return parsed.problems();
+		}
+		Evolution evolution = evolution(schema, baseline);
+		if (!evolution.problems().isEmpty()) {
+			return evolution.problems();
 		}
 		StringWriterOutputManager staged = new StringWriterOutputManager();
 		staged.setPackageName(ir.applicableNamespace());
@@ -242,7 +292,7 @@ public final class Generator {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-		List<Problem> problems = CodecEmitter.emit(ir, annotated, staged);
+		List<Problem> problems = CodecEmitter.emit(ir, annotated, evolution.baseline(), staged);
 		if (problems.stream().anyMatch(Problem::isError)) {
 			return problems;
 		}

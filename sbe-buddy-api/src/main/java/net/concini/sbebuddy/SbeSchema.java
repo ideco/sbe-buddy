@@ -86,14 +86,27 @@ public @interface SbeSchema {
 	String resource() default "";
 
 	/**
-	 * The oldest schema version accepted by generated codecs. Decoding a message
-	 * below this version fails.
+	 * The classpath resource containing the schema version this schema must stay
+	 * compatible with, an SBE XML schema as it was released. Paths are relative to
+	 * this package, or absolute when prefixed with {@code /}. Empty means no
+	 * baseline.
 	 *
 	 * <p>
-	 * A required field introduced at or below this version cannot be absent due to
-	 * schema evolution, so its record component can use a primitive type. This
-	 * setting affects codecs only and is not written to the SBE schema.
+	 * The schema is checked against the baseline under SBE's extension rules:
+	 * messages are matched by ID; the baseline's fields, groups and var-data come
+	 * first in each block, in order, with the same IDs and types; and every
+	 * addition declares a {@code sinceVersion} above the baseline's version. Names,
+	 * descriptions and deprecation may change, and so may presence between required
+	 * and optional.
+	 * </p>
+	 *
+	 * <p>
+	 * The baseline's version is the oldest version accepted by generated codecs.
+	 * Decoding a message below it fails, and a required field introduced at or
+	 * below it cannot be absent due to schema evolution, so its record component
+	 * can use a primitive type. Without a baseline, codecs accept every version.
+	 * The baseline is not written to the SBE schema.
 	 * </p>
 	 */
-	int baselineVersion() default 0;
+	String baseline() default "";
 }

@@ -125,7 +125,7 @@ final class GeneratorTest {
 		Schema schema = schema(0, List.of(messageHeader()), List.of(message("M", 1, field("x", 1, "nosuch"))));
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
-		List<Problem> problems = Generator.generate(schema, annotated(0), output);
+		List<Problem> problems = Generator.generate(schema, annotated(0), null, output);
 
 		assertThat(problems).hasSize(1);
 		assertThat(problems.get(0).node()).isSameAs(schema);
@@ -216,7 +216,9 @@ final class GeneratorTest {
 
 		List<Problem> problems = Generator
 				.generate(
-						schemaOf(annotated), Files.readString(resource), resource.toUri().toString(), annotated, output
+						schemaOf(annotated),
+						new Generator.Resource(Files.readString(resource), resource.toUri().toString()),
+						null, annotated, output
 				);
 
 		assertThat(problems).isEmpty();
@@ -232,7 +234,10 @@ final class GeneratorTest {
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
 		List<Problem> problems = Generator
-				.generate(schema, Files.readString(resource), resource.toUri().toString(), annotated, output);
+				.generate(
+						schema, new Generator.Resource(Files.readString(resource), resource.toUri().toString()), null,
+						annotated, output
+				);
 
 		assertThat(problems).hasSize(1);
 		assertThat(problems.get(0).node()).isSameAs(schema);
@@ -248,13 +253,87 @@ final class GeneratorTest {
 		Schema schema = schemaOf(annotated);
 		StringWriterOutputManager output = new StringWriterOutputManager();
 
-		List<Problem> problems = Generator.generate(schema, document, "memory:schema.xml", annotated, output);
+		List<Problem> problems = Generator
+				.generate(schema, new Generator.Resource(document, "memory:schema.xml"), null, annotated, output);
 
 		assertThat(problems).containsExactlyInAnyOrder(
 				new Problem(schema, "the schema has id=\"2\", not \"1\""),
 				new Problem(schema.messages().get(0).fields().get(0), "the schema has id=\"1\", not \"3\"")
 		);
 		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void aSchemaBreakingItsBaselineIsAProblemNamingWhatBreaksIt() {
+		Annotated annotated = annotated(1, annotatedMessage("M", 1, annotatedField("qty", 3, primitive(INT))));
+		Schema schema = schemaOf(annotated);
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schema, annotated, baseline(1), output);
+
+		assertThat(problems).containsExactly(
+				new Problem(
+						schema.messages().get(0).fields().get(0),
+						"the baseline has a field \"qty\" (id 1) here, not id 3; the id is its identity, and a field that means something else is appended as a new one"
+				)
+		);
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	@Test
+	void theCodecsReadFromTheBaselinesVersion() {
+		Annotated annotated = annotated(2, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator.generate(schemaOf(annotated), annotated, baseline(1), output);
+
+		assertThat(problems).isEmpty();
+		assertThat(output.getSources().get("p.MCodec").toString()).contains("is below the baseline 1");
+	}
+
+	@Test
+	void withoutABaselineTheCodecsReadEveryVersion() {
+		Annotated annotated = annotated(2, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		assertThat(generate(annotated, output)).isEmpty();
+		assertThat(output.getSources().get("p.MCodec").toString()).doesNotContain("baseline");
+	}
+
+	@Test
+	void aBaselineSbeXsdRefusesIsAProblemNamingTheSchema() {
+		Annotated annotated = annotated(1, annotatedMessage("M", 1, annotatedField("qty", 1, primitive(INT))));
+		Schema schema = schemaOf(annotated);
+		StringWriterOutputManager output = new StringWriterOutputManager();
+
+		List<Problem> problems = Generator
+				.generate(schema, annotated, new Generator.Resource("<nothing/>", "memory:baseline.xml"), output);
+
+		assertThat(problems).singleElement().satisfies(problem -> {
+			assertThat(problem.node()).isSameAs(schema);
+			assertThat(problem.message()).startsWith("the baseline: not a valid SBE schema");
+		});
+		assertThat(output.getSources()).isEmpty();
+	}
+
+	/** Version {@code version} of the schema of one message M with qty, id 1. */
+	private static Generator.Resource baseline(int version) {
+		return new Generator.Resource("""
+				<?xml version="1.0" encoding="UTF-8"?>
+				<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe" package="p" id="1" version="%d">
+				    <types>
+				        <composite name="messageHeader">
+				            <type name="blockLength" primitiveType="uint16"/>
+				            <type name="templateId" primitiveType="uint16"/>
+				            <type name="schemaId" primitiveType="uint16"/>
+				            <type name="version" primitiveType="uint16"/>
+				        </composite>
+				    </types>
+				    <sbe:message name="M" id="1">
+				        <field name="qty" id="1" type="int32"/>
+				    </sbe:message>
+				</sbe:messageSchema>
+				""".formatted(version), "memory:baseline.xml");
 	}
 
 	/** A schema whose types arrive by XInclude, relative to the document. */
@@ -294,7 +373,7 @@ final class GeneratorTest {
 	 * the input here, not the expectation, so these tests describe each case once.
 	 */
 	private static List<Problem> generate(Annotated annotated, StringWriterOutputManager output) {
-		return Generator.generate(schemaOf(annotated), annotated, output);
+		return Generator.generate(schemaOf(annotated), annotated, null, output);
 	}
 
 	private static Schema schemaOf(Annotated annotated) {

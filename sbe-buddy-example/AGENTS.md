@@ -19,6 +19,10 @@ interop with sbe-tool; coverage belongs in sbe-buddy-tests.
 - `quotes` grows a construct per increment and bumps its schema version. The
   previous oracle is then frozen as `quotes-vN.xml`, with only its leading
   comment saying so, and never edited again.
+- `quotes` names its frozen version 1 as its baseline, so the compiler holds
+  every later version against it. That file lives in
+  `src/main/resources/com/example/quotes/`, on the class path where a user's
+  baseline would, and the other frozen versions stay in `src/main/sbe`.
 - The pom runs `SbeTool` over each oracle and each frozen version at
   `generate-test-sources`, into `xmlref` and `xmlref.vN`, test code only. A
   new frozen version needs its own execution.

@@ -48,6 +48,7 @@ final class CodecWalk {
 
 	private final Ir ir;
 	private final Annotated annotated;
+	private final int baseline;
 	private final Annotated.Message message;
 	private final String flyweights;
 	private final Map<Object, Helper> helpers = new LinkedHashMap<>();
@@ -56,19 +57,23 @@ final class CodecWalk {
 	private final List<Problem> problems = new ArrayList<>();
 	private final FaceRules faces = new FaceRules(problems);
 
-	private CodecWalk(Ir ir, Annotated annotated, Annotated.Message message) {
+	private CodecWalk(Ir ir, Annotated annotated, int baseline, Annotated.Message message) {
 		this.ir = ir;
 		this.annotated = annotated;
+		this.baseline = baseline;
 		this.message = message;
 		this.flyweights = ir.applicableNamespace();
 	}
 
 	/**
 	 * The message's model, or null with an error among the problems added to
-	 * {@code problems}; a warning is added and stops nothing.
+	 * {@code problems}; a warning is added and stops nothing. {@code baseline} is
+	 * the oldest version the codec reads.
 	 */
-	static @Nullable CodecModel walk(Ir ir, Annotated annotated, Annotated.Message message, List<Problem> problems) {
-		CodecWalk walk = new CodecWalk(ir, annotated, message);
+	static @Nullable CodecModel walk(
+			Ir ir, Annotated annotated, int baseline, Annotated.Message message, List<Problem> problems
+	) {
+		CodecWalk walk = new CodecWalk(ir, annotated, baseline, message);
 		CodecModel model = walk.model(message);
 		problems.addAll(walk.problems);
 		return walk.failed() ? null : model;
@@ -148,7 +153,7 @@ final class CodecWalk {
 		String messageClass = JavaUtil.formatClassName(tokens.get(0).name());
 		Owner owner = new Owner(
 				flyweights + "." + messageClass + "Encoder", flyweights + "." + messageClass + "Decoder", "",
-				Owner.Kind.MESSAGE, annotated.baselineVersion()
+				Owner.Kind.MESSAGE, baseline
 		);
 		Body body = body(tokens, 1, message.components(), message.unmapped(), owner, tokens.get(0).name());
 		List<CodecModel.Binding> fields = new ArrayList<>();
@@ -156,7 +161,7 @@ final class CodecWalk {
 		return new CodecModel(
 				annotated.packageName(), message.javaName() + "Codec",
 				message.qualifiedName(),
-				flyweights, header, messageClass, annotated.baselineVersion(), fields, List.copyOf(contexts.values()),
+				flyweights, header, messageClass, baseline, fields, List.copyOf(contexts.values()),
 				body, List.copyOf(helpers.values())
 		);
 	}

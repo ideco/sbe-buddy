@@ -264,7 +264,7 @@
                 </systemProperty>
               </systemProperties>
               <arguments>
-                <argument>${project.basedir}/src/main/sbe/quotes-v1.xml</argument>
+                <argument>${project.basedir}/src/main/resources/com/example/quotes/quotes-v1.xml</argument>
               </arguments>
             </configuration>
           </execution>

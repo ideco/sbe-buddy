@@ -106,7 +106,7 @@ public interface Codec<T, H extends MessageHeader> {
 
 	/**
 	 * Returns whether the message header identifies this schema, a message
-	 * supported by this codec and a version at or above the configured baseline.
+	 * supported by this codec and a version at or above the schema's baseline.
 	 *
 	 * <p>
 	 * Reads only the header. A true result does not guarantee successful decoding:

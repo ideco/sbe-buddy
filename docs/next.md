@@ -1,118 +1,136 @@
-# Increment 23: Schema-first, without drift
+# Increment 24: A checked-in baseline
 
 ## Goal
 
-Increment 22 let a package read its schema from a resource and map part of
-it. This increment narrows it to what a shipped schema needs and makes it
-safe: the compiler proves that the annotations and the document are the
-same schema. The workflow it serves: develop code-first, freeze the schema
-sbe-buddy wrote as a resource and switch the package to reading it, later
-switch back to grow it. The switch is one member on `@SbeSchema` in either
-direction, and neither direction loses anything, because the annotations
-always describe the whole document and the document always says what the
-annotations say. Drift, in either direction, is a compile error naming the
-node that differs.
+`baselineVersion` states a number: the oldest version the codecs read.
+Nothing checks that the schema still reads that version. A refactor that
+reorders two fields, retypes one or drops a value from an enum compiles
+clean, and the first to notice is a reader on the other side. That is the
+real risk of writing a schema from code.
+
+This increment replaces the number with the schema itself. `@SbeSchema`
+names a checked-in XML file, the version the schema must stay compatible
+with, and the compiler holds the schema against it. The baseline version
+the codecs read from becomes that file's `version`. A change that breaks
+the baseline is a compile error on the node it is on. A change SBE allows,
+an appended field, a renamed one or a new enum value, compiles.
 
 ## Settled before it started
 
-- **Not partial.** Every message of the document has a record, every field
-  of a message is a component or an `unmapped` entry, every group and
-  var-data is a component, every type of the document has its declaration,
-  and nothing in the annotations is absent from the document. Anything
-  less is drift the moment the package goes back to code-first. Mapping
-  part of a schema someone else owns is a different feature, views over a
-  schema, decode-only; `intent.md` parks it.
-- **The annotations are complete.** They must be able to write the schema
-  again, so a member the document decides and the annotation leaves out is
-  gone. `@SbeField(id = 11) String clOrdId` alone is refused as it is
-  code-first; the type is named. On the day the package switches, the
-  annotations are the ones that wrote the document, so nothing changes.
-- **The check is equivalence, not a per-node join.** Schema-first runs the
-  code-first pipeline up to the document: `Mapping`, `Generator.validate`,
-  `SchemaXml`. The rendered document is then compared with the resource,
-  after XIncludes, with `sbe.xsd`'s defaults filled on both sides so an
-  absent attribute equals its default, declarations and messages matched
-  by name regardless of order, everything else in sequence. That is the
-  equivalence `SchemaXmlAssert` has always defined for the oracles; it
-  moves into the generator, and each difference is a problem naming the
-  node it is on and both values. It subsumes every comparison `StatedRules`
-  makes through the IR and reaches what the IR blurs: `nullValue`,
-  `minValue`, `maxValue`, `valueRef`, a group's `semanticType`.
-  `StatedRules` goes.
-- **The IR comes from the resource,** which the check has proven equivalent
-  to what the annotations would write; the flyweights and the join are the
-  code-first ones over it. Nothing is written in this mode, as in 22.
-- **Schemas are never merged,** the resource is found on `CLASS_PATH`, and
-  XInclude resolves against its URI, all as 22 settled them.
+- **XML against XML.** The check compares the schema's document with the
+  baseline's, both parsed with sbe.xsd so the defaults are filled, as
+  `SchemaEquivalence` does, and reports on the same paths. It does not use
+  sbe-tool's IR, which blurs since-versions and semantic types
+  (`notes.md`). It lives next to `SchemaEquivalence` and shares its parsing
+  and its `Difference`. In schema-first mode it runs after the equivalence
+  check, over the same rendered document, so it works in both modes.
+- **Names are free.** The spec lists name and description corrections as
+  changes that keep compatibility, and sbe-tool matches nothing across
+  versions by name. So messages match by template `id`; fields, groups and
+  var-data by position; types by what they are, following each `type`
+  reference into its own document. `name`, `description` and `deprecated`
+  are never compared. Everything else is either the wire or what a value on
+  it means, and stays.
+- **Ids are identity.** A field's or a group's id is not on the wire, but
+  it is the field's FIX tag, "the same type" wherever it appears. Only the
+  id tells a rename, same position and same id, from a replacement, same
+  position and type but a new id. A replacement reads cleanly on the wire
+  and means something else to an old reader. A changed id at a position is
+  an error. A field that means something else is a new field.
+- **Presence may change between required and optional.** Neither changes
+  the wire. A change to or from `constant` does, because a constant takes
+  no space in the block.
+- **The spec's constraints, nothing more.** Fields are appended to the end
+  of a block, groups after groups, var-data after var-data; an existing
+  field keeps its type and its place; the header does not change. Added to
+  that, from the spec's `sinceVersion`: an addition states its version,
+  above the baseline's, and an existing element's version never changes.
+  An enum value and a set choice may be added, as the spec's example adds
+  `OrdType=J`. A composite never grows, as `type-mappings.md` already
+  requires. Nothing is removed: a field is retired with `unmapped`, a
+  message or a value with `deprecated`.
+- **Block lengths and offsets stay as stated.** An explicit `offset` must
+  equal the baseline's, and so must its absence. A `blockLength` may grow,
+  but not shrink, appear or disappear. The offsets that are computed follow
+  from equal types in equal order, so nothing here computes a layout.
+- **One baseline.** It guards against breaking the version it names, not
+  the latest release. A history of released versions, each checked, is a
+  later increment if it earns one. So are generated sources in `src`.
+- **No baseline** means what `baselineVersion = 0` meant: the codecs read
+  from version 0, and nothing is compared.
 
 ## What gets built
 
-- **The processor** runs discovery, mapping and validation in both modes.
-  With a resource it reads it as today, hands the generator the rendered
-  document beside the resource's text and URI, and writes no `schema.xml`.
-- **The generator** resolves the resource's XIncludes, validates it against
-  `sbe.xsd`, and compares it with the rendered document through
-  `SchemaEquivalence`, the comparison moved out of `SchemaXmlAssert`, which
-  becomes a wrapper over it so the tests and the compiler agree on one
-  definition. A difference is a problem on the annotated node the path
-  names, found by wire name, and on the package where no annotation
-  corresponds:
-  - a message, type or field the document has and the annotations lack,
-    on the record or the package: `the schema has a message "Reject" (id 6)
-    and no record maps it`, `the schema's NewOrder has a field "locateReqd"
-    no component carries; add it, or declare it unmapped`, `the schema's
-    ExecutionReport has a group "fills" no component carries`, `the schema
-    has an enum "ExecType" and no declaration maps it`;
-  - the reverse, on the annotation: `the schema has no message named
-    "Order"`, `the schema's Order has no field named "nowhere"`;
-  - an attribute or a value, on the annotation that states it: `the schema
-    has presence="optional" on Order's price, not "required"`, `the schema
-    has "F" for ExecType.TRADE, not "E"`.
-  With no difference the resource is parsed, and the IR, the flyweights and
-  the join follow as code-first.
-- **What goes.** `StatedRules`; the partial-mapping members of the walk,
-  the model, the writer and the templates (`UnmappedGroup`, `UnmappedData`,
-  a composite no component carries, an uncarried field over a resource);
-  the union over mapped messages only; the face taken from the document
-  where the record names no type. `Member.Unmapped` stays for code-first's
-  `unmapped` fields, which are in the document like any other.
-- **The corpus.** `schemafirst` stays: `bigendian`'s records over the XML
-  that package writes, expecting the generated sources to be the twin's.
-  `partial` goes. `SchemaRoundTripTest` takes every schema of the corpus
-  and the example round in both directions: the records compiled
-  code-first write their schema, the same records compiled schema-first
-  over it generate the same sources, byte for byte, and a package that is
-  schema-first in the repository is compiled code-first with its
-  `resource` spliced out and writes its resource back, equivalent.
-- **The snippets.** Each difference above as a compile error on its node,
-  against `venue.xml` beside the test; the partial-mapping snippets go.
-- **The example.** `trading` is the showcase, and shipped schemas are
-  frozen, so it goes schema-first: `trading.xml` moves to
-  `src/main/resources/com/example/trading/`, the package names it, and the
-  compiler's check replaces the oracle test for it. The pom's `SbeTool`
-  execution reads it from there. `quotes` stays code-first, growing.
-  `com.example.client` goes.
-- **The documents.** `intent.md` adds increment 23, reworded from what 22
-  claimed, and parks views; `type-mappings.md`'s schema-first section says
-  the annotations are complete and the check is equivalence;
-  `architecture.md`'s pipeline shows the resource entering beside the
-  rendered document and the comparison; the guide's schema-first page is
-  rewritten around the workflow, the errors and the build notes; the
-  generator's, processor's, tests' and example's `AGENTS.md`.
+- **The api.** `@SbeSchema(baseline = "orders-v3.xml")` replaces
+  `baselineVersion`. It is a class path name resolved as `resource` is,
+  relative to the package or absolute with a leading slash.
+  `baselineVersion` goes; the api is pre-1.0 and has one user.
+- **The processor** reads the baseline through `Filer.getResource` on
+  `CLASS_PATH`, as it reads a resource, and hands the text and its URI to
+  the generator. A missing file is an error on the package:
+  `no baseline mistakes/nowhere.xml on the class path`.
+- **The generator.** `SchemaEvolution.differences(schema, baseline)`,
+  beside `SchemaEquivalence`, with paths in the schema's names so each
+  difference lands on its node through `Generator.node`. A baseline node
+  with no counterpart lands on its nearest parent: a removed field on its
+  message, a removed message on the package. `Generator.generate` takes the
+  baseline, resolves its XIncludes, and runs the comparison once sbe-tool
+  has accepted the document, so what sbe.xsd refuses there is the
+  baseline's, and before the codecs. With no difference, the baseline's
+  version goes to the codec walk. `Mapping` loses its baseline and its range check, and
+  `Annotated` carries the baseline's name.
+- **The rules, each a difference:**
+  - the schema: the same `id` and `byteOrder`, a `version` at or above the
+    baseline's, and the header the same structure;
+  - a message the baseline has, matched by `id`, is still there; a message
+    it lacks has a `sinceVersion` above the baseline's version;
+  - in each message and group, the baseline's fields, groups and var-data
+    come first, in order, each with its `id`, its `sinceVersion`, its
+    `offset`, its `semanticType`, `epoch`, `timeUnit`, a constant's value,
+    and its type; what follows has a `sinceVersion` above the baseline's
+    version; `blockLength` only grows;
+  - a type is compared as what it is, not by name: a primitive, or a
+    `type`'s primitive, length, encoding, bounds, null value and
+    constant; a composite member for member in order; an enum's encoding
+    and its values, matched by value; a set's encoding and its choices,
+    matched by bit. An enum value or choice the baseline lacks has a
+    `sinceVersion` above the baseline's version, and one it has stays.
+
+  The errors read as the fix. Examples:
+  `the baseline has a field "price" (id 44) here, not id 99; the id is its identity, and a field that means something else is appended as a new one`,
+  `the baseline's Order has a field "price" (id 5) the schema lacks; a field stays, unmapped if the record retires it`,
+  `a field the baseline lacks needs a sinceVersion above the baseline's version 1`.
+- **The codecs** are unchanged: a message below the baseline is refused,
+  and a field at or below it may be a primitive.
+- **The corpus.** `addedfields` checks in its version 1 schema at
+  `src/main/resources/corpus/addedfields/addedfields-v1.xml` and names it.
+  `SchemaRoundTripTest` puts the modules' resources on the class path of
+  the code-first run too, so a baseline is found in both.
+- **The example.** `quotes` names its frozen `quotes-v1.xml`, which moves
+  unchanged to `src/main/resources/com/example/quotes/`, where a user's
+  baseline lives. The pom's reference execution reads it from there.
+- **The snippets.** One per rule, against `order-v1.xml` beside the test:
+  each breaking change as an error on its line, and the allowed ones, a
+  rename, a presence change, an appended field and a new enum value,
+  compiling clean. The snippets on absence above and at the baseline move
+  onto the file, and the one on a baseline above the schema's version
+  becomes the file's.
+- **The documents.** `intent.md` makes 24 this and moves the API pass to 25;
+  `type-mappings.md`'s evolution sections; the guide's schema page and the
+  versioning passages that name `baselineVersion`; the README's versioning
+  paragraph; the api's Javadoc; the generator's and example's `AGENTS.md`.
 
 ## Criteria
 
-- Every schema in the repository goes round in both directions with the
-  same generated sources, byte for byte.
-- A difference between the annotations and the resource, in either
-  direction, is a compile error naming the node.
-- `./mvnw verify` is green on a fresh clone, and the CI job passes on this
-  pull request.
+- Each rule above is an error on the node it concerns, and each allowed
+  change compiles clean.
+- The example and the corpus compile against their baselines, and their
+  codecs refuse below them as before.
+- `./mvnw verify` is green.
 
 ## Out of scope
 
-Views: records over part of a schema someone else owns, decode-only, which
-`intent.md` parks. Merging a resource with annotations. `unmapped` groups
-and var-data, which complete mapping does not need. Recompiling on a
-schema-only edit under Maven, which has no mechanism for it; the guide says
-`clean`. Reading a schema from anywhere but the class path.
+A release history, and checking against the latest release rather than one
+baseline. Writing generated sources or the schema into `src`. Views.
+Comparing layouts computed from sizes; stated offsets and block lengths are
+compared as stated.

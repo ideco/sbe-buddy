@@ -38,14 +38,15 @@ public final class CodecEmitter {
 	 * nothing and returns the problems: every rule broken in any message is
 	 * collected, never a partial write. Warnings come back with everything written.
 	 * An output that fails to write is an {@link UncheckedIOException}.
+	 * {@code baseline} is the oldest version the codecs read.
 	 */
-	public static List<Problem> emit(Ir ir, Annotated annotated, DynamicPackageOutputManager output) {
+	public static List<Problem> emit(Ir ir, Annotated annotated, int baseline, DynamicPackageOutputManager output) {
 		Problems problems = new Problems();
 		Map<String, String> sources = new LinkedHashMap<>();
 		Map<Annotated.Message, CodecModel> models = new IdentityHashMap<>();
 		for (Annotated.Message message : annotated.messages()) {
 			List<Problem> walked = new ArrayList<>();
-			CodecModel model = CodecWalk.walk(ir, annotated, message, walked);
+			CodecModel model = CodecWalk.walk(ir, annotated, baseline, message, walked);
 			problems.addAll(walked);
 			if (model != null) {
 				models.put(message, model);

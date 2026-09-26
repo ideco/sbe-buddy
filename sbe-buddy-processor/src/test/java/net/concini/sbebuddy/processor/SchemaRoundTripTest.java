@@ -62,7 +62,10 @@ final class SchemaRoundTripTest {
 				}
 			}
 		}
-		Compilation written = compile(directory.resolve("code-first"), codeFirst, List.of());
+		// The modules' resources on the class path, where a baseline is read in both
+		// runs, as a build puts them there.
+		List<Path> classpath = ROOTS.values().stream().filter(Files::isDirectory).toList();
+		Compilation written = compile(directory.resolve("code-first"), codeFirst, classpath);
 		assertThat(written.errors()).isEmpty();
 		Map<String, String> schemas = written.schemas();
 		assertThat(schemas).as("schemas written code-first").hasSizeGreaterThan(20);
@@ -78,7 +81,9 @@ final class SchemaRoundTripTest {
 		for (Path source : codeFirst) {
 			schemaFirst.add(source.endsWith("package-info.java") ? readingItsSchema(source) : source);
 		}
-		Compilation again = compile(directory.resolve("schema-first"), schemaFirst, List.of(resources));
+		List<Path> readable = new ArrayList<>(List.of(resources));
+		readable.addAll(classpath);
+		Compilation again = compile(directory.resolve("schema-first"), schemaFirst, readable);
 
 		assertThat(again.errors()).isEmpty();
 		assertThat(again.schemas()).as("nothing written schema-first").isEmpty();

@@ -44,7 +44,8 @@ import net.concini.sbebuddy.generator.SchemaXml;
  * error gets its flyweights and codecs as sources and its {@code schema.xml} in
  * the class output. A package whose {@code @SbeSchema} names a resource is
  * checked against it instead, its flyweights and codecs follow from the
- * resource, and no {@code schema.xml} is written.
+ * resource, and no {@code schema.xml} is written. A baseline it names is read
+ * the same way and handed to the generator in either mode.
  */
 @SupportedAnnotationTypes("net.concini.sbebuddy.*")
 public final class SbeProcessor extends AbstractProcessor {
@@ -106,11 +107,22 @@ public final class SbeProcessor extends AbstractProcessor {
 		if (problems.stream().anyMatch(Problem::isError)) {
 			return;
 		}
-		if (!discovered.annotated().resource().isEmpty()) {
-			resource(schemaPackage, discovered, mapped);
+		Annotated annotated = discovered.annotated();
+		Generator.Resource baseline = null;
+		if (!annotated.baseline().isEmpty()) {
+			baseline = read(schemaPackage, annotated.baseline(), "baseline", discovered, mapped);
+			if (baseline == null) {
+				return;
+			}
+		}
+		if (!annotated.resource().isEmpty()) {
+			Generator.Resource resource = read(schemaPackage, annotated.resource(), "resource", discovered, mapped);
+			if (resource != null) {
+				resource(schemaPackage, resource, baseline, discovered, mapped);
+			}
 			return;
 		}
-		List<Problem> generation = generate(schemaPackage, mapped.schema(), discovered.annotated());
+		List<Problem> generation = generate(schemaPackage, mapped.schema(), annotated, baseline);
 		report(generation, discovered, mapped, schemaPackage);
 		if (generation.stream().anyMatch(Problem::isError)) {
 			return;
@@ -119,37 +131,45 @@ public final class SbeProcessor extends AbstractProcessor {
 	}
 
 	/**
-	 * A schema read from its resource on the class path, named relative to the
-	 * package or absolute with a leading slash: the schema mapped from the
-	 * annotations is compared with it, and with no difference the flyweights and
-	 * codecs follow from the resource, and no {@code schema.xml}, since the
-	 * resource is the schema and ships from where the user put it.
+	 * An XML document on the class path, named relative to the package or absolute
+	 * with a leading slash; null, with the problem reported, where there is none.
 	 */
-	private void resource(PackageElement schemaPackage, Discovery.Discovered discovered, Mapping.Mapped mapped) {
-		Annotated annotated = discovered.annotated();
-		String resource = annotated.resource();
-		String path = resource.startsWith("/")
-				? resource.substring(1)
-				: schemaPackage.getQualifiedName().toString().replace('.', '/') + "/" + resource;
-		String document;
-		String systemId;
+	private Generator.@Nullable Resource read(
+			PackageElement schemaPackage, String name, String what, Discovery.Discovered discovered,
+			Mapping.Mapped mapped
+	) {
+		String path = name.startsWith("/")
+				? name.substring(1)
+				: schemaPackage.getQualifiedName().toString().replace('.', '/') + "/" + name;
 		try {
 			FileObject file = processingEnv.getFiler().getResource(StandardLocation.CLASS_PATH, "", path);
-			document = file.getCharContent(true).toString();
-			systemId = file.toUri().toString();
+			return new Generator.Resource(file.getCharContent(true).toString(), file.toUri().toString());
 		} catch (IOException | IllegalArgumentException e) {
 			// A missing file is a FileNotFoundException; a name javac refuses, the other.
 			report(
-					List.of(new Problem(annotated, "no resource " + path + " on the class path")), discovered, mapped,
-					schemaPackage
+					List.of(new Problem(discovered.annotated(), "no " + what + " " + path + " on the class path")),
+					discovered, mapped, schemaPackage
 			);
-			return;
+			return null;
 		}
+	}
+
+	/**
+	 * A schema read from its resource: the schema mapped from the annotations is
+	 * compared with it, and with no difference the flyweights and codecs follow
+	 * from the resource, and no {@code schema.xml}, since the resource is the
+	 * schema and ships from where the user put it.
+	 */
+	private void resource(
+			PackageElement schemaPackage, Generator.Resource resource, Generator.@Nullable Resource baseline,
+			Discovery.Discovered discovered, Mapping.Mapped mapped
+	) {
+		Annotated annotated = discovered.annotated();
 		List<Problem> generation;
 		try {
 			generation = Generator
 					.generate(
-							mapped.schema(), document, systemId, annotated,
+							mapped.schema(), resource, baseline, annotated,
 							new FilerOutputManager(processingEnv.getFiler(), schemaPackage)
 					);
 		} catch (UncheckedIOException e) {
@@ -158,10 +178,13 @@ public final class SbeProcessor extends AbstractProcessor {
 		report(generation, discovered, mapped, schemaPackage);
 	}
 
-	private List<Problem> generate(PackageElement schemaPackage, Schema schema, Annotated annotated) {
+	private List<Problem> generate(
+			PackageElement schemaPackage, Schema schema, Annotated annotated, Generator.@Nullable Resource baseline
+	) {
 		try {
-			return Generator
-					.generate(schema, annotated, new FilerOutputManager(processingEnv.getFiler(), schemaPackage));
+			return Generator.generate(
+					schema, annotated, baseline, new FilerOutputManager(processingEnv.getFiler(), schemaPackage)
+			);
 		} catch (UncheckedIOException e) {
 			return List.of(new Problem(schema, "could not write generated code: " + e.getMessage()));
 		}

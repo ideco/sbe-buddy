@@ -353,7 +353,7 @@ public final class SchemaEquivalence {
 		return element;
 	}
 
-	private static Map<String, String> attributes(Element element) {
+	static Map<String, String> attributes(Element element) {
 		Map<String, String> attributes = new LinkedHashMap<>();
 		NamedNodeMap nodes = element.getAttributes();
 		for (int i = 0; i < nodes.getLength(); i++) {
@@ -392,7 +392,7 @@ public final class SchemaEquivalence {
 	}
 
 	/** The element children, of the given local name or all of them. */
-	private static List<Element> children(Element parent, @Nullable String element) {
+	static List<Element> children(Element parent, @Nullable String element) {
 		List<Element> children = new ArrayList<>();
 		NodeList nodes = parent.getChildNodes();
 		for (int i = 0; i < nodes.getLength(); i++) {

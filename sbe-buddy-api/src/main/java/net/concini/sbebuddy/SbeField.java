@@ -166,7 +166,7 @@ public @interface SbeField {
 	 * {@code sinceVersion}.
 	 * </p>
 	 *
-	 * @see SbeSchema#baselineVersion()
+	 * @see SbeSchema#baseline()
 	 */
 	int sinceVersion() default 0;
 

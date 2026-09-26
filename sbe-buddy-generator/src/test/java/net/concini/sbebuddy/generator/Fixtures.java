@@ -108,7 +108,7 @@ public final class Fixtures {
 	public static Annotated annotated(int version, List<Annotated.Declaration> types, Annotated.Message... messages) {
 		return new Annotated(
 				"p", 1, version, MESSAGE_HEADER, types, List.of(messages), List.of(), "", "",
-				ByteOrder.LITTLE_ENDIAN, true, 0, ""
+				ByteOrder.LITTLE_ENDIAN, true, "", ""
 		);
 	}
 

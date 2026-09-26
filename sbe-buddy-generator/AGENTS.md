@@ -10,6 +10,7 @@ FaceRules        a component's Java type against the face its token hands it, ap
 Schema           sbe.xsd as records
 SchemaXml        Schema to XML, exactly what the model holds
 SchemaEquivalence whether two documents are one schema, and where they differ
+SchemaEvolution  whether a schema still reads its baseline, and where it breaks it
 Generator        steps 3 to 7, all or nothing, and the rules that compare nodes
 CodecWalk        the IR and Annotated to a CodecModel
 CodecModel       what a codec is made of
@@ -59,6 +60,11 @@ Problem          a mistake on a node of either model
   against its oracles the compiler proves against a resource. Each
   difference names a path, and `Generator` puts it on the schema node the
   path reaches.
+- It compares the schema with its baseline: `SchemaEvolution`, on the
+  rendered document against the baseline's, sharing `SchemaEquivalence`'s
+  parsing and paths. Nothing is matched by name there: messages by id,
+  members by position, types by structure, following each document's own
+  references.
 - Everything else is sbe-tool's, reported verbatim on the package. Our
   documents raise nothing there, so anything it reports is our mistake.
 
