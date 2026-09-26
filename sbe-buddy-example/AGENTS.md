@@ -26,6 +26,8 @@ interop with sbe-tool; coverage belongs in sbe-buddy-tests.
 - The pom runs `SbeTool` over each oracle and each frozen version at
   `generate-test-sources`, into `xmlref` and `xmlref.vN`, test code only. A
   new frozen version needs its own execution.
+- The pom also packages the test classes as a test jar, so
+  `sbe-buddy-benchmarks` reads `Samples` as the tests do.
 - The reference tests encode with our codecs and decode with sbe-tool's
   flyweights, and the reverse, across versions in both directions.
 - `src/test/java/com/example/trading/hand` holds the tests the typed
