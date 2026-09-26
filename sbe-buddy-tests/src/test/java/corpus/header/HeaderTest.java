@@ -1,5 +1,6 @@
 package corpus.header;
 
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -13,6 +14,7 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.header.sbe.ApplicationHeaderDecoder;
 import corpus.header.sbe.ApplicationHeaderEncoder;
 import corpus.header.sbe.HeaderEncoder;
+import corpus.header.sbe.HeaderWriter;
 
 /**
  * A header of the schema's own naming and shape: the four standard members
@@ -120,6 +122,28 @@ final class HeaderTest implements SchemaCase {
 	 * Bytes that are none of the header's null values, so a member left unwritten
 	 * shows.
 	 */
+	@Test
+	void theWriterWritesTheHeadersOwnMembersAsTheirNullValue() {
+		assertWritesTheCodecsBytes(
+				new HeaderCodec(), ORDER,
+				(buffer, offset) -> new HeaderWriter().wrap(buffer, offset).orderId(ORDER.orderId()).length()
+		);
+	}
+
+	@Test
+	void theWritersHeaderTakesItsOwnMembersAsTheCodecsHeaderDoes() {
+		UnsafeBuffer expected = new UnsafeBuffer(new byte[64]);
+		UnsafeBuffer written = new UnsafeBuffer(new byte[64]);
+		new HeaderCodec().encode(ORDER, new ApplicationHeader(0, 0, 0, 0, 7L, "SNDR"), expected, OFFSET);
+
+		HeaderWriter writer = new HeaderWriter();
+		HeaderWriter.RootBlockOrderId start = writer.wrap(written, OFFSET);
+		writer.header().sequenceNumber(7L).sender("SNDR");
+		start.orderId(ORDER.orderId()).length();
+
+		assertThat(written.byteArray()).isEqualTo(expected.byteArray());
+	}
+
 	private static UnsafeBuffer dirtyBuffer() {
 		UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
 		buffer.setMemory(0, buffer.capacity(), (byte) 0x5A);

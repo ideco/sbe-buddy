@@ -44,7 +44,7 @@ import net.concini.sbebuddy.generator.Faces.Shape;
 final class Join {
 
 	/** The members every header carries, which the message's flyweight writes. */
-	private static final Set<String> STANDARD_HEADER_MEMBERS = Set
+	static final Set<String> STANDARD_HEADER_MEMBERS = Set
 			.of("blockLength", "templateId", "schemaId", "version");
 
 	/**
@@ -144,11 +144,12 @@ final class Join {
 
 	/**
 	 * Var-data at {@code path}, which names its methods; {@code addedSince} as on a
-	 * group, and {@code lengthEncoder} the flyweight of its encoding, whose length
-	 * type holds the maximum. {@code component}, {@code content} and {@code bound}
-	 * are null where no record maps the message; {@code charset} is the constant
-	 * for text in another encoding, or null; {@code helpers} are the methods its
-	 * content calls.
+	 * group, {@code lengthEncoder} the flyweight of its encoding, whose length type
+	 * holds the maximum, and {@code varData} the encoding's member of that name,
+	 * which carries the character encoding. {@code component}, {@code content} and
+	 * {@code bound} are null where no record maps the message; {@code charset} is
+	 * the constant for text in another encoding, or null; {@code helpers} are the
+	 * methods its content calls.
 	 */
 	record Data(
 			Token token,
@@ -156,6 +157,7 @@ final class Join {
 			String path,
 			@Nullable String addedSince,
 			String lengthEncoder,
+			Token varData,
 			Annotated.@Nullable Data component,
 			@Nullable Content content,
 			@Nullable String charset,
@@ -594,7 +596,9 @@ final class Join {
 		String lengthEncoder = flyweights + "." + JavaUtil.formatClassName(tokens.get(1).applicableTypeName())
 				+ "Encoder";
 		if (data == null) {
-			return new Data(token, property, path, addedSince, lengthEncoder, null, null, null, null, List.of());
+			return new Data(
+					token, property, path, addedSince, lengthEncoder, tokens.get(3), null, null, null, null, List.of()
+			);
 		}
 		if (!faces.data(data, tokens.get(1), tokens.get(3))) {
 			return null;
@@ -625,7 +629,9 @@ final class Join {
 				return null;
 			}
 		}
-		return new Data(token, property, path, addedSince, lengthEncoder, data, content, charset, bound, used);
+		return new Data(
+				token, property, path, addedSince, lengthEncoder, tokens.get(3), data, content, charset, bound, used
+		);
 	}
 
 	/**

@@ -65,6 +65,12 @@ final class FaceTemplates {
 
 	static final Template ENCODE_UNMAPPED_SET_FIELD = Template.of("encoder.{property}().clear();");
 
+	/**
+	 * Member by member, through the writer's {@code nulls} for the composite's
+	 * flyweight.
+	 */
+	static final Template ENCODE_UNMAPPED_COMPOSITE_FIELD = Template.of("nulls(encoder.{property}());");
+
 	// ---- a char string: the flyweight's own String form, checked first
 
 	static final Template ENCODE_STRING_FIELD = Template.of(

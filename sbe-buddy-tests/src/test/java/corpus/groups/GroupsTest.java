@@ -1,5 +1,6 @@
 package corpus.groups;
 
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,6 +15,8 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.groups.Groups.Fill;
 import corpus.groups.Groups.Leg;
 import corpus.groups.Groups.Leg.Allocation;
+import corpus.groups.sbe.GroupsEncoder.LegsEncoder;
+import corpus.groups.sbe.GroupsWriter;
 import corpus.groups.sbe.MessageHeaderEncoder;
 
 /**
@@ -172,5 +175,45 @@ final class GroupsTest implements SchemaCase {
 		assertThatThrownBy(() -> codec.decode(buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("not a Groups: schemaId 1, templateId 2");
+	}
+
+	/**
+	 * Every wire field is a step, the one the record leaves unmapped too; an entry
+	 * complete takes the next entry or the group's end, and the appended group with
+	 * no entry is written with a count of 0.
+	 *
+	 * <pre>
+	 * // does not compile: a nested group is opened in every entry, even empty
+	 * writer.wrap(buffer, 0).orderId(1L).legs().entry().legId(100).legRatio(ratio).entry();
+	 * </pre>
+	 */
+	@Test
+	void theWriterWritesTheCodecsBytesForLegsAndTheirAllocations() {
+		short noRatio = LegsEncoder.legRatioNullValue();
+
+		assertWritesTheCodecsBytes(
+				new GroupsCodec(),
+				new Groups(
+						1L,
+						List.of(
+								new Leg(List.of(), 100),
+								new Leg(List.of(new Allocation(10, null), new Allocation(20, 5)), 200)
+						),
+						List.of()
+				),
+				(buffer, offset) -> new GroupsWriter().wrap(buffer, offset)
+						.orderId(1L)
+						.legs()
+						.entry().legId(100).legRatio(noRatio)
+						.allocations().end()
+						.entry().legId(200).legRatio(noRatio)
+						.allocations()
+						.entry().account(10)
+						.entry().account(20).share(5)
+						.end()
+						.end()
+						.fills().end()
+						.length()
+		);
 	}
 }

@@ -1463,6 +1463,27 @@ final class AnnotationMistakesTest {
 		assertThat(result.outputs()).isEmpty();
 	}
 
+	// ---- names the flyweight writer takes
+
+	@Test
+	void aFieldNamedAsTheWritersRootBlockObjectIsAProblem() {
+		assertErrors(
+				inMessage("@SbeField(id = 1) long stage"),
+				error("long stage", "the field \"stage\" clashes with the writer's RootBlockStage; rename it")
+		);
+	}
+
+	@Test
+	void anOptionalCompositeNamedAsTheWritersLengthIsAProblem() {
+		assertErrors(
+				inMessage("@SbeField(id = 1, presence = OPTIONAL) Decimal length", DECIMAL),
+				error(
+						"Decimal length",
+						"the field \"length\" clashes with the writer's RootBlockStage.length(); rename it"
+				)
+		);
+	}
+
 	/** The venue's schema, mapped in part. */
 	private static final String PARTIAL = """
 			@SbeSchema(id = 7, version = 2, resource = "venue.xml", partial = true)

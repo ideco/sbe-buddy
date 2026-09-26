@@ -1,5 +1,6 @@
 package corpus.evolution;
 
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import corpus.evolution.Order.Allocation;
 import corpus.evolution.Order.Fill;
 import corpus.evolution.Order.Leg;
 import corpus.evolution.sbe.OrderReader;
+import corpus.evolution.sbe.OrderWriter;
 
 /**
  * The evolution schema at version 2, crossed with the packages holding its
@@ -222,5 +224,39 @@ final class EvolutionTest implements SchemaCase {
 		R read = reader.decode(buffer, OFFSET);
 		assertThat(reader.lastDecodedLength()).as("lastDecodedLength").isEqualTo(length);
 		return read;
+	}
+
+	/** The writer writes the current version: every appended member is a step. */
+	@Test
+	void theWriterWritesTheCodecsBytesWithEveryAppendedMember() {
+		assertWritesTheCodecsBytes(
+				new OrderCodec(),
+				new Order(
+						1L, List.of(
+								new Leg(
+										1, new Price(100L, (byte) -2), 3,
+										List.of(new Allocation(7, 70L), new Allocation(8, 80L)),
+										List.of(new Fill(10), new Fill(20)), "first"
+								),
+								new Leg(2, new Price(-5L, (byte) 0), 4, List.of(), List.of(new Fill(30)), "second")
+						)
+				),
+				(buffer, offset) -> new OrderWriter().wrap(buffer, offset)
+						.orderId(1L)
+						.legs()
+						.entry().legId(1).price().mantissa(100L).exponent((byte) -2).ratio(3)
+						.allocations()
+						.entry().account(7).share(70L)
+						.entry().account(8).share(80L)
+						.end()
+						.fills().entry().quantity(10).entry().quantity(20).end()
+						.note("first")
+						.entry().legId(2).price().mantissa(-5L).exponent((byte) 0).ratio(4)
+						.allocations().end()
+						.fills().entry().quantity(30).end()
+						.note("second")
+						.end()
+						.length()
+		);
 	}
 }

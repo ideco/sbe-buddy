@@ -1,5 +1,6 @@
 package corpus.optionalfields;
 
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import net.concini.sbebuddy.tests.SchemaCase;
 
 import corpus.optionalfields.sbe.MessageHeaderEncoder;
+import corpus.optionalfields.sbe.OptionalFieldsWriter;
 
 /**
  * Presence declared on the field itself rather than on a named type; the
@@ -87,5 +89,25 @@ final class OptionalFieldsTest implements SchemaCase {
 		assertThatThrownBy(() -> codec.decode(buffer, OFFSET))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("not a OptionalFields: schemaId 1, templateId 2");
+	}
+
+	@Test
+	void anOptionalFieldTheWriterLeavesUnsetIsNull() {
+		assertWritesTheCodecsBytes(
+				new OptionalFieldsCodec(), new OptionalFields(42L, null, null),
+				(buffer, offset) -> new OptionalFieldsWriter().wrap(buffer, offset).orderId(42L).length()
+		);
+	}
+
+	@Test
+	void theOptionalFieldsAreSetInAnyOrderOnceTheRequiredAreSet() {
+		assertWritesTheCodecsBytes(
+				new OptionalFieldsCodec(), new OptionalFields(42L, 100, 101.25),
+				(buffer, offset) -> new OptionalFieldsWriter().wrap(buffer, offset)
+						.orderId(42L)
+						.price(101.25)
+						.quantity(100)
+						.length()
+		);
 	}
 }

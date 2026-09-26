@@ -1,5 +1,6 @@
 package corpus.vardata;
 
+import static net.concini.sbebuddy.tests.WriterAssert.assertWritesTheCodecsBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,6 +15,7 @@ import net.concini.sbebuddy.tests.SchemaCase;
 import corpus.vardata.VarData.Attachment;
 import corpus.vardata.sbe.MessageHeaderDecoder;
 import corpus.vardata.sbe.VarDataDecoder;
+import corpus.vardata.sbe.VarDataWriter;
 
 /**
  * Variable-length data: text with a character encoding, opaque bytes without
@@ -187,6 +189,31 @@ final class VarDataTest implements SchemaCase {
 
 		assertThat(decoder.noteLength()).isEqualTo(6);
 		assertThat(decoder.note()).isEqualTo("é😀");
+	}
+
+	/**
+	 * An entry's var-data hands back its group; the root's follow the group in wire
+	 * order.
+	 */
+	@Test
+	void theWriterWritesTheCodecsBytesForAttachmentsAndEveryData() {
+		assertWritesTheCodecsBytes(
+				new VarDataCodec(),
+				new VarData(
+						3, List.of(new Attachment(1, new byte[0]), new Attachment(2, filled(254))), "note",
+						new byte[]{42}, filled(254)
+				),
+				(buffer, offset) -> new VarDataWriter().wrap(buffer, offset)
+						.orderId(3)
+						.attachments()
+						.entry().kind(1).putContent(new byte[0], 0, 0)
+						.entry().kind(2).putContent(filled(254), 0, 254)
+						.end()
+						.note("note")
+						.putPayload(new byte[]{42}, 0, 1)
+						.putSignature(filled(254), 0, 254)
+						.length()
+		);
 	}
 
 	private static byte[] everyByte() {
