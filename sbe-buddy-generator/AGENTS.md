@@ -27,13 +27,7 @@ FlyweightModel   what a message's reader is made of
 ReaderWriter     a FlyweightModel to source, bound stages through FaceWriter
 ReaderTemplates  the text of a reader: the class, its control, the methods that arrive at each stage, the steps
 ReaderStageTemplates the text of a reader's stages, the accessors they delegate, and their bound stages
-WriterWalk       a Join to a WriterModel: a writer's stages, their objects and positions in wire order, the names it takes; the sub-chains
-WriterModel      what a message's writer is made of, and a composite's or a set's sub-chain
-WriterWriter     a WriterModel to source, null values and bound steps through FaceWriter
-WriterTemplates  the text of a writer: the class, its stages, the objects behind them, the null values
-WriterStepTemplates the text of a writer's steps: guard, delegation to the encoder, how each hands on
-SubWriterTemplates the text of a composite's and a set's sub-chain
-FlyweightEmitter a reader and a writer for every message of the IR, the sub-chains, then the output, beside the codecs
+FlyweightEmitter a reader for every message of the IR, then the output, beside the codecs
 UnionWriter      a UnionModel to source
 Template         a text block with named placeholders
 CodecEmitter     the walk and the writer per message, a union's codec over them, then the output
@@ -160,34 +154,6 @@ Problem          a mistake on a node of either model
   since a stage may declare a method of a helper's name.
 - `GroupsReader.java` is checked in as a golden in sbe-buddy-tests; a change
   to the reader's text shows there, and `-Dgolden.update=true` rewrites it.
-
-## Writers
-
-- Every message of the IR gets a writer beside its reader, walked only when
-  the reader's walk reported no error, so a name both would take is
-  reported once. It writes the current version: every field but the
-  constants is a step, mapped or not.
-- A block's required fields are a stage each, in wire order; its optional
-  fields and its first group or var-data sit on the stage where it is
-  complete. Each stage is an interface, and one object per block, and one
-  per group, implements all of its stages. A new kind of field is a case in
-  `WriterWalk.steps`, with sbe-tool's setters for it.
-- A block is filled with its null values when it opens, through
-  `FaceWriter.writeNull`, the codec's null writers; a composite through a
-  `nulls` overload of its own. The null writers take a `Faces.Shape` built
-  from the token alone, since a writer needs no record.
-- A composite's and a set's sub-chain is generated once per package, for
-  those a step opens, from the IR's type by name.
-- Every name the writer declares comes from the model; a field, group or
-  var-data that would take one the writer has, a class or a method of an
-  object, is a `Problem`, never a rename.
-- Where a record maps the message, every stage that takes a component has a
-  twin writing it through its leaf, `FaceWriter.write` with the parameter as
-  the value, one bound object per block; a step returns the next twin, else
-  the next wire stage, and a field no component carries has no step there.
-  The write halves of the helpers are declared in the writer.
-- `GroupsWriter.java` and `QuoteWriter.java` are goldens in sbe-buddy-tests,
-  beside `GroupsReader.java`.
 
 ## Tests
 

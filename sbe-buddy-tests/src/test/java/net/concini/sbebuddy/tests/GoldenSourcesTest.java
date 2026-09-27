@@ -23,9 +23,7 @@ final class GoldenSourcesTest {
 	private static final Path GOLDEN = Path.of("src/test/resources/golden");
 
 	@ParameterizedTest
-	@ValueSource(strings = {
-			"corpus/groups/GroupsReader.java", "corpus/groups/GroupsWriter.java",
-			"corpus/composites/QuoteWriter.java"})
+	@ValueSource(strings = {"corpus/groups/GroupsReader.java"})
 	void theGeneratedSourceIsTheGoldenOne(String source) throws IOException {
 		String generated = Files.readString(GENERATED.resolve(source), StandardCharsets.UTF_8);
 		Path golden = GOLDEN.resolve(source);

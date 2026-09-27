@@ -90,11 +90,6 @@ Closed grammars, each one file of nested records.
   reader passes through in wire order and the step that moves it on from
   each, and where a record maps the message the leaves its bound stages
   read.
-* **`WriterModel`** is what a message's writer is made of: its stages as
-  interfaces in chain order, the objects implementing them and their
-  methods, the positions the writer passes through, and the null values
-  each block is filled with, and the bound twins writing leaves; and the
-  sub-chain of a composite or a set.
 
 Models carry no positions. Discovery maps each `Annotated` node to its javac
 `Element` and `AnnotationMirror`, Mapping each `Schema` node to the
@@ -139,15 +134,10 @@ Three layers, in the order a mistake meets them.
   message joined as the codec joins it, laid out as a `FlyweightModel` in
   the order `OtfMessageDecoder` walks a message, and written from it. They
   run after the codecs, whose join reports the problems a record has.
-* **Writers** are generated beside the readers, for the same messages: the
-  same join laid out as a `WriterModel`, a stage per required field and one
-  per group and per what follows it, and written from it, the null values
-  through `FaceWriter` as the codec writes an unmapped field. Each composite
-  and set a writer's step opens gets its sub-chain once per package.
-* **Bound stages** are the readers' and writers' view of a message a record
-  maps: each component through the leaf the join made of it, written by
-  `FaceWriter` as the codec's is, its helpers, bindings and contexts
-  declared in the reader or writer that calls them.
+* **Bound stages** are the readers' view of a message a record maps: each
+  component through the leaf the join made of it, written by `FaceWriter`
+  as the codec's is, its helpers, bindings and contexts declared in the
+  reader that calls them.
 
 ## The codec contract
 

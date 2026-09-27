@@ -31,8 +31,7 @@ interop with sbe-tool; coverage belongs in sbe-buddy-tests.
 - The reference tests encode with our codecs and decode with sbe-tool's
   flyweights, and the reverse, across versions in both directions.
 - `src/test/java/com/example/trading/hand` holds the tests the typed
-  flyweights of increment 26 were first written by hand against, `NewOrder`
-  and `CancelReject`: `HandReaderTest`, `HandWriterTest` and
-  `HandBoundTest`, run against the generated readers and writers.
-  `BoundStagesTest` reads the samples through the bound stages and writes
-  them through the bound chains into the codecs' bytes.
+  readers of increment 26 were first written by hand against, `NewOrder`
+  and `CancelReject`: `HandReaderTest` and `HandBoundTest`, run against
+  the generated readers. `BoundStagesTest` reads the samples through the
+  bound stages.

@@ -1,8 +1,8 @@
 # Typed flyweights
 
-sbe-tool's flyweights read and write a message in place, without allocating, but they leave the order to you: groups and var-data must be read in wire order, a var-data accessor consumes what it reads, and a group left unread leaves everything after it misplaced; on the way out, a group's count comes before its entries, every group must be written even when empty, and a field left unset keeps whatever the buffer held. sbe-buddy generates a reader and a writer over them for every message of the schema: the reader takes the message as a sequence of stages in wire order and keeps that order for you, and the writer's chain offers only the next step, so a message written out of order, or left incomplete, does not compile.
+sbe-tool's flyweights read a message in place, without allocating, but they leave the order to you: groups and var-data must be read in wire order, a var-data accessor consumes what it reads, and a group left unread leaves everything after it misplaced. sbe-buddy generates a reader over them for every message of the schema: it takes the message as a sequence of stages in wire order and keeps that order for you.
 
-Readers and writers need no record: a message a `partial` package leaves out, and every message of a package with no record at all, get them too. They are generated into the schema's own package, beside the codecs, over sbe-tool's flyweights in `.sbe`; where a record maps the message, each stage also offers `bound()`, the record's view of it, below.
+A reader needs no record: a message a `partial` package leaves out, and every message of a package with no record at all, get one too. It is generated into the schema's own package, beside the codecs, over sbe-tool's flyweights in `.sbe`; where a record maps the message, each stage also offers `bound()`, the record's view of it, below. Writing stays sbe-tool's encoders', in place, or the codec's, from a record.
 
 ## The reader
 
@@ -59,46 +59,9 @@ Only the current stage can skip. And `default -> stage.skip()` is a mistake: a g
 
 A reader is mutable and reused: one per thread, as a codec is.
 
-## The writer
-
-`NewOrderWriter` sits beside the reader, over sbe-tool's `NewOrderEncoder`. `wrap` returns the first step, and each step returns the only one that may follow it:
-
-```java
-NewOrderWriter writer = new NewOrderWriter();            // once, reused for every message
-
-int length = writer.wrap(buffer, offset)
-        .clOrdId("ORD-1")                                // the required fields, in wire order
-        .account("ACCT-0001")
-        .symbol("ACME")
-        .side(Side.BUY)
-        .ordType(OrdType.LIMIT)
-        .timeInForce(TimeInForce.DAY)
-        .execInst().postOnly(true).end()                 // a set: its choices, then end()
-        .transactTime(nanos)
-        .orderQty().mantissa(700)                        // a composite: every member but the constants
-        .price().mantissa(996_100L)                      // the block complete: its optional fields, in any order
-        .parties()
-            .entry().partyId("FIRM-A").partyRole(PartyRole.EXECUTING_FIRM)
-                .partySubIds().entry().partySubId("DESK-7").partySubIdType((short) 4).end()
-            .entry().partyId("TRADER-12").partyRole(PartyRole.ENTERING_TRADER)
-                .partySubIds().end()                     // a nested group is opened in every entry, even empty
-        .end()
-        .length();                                       // header included; only here once the message is complete
-```
-
-* Every required field is a step, in the order of the wire, and so is a field the record leaves `unmapped`: the writer writes the message, not the record. A field appended in a later version is a step too, since the writer always writes the current version.
-* Once a block's required fields are written, its optional fields may be set in any order, beside the first group or var-data. An optional field left unset is its null value: every block is filled with null values when it opens.
-* Each step has sbe-tool's own setters for the field, under sbe-tool's names: `clOrdId(String)`, `clOrdId(CharSequence)` and `putClOrdId(byte[], int)` for a `char` array, `side(Side)` for an enum. A var-data takes `text(String)` where its type has a character encoding, and `putText` over a `byte[]` or a `DirectBuffer`.
-* A composite opens a chain of its members, `price().mantissa(996_100L)`, an optional member offering `mantissaNull()`; a set its choices and `end()`.
-* A group opens with `parties()`; `entry()` starts each entry, `end()` closes the group and writes its count. An entry complete takes the next `entry()` or the group's `end()`.
-* `length()` is the length of the whole message, header included, and exists only once the message is complete.
-* `header()` is sbe-tool's header encoder, for a header's own members, which the writer otherwise writes as their null values.
-
-A stage is one object, reused: nothing is allocated per step, and a stage may be kept, a group to add entries as they come. Once the writer has moved past it, a kept stage refuses with an `IllegalStateException`.
-
 ## Bound stages
 
-Where a record maps the message, every stage that carries a component has `bound()`: the record's view of it, every component under its Java name and with its Java type, its binding applied, as the codec reads and writes it. The wire stays the default and garbage-free; the bound stage is the one to reach for where the record's types are wanted.
+Where a record maps the message, every stage that carries a component has `bound()`: the record's view of it, every component under its Java name and with its Java type, its binding applied, as the codec reads it. The wire stays the default and garbage-free; the bound stage is the one to reach for where the record's types are wanted.
 
 ```java
 for (NewOrderReader.Stage stage : reader.wrap(buffer, offset)) {
@@ -117,30 +80,4 @@ for (NewOrderReader.Stage stage : reader.wrap(buffer, offset)) {
 * Absence is `null`, as on the record: a primitive that may be absent is boxed, and reads `null` for its null value, and for a field above the acting version, where the wire stage reads sbe-tool's null value.
 * A group's header has no bound stage: a binding over the whole group, a `Map` of the entries, has nothing to apply to while the entries come one by one; each entry's components are bound.
 * A bound stage answers while its stage does, and refuses as it does.
-
-On the writer, every stage that takes a component has a twin, reached by `bound()` and left by `wire()`, whose steps take the component as the record holds it:
-
-```java
-int length = writer.wrap(buffer, offset).bound()
-        .clOrdId("ORD-1")
-        .account("ACCT-0001")
-        .symbol("ACME")
-        .side(com.example.trading.Side.BUY)              // the record's enum
-        .ordType(OrdType.LIMIT)
-        .timeInForce(TimeInForce.DAY)
-        .execInst(EnumSet.of(ExecInst.POST_ONLY))        // a set in one step
-        .transactTime(Instant.now())                     // through UtcTimestampBinding
-        .orderQty(700)                                   // a composite in one step, through QtyBinding
-        .price(new BigDecimal("99.61"))                  // null writes the null value
-        .parties()
-            .entry().bound().partyId("FIRM-A").partyRole(PartyRole.EXECUTING_FIRM)
-                .partySubIds().end()
-        .end()
-        .length();
-```
-
-* A composite is one step, taking its binding's value, or its face record where it has no binding; a set is one step, taking the `Set`.
-* A step refuses what the codec refuses, with the codec's message: `null` for a required field, a string too long, a value the binding cannot write, an enum constant with no wire form, a character the encoding lacks.
-* A field no component carries has no step on the twins: it keeps the null value its block was filled with, as the codec writes it. A constant has no step on either chain.
-* The chain hops freely: `.clOrdId("ORD-1").bound().account(...)`. A group's `entry()` and `end()` carry no component and are the wire's; an entry's twin is one `bound()` away.
 
