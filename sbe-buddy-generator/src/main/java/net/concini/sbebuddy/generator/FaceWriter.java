@@ -184,7 +184,7 @@ final class FaceWriter {
 	/**
 	 * The field or member {@code property} of the flyweight {@code encoder} holds,
 	 * written as its null value: a composite through the {@code nulls} overload of
-	 * its own flyweight, which only the writers declare.
+	 * its own flyweight, which the codec declares.
 	 */
 	String writeNull(String encoder, String property, Shape shape) {
 		return switch (shape) {

@@ -1,8 +1,8 @@
 # Typed flyweights: the sketch
 
-Increment 26 in `intent.md`: this is the design, `next.md` the build
-order. Read both before working on the increment; `next.md` decides where
-this file leaves room.
+Increment 26 in `intent.md`: the design of the typed reader as built, and
+under Superseded what was built or planned beside it and cut. `next.md`
+holds the increment's closing step.
 
 ## The problem
 
@@ -11,24 +11,20 @@ all the time. Decoding: groups and var-data must be read in wire order, or
 what follows reads garbage; a var-data accessor consumes, so reading it
 twice reads what follows it; a group not walked leaves everything after it
 misplaced; an optional field is its null value unless compared; a field
-above the acting version reads as its null value, silently. Encoding: a
-group's count comes before its entries and must match them; every entry
-needs its `next()`; an empty group must still be written; groups and
-var-data go in schema order; a required field not set leaves whatever the
-buffer held; the length is the header plus `encodedLength()`, added by
-hand.
+above the acting version reads as its null value, silently.
 
 sbe-tool's precedence checks catch the order at run time, opt-in. Its OTF
 decoder walks any message in wire order from the IR, at run time, untyped
-and per field. The goal here is that the wrong order, and a message left
-incomplete, do not compile.
+and per field. The goal here is that the wrong order does not compile.
+Encoding has its own traps, and a writer for them was built and cut; see
+Superseded.
 
 ## The shape
 
-The wire is the default. Every message of the schema gets a reader and a
-writer over sbe-tool's own flyweights, records or not, generated beside the
-codecs in the schema's package, schema-shaped, with sbe-tool's names and
-faces, so anyone who knows SBE recognises every method. The reader takes the message
+The wire is the default. Every message of the schema gets a reader over
+sbe-tool's own flyweights, records or not, generated beside the codecs in
+the schema's package, schema-shaped, with sbe-tool's names and faces, so
+anyone who knows SBE recognises every method. The reader takes the message
 as a flat sequence of stages, as a pull parser reads a document: the root
 block, each group's header, each of its entries, each var-data. Nesting is
 the order the stages come in. The stages are a sealed interface, so a read
@@ -141,9 +137,8 @@ int length = reader.decodedLength();
 
 Everything is named from the schema, since a record may not exist:
 sbe-tool's `formatClassName` of the schema name, as its flyweights do. The
-reader is `<Message>Reader`, the writer `<Message>Writer`, a union's
-reader `<Union>Reader`; sbe-tool's `Decoder` and `Encoder` are taken, and
-the codec's `Codec`, which they sit beside. The root block is `RootBlock`, sbe-tool's
+reader is `<Message>Reader`; sbe-tool's `Decoder` is taken, and the
+codec's `Codec`, which it sits beside. The root block is `RootBlock`, sbe-tool's
 own term (`HeaderStructure`, `OtfHeaderDecoder`, `sbe.xsd`'s "root level
 of message"); a group's header is the group's name, `Fills`, and its entry
 `FillsEntry`, since the wire has no singular and one borrowed from a
@@ -216,192 +211,15 @@ the reader could not compile with, which `type-mappings.md` lists.
   never switches between two objects for one block. A group binding over
   the whole collection, `FillsBinding` to a `Map`, has nothing to apply to
   here and is the records' alone; the entries' own bindings apply.
-- **Every message gets a reader and a writer.** Only `bound()` needs a
-  record, so a partial package's unmapped messages and a `flyweightsonly`
-  package get them too. Reading part of a message is what they are for; a
-  record maps a message whole.
-
-## Encoding
-
-Writers are a typestate all the way down: every required field, every
-group, every var-data is a stage whose only way on is the next one, and
-`length()` exists only once the last mandatory step is taken. A message
-left incomplete does not compile.
-
-```java
-int length = writer.wrap(buffer, offset)   // only orderId(long)
-        .orderId(42)                       // only side(Side)
-        .side(Side.BUY)                    // only price()
-        .price().mantissa(10025).exponent(-2)
-        .clOrdId("abc")                    // the block complete: optional fields, any order, and fills()
-        .fills()
-            .entry().fillId(1).quantity(100).allocations().end()
-            .entry().fillId(2).quantity(50).allocations().end()
-        .end()                             // only note(...)
-        .note("hello")                     // only length()
-        .length();                         // header included
-```
-
-- **Required fields in the record's order.** Each setter returns the stage
-  that has only the next required field; the order is the block's
-  `layout`, the one a reader sees. A required field appended in a later
-  version is a new link, and every writer stops compiling until it sets
-  it, the twin of the reader's new permit; `sinceVersion` order is the
-  chain's order. Optional fields sit on the block-complete stage, in any
-  order, beside the first group or var-data. This is the one place the
-  types are stricter than the wire, which does not care in what order a
-  block's fields are written; the guide says so.
-- **One object, many interfaces.** All of a block's stages are one
-  preallocated object implementing every stage interface of the block;
-  each setter does `return this` typed as the next. Nothing is allocated
-  per step, and a stage can be held and resumed later: entries as they
-  arrive, a header now and the trailer when it is known.
-- **The length is where the message is complete.** The last mandatory
-  step returns the stage that has `length()`, header included: the
-  block-complete stage when a block comes last, else the stage after the
-  last group's `end()` or the last var-data, which the generator produces
-  anyway as their return type. There is no stage named for it; a stage
-  carries data.
-- **Optional fields are filled on open.** When a block's stage opens, its
-  null image, a `static final byte[]` known at generation, is written with
-  one `putBytes`, or one per run of contiguous optional fields where a
-  wide block has few. Required bytes are overwritten by the chain; unset
-  optionals are their null values, as non-negotiable 4 wants, and the
-  block is well formed at every point while it is written, which matters
-  under `tryClaim`. Filling at the switch instead needs a mask updated per
-  setter; the switch is one generated call either way, so a JMH run can
-  change the answer without touching the API.
-- **No count up front.** sbe-tool's group encoders have
-  `resetCountToIndex()`, which rewrites the count at the group's initial
-  limit to the entries written; the group opens with room for its maximum
-  and `end()` settles it.
-- **No group left out.** The only way to `note` is through `fills`; a
-  nested group is opened and closed per entry even when empty,
-  `.allocations().end()`, which is SBE's rule made visible.
-- **Composites chain through.** `Price` appears in many messages, so its
-  chain's last step must return the caller's next stage: `price()` returns
-  `PriceWriter<N>` and `exponent(int)` returns `N`, a phantom generic,
-  erased, one preallocated object per site. The step also takes the face
-  record, `price(Price)`, the allocation being the caller's.
-- **Bound writing.** Every wire stage that takes a value has `bound()`
-  returning its bound twin, every bound stage `wire()`; the twin is a
-  second preallocated object per block, not the same one, because the
-  wire and bound setters of a `String` field share a signature and differ
-  only in what they return, which one class cannot implement twice. Hopping
-  is still free at any step: `.orderId(42).bound().price(bigDecimal)`
-  runs `PRICE_BINDING.toWire`. A composite with a binding is one bound
-  step. A group binding over the whole collection has nothing to apply to,
-  as on the reader.
-- **Staleness.** The types make the straight path correct; the run-time
-  check is for a kept reference only, a block-complete stage calling
-  `fills()` after `note()`: the writer's position, as the reader's, never
-  a check for completeness.
-
-## The codec over them
-
-The codec is rewritten over the bound stages, so what a component is on
-the wire is decided in one place. Today `NewOrderCodec` is four hundred
-lines of what the bound stages are: enum and set mapping, composite face
-records, bindings with their `BindingContext`, `char` strings and arrays,
-absence to `null`. All of that moves into the flyweight emitter; the
-codec keeps the record: its constructor and the component order against
-the wire order, lists for groups, `encodedLength(value)` without writing
-as non-negotiable 6 wants, the header record in `encode(value, header,
-…)` and `decodeHeader`, `canDecode`, `lastDecodedLength`.
-`decodedLength(buffer, offset)` is the reader's after `wrap`.
-
-```java
-RootBlock block = (RootBlock) reader.wrap(buffer, offset).next();
-Fills fills = (Fills) reader.next();
-for (int i = 0; i < fills.count(); i++) {
-    FillsEntry fill = (FillsEntry) reader.next();
-    Allocations allocations = (Allocations) reader.next();
-    ...                                                        // the same, one level down
-    fillList.add(new Fill(fill.bound().fillId(), fill.bound().price(), allocationList));
-}
-Note note = (Note) reader.next();
-return new Order(block.bound().orderId(), ..., fillList, note.bound().value());
-```
-
-`encode(value)` is the writer's bound chain, a loop of `.entry().bound()`
-over each group's list, and the length its last step returns. The union
-codec does not change: it composes member codecs by template id, and the
-union reader is not on its path. `CodecModel`'s leaf shapes become the
-emitter's; the codec model shrinks to structure.
-
-The point is proof as much as economy: the corpus, every case, every
-frozen version, both directions, against the oracles, runs through the
-codecs. Rewriting them over the flyweights makes the whole suite prove the
-flyweights in the same commit, with the round trips as the criterion that
-nothing moved. A JMH run against the current codec decides whether the
-liveness check needs its switch.
-
-## Unions
-
-`OrderEntry` declares `String clOrdId()`, and its members carry `clOrdId`
-with the same id and type at different offsets. A common field is one
-signature delegated by template id, never one offset. A union's reader
-dispatches once, at `wrap`, and offers what the interface declares.
-
-```java
-OrderEntryReader union = new OrderEntryReader();              // members preallocated
-
-OrderEntryReader.Member m = union.wrap(buffer, offset);       // by the header's template id
-switch (m) {                                                  // sealed over the member readers
-    case NewOrderReader r     -> for (NewOrderReader.Stage s : r) { ... }
-    case ReplaceOrderReader r -> ...
-    case CancelOrderReader r  -> ...
-}
-
-for (OrderEntryReader.Stage s : union.wrap(buffer, offset)) { // or flat, over the union's stages
-    switch (s) {
-        case OrderEntryReader.RootBlock b     -> route(b.bound().clOrdId());
-        case OrderEntryReader.PartiesEntry p  -> parties.add(p.partyId());   // whichever member, wherever it lies
-        case OrderEntryReader.Text t          -> t.copyTo(audit, position);
-        default -> {}
-    }
-}
-```
-
-- **`wrap` is the codec's dispatch.** A template id outside the union is
-  an `IllegalArgumentException`; `canDecode(buffer, offset)` tells it
-  first. `Member` is sealed over the member readers. A nested annotated
-  union's `Member` is a permitted subtype of the outer's, so a `switch`
-  over `TradingMessage` takes `OrderEntry` as one case or its leaves, as
-  the record union's javadoc promises; an unannotated interface between
-  flattens, as in the codec.
-- **Commonality is declared, not inferred.** The sealed interface's
-  abstract methods are the declaration, and javac has already checked
-  that every member implements them. Each method that names, on every
-  member's record, a component of one kind becomes a union stage
-  interface, sealed over the members' corresponding stages, which
-  implement it:
-  - a **field** on every member's root block: on the union's `RootBlock`,
-    wire where the face is the same in every member, bound always, each
-    member's binding applied;
-  - a **group** on every member: its element record is one record, so the
-    entries' block, faces, bindings and nested groups are identical by
-    construction; the union has a header stage with `count()` and an
-    entry stage with all of it, met wherever the member puts the group;
-  - a **var-data** on every member: the wire face is the same whatever
-    the length type or encoding, so it is common on both faces, the
-    encoding each member's own inside `bound()`.
-  - A method that is not one kind on every member yields no union stage;
-    the records still satisfy the interface, the reader does not share it.
-- **The header is common by wire.** `templateId()`, `version()` and
-  `blockLength()` sit on every union's `RootBlock`, so a union that
-  declares nothing, `TradingMessage`, still has a root block that answers
-  what arrived.
-- **`Stage` is sealed over the members' stages,** each member's `Stage`
-  extending every union's it belongs to, so the flat loop's `switch` lists
-  the union's stages and any member's own. Java's exhaustiveness covers a
-  member's stages through the union's case.
-- **Writers get nothing from the union.** You pick the member's writer;
-  the union is a decode-side dispatch, as its codec is.
+- **Every message gets a reader.** Only `bound()` needs a record, so a
+  partial package's unmapped messages and a `flyweightsonly` package get
+  one too. Reading part of a message is what it is for; a record maps a
+  message whole.
 
 ## Testing
 
-The corpus through the codecs is the proof, above. Beside it, sbe-tool's
+The corpus's round trips run through the readers' bound stages beside the
+codecs, `ReaderAssert` and `BoundStagesTest`. Beside them, sbe-tool's
 `OtfMessageDecoder` walks the IR in exactly the reader's order, one level
 down: `onBeginMessage`, `onGroupHeader`, `onBeginGroup`, `onVarData` are
 the root block, the header, the entry and the var-data, and
@@ -430,11 +248,13 @@ derives the sequence the way the OTF walk does, and `notes.md` cites it.
   message; the other kinds have too little to share. In reserve until an
   audit copier asks.
 - **Indexes.** Recorded offsets want a way back in, `reader.at(offset)`.
-- **Measuring.** The liveness check and the null template are both
-  choices a JMH run may reverse without touching the API.
-- **Trying it by hand.** The shape wants trying on `trading`'s
-  `ExecutionReport`, hand-written over its flyweights in a test, before
-  anything is generated; the writer chain three levels deep most of all.
+- **Measuring.** The liveness check is a choice a JMH run may reverse
+  without touching the API; `sbe-buddy-benchmarks` measures the codecs.
+- **Union readers.** A `<Union>Reader` per `@SbeUnion`, dispatching by
+  template id as the union codec does, its `Stage` sealed over the
+  members', its root block sharing what the interface declares. Planned as
+  a step of the increment and not built; a small step of its own if
+  wanted.
 
 ## Superseded
 
@@ -491,3 +311,20 @@ derives the sequence the way the OTF walk does, and `notes.md` cites it.
   bindings or unions. It is the reference for the sequence and an oracle
   in the tests, and the right tool for a reader of any schema, which the
   guide points to.
+- **The writer.** `<Message>Writer` over sbe-tool's encoder, a typestate
+  down to every required field, so an incomplete message did not compile;
+  `bound()` twins on its stages; a sub-chain per composite and set. Built
+  in two steps and cut: the fill of a block on open cost the codecs written
+  over it about half again on encode, and every way out (filling only what
+  a chain may skip, a mask, optionals in wire order) gave up either the
+  block being well formed while written or the typestate's guarantee, or
+  reopened the design; the bound twins doubled the API of every stage; and
+  a binding cannot write into a generated encoder, since the encoder does
+  not exist when the binding is compiled, so a bound composite allocated its
+  face record per call. Writing stays sbe-tool's encoders' in place, and
+  the codec's from a record.
+- **The codec over the bound stages.** Planned so one implementation held
+  every leaf conversion and the corpus proved the flyweights through the
+  codecs. It needed the writer, and measured 10 to 15% slower on decode
+  and more on encode; cut with the writer. The codec stays as it was, and
+  the reader's bound stages share its leaves through `FaceWriter` instead.

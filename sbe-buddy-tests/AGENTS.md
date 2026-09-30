@@ -14,12 +14,9 @@ against the flyweights and codecs the processor generated for it.
   classpath scan in the repository, and `SchemaCasesTest` runs its checks.
   `ReaderSequenceTest` runs every round trip through the message's generated
   reader against sbe-tool's `OtfMessageDecoder` on the same bytes.
-- A writer's chain is typed per message, so no loop drives it: a case whose
-  writer is worth exercising writes a round trip's value by hand in a `@Test`
-  of its own, held by `WriterAssert` to the codec's bytes; one whose bound
-  stages are worth reading reads a value back through them by hand,
-  rebuilding the record, held by `ReaderAssert` to the value the codec
-  wrote.
+- A case whose bound stages are worth reading reads a value back through
+  them by hand in a `@Test` of its own, rebuilding the record, held by
+  `ReaderAssert` to the value the codec wrote.
 - `GoldenSourcesTest` holds generated sources against copies in
   `src/test/resources/golden`, reviewed like any source;
   `-Dgolden.update=true` rewrites them from the build.

@@ -8,9 +8,9 @@ package net.concini.sbebuddy.generator;
  * it takes. {@code flyweight} is the variable holding the flyweight,
  * {@code value} the expression of the component's value, {@code qualifier} what
  * a static helper is called through, empty in a codec and the class with its
- * dot in a reader or writer, whose stages may declare a method of a helper's
- * name, and {@code instance} the same for a composite's pair, which may call a
- * binding: the class's {@code this} in a reader or writer.
+ * dot in a reader, whose stages may declare a method of a helper's name, and
+ * {@code instance} the same for a composite's pair, which may call a binding:
+ * the class's {@code this} in a reader.
  */
 final class FaceTemplates {
 
@@ -73,7 +73,7 @@ final class FaceTemplates {
 	static final Template ENCODE_UNMAPPED_SET_FIELD = Template.of("encoder.{property}().clear();");
 
 	/**
-	 * Member by member, through the writer's {@code nulls} for the composite's
+	 * Member by member, through the codec's {@code nulls} for the composite's
 	 * flyweight.
 	 */
 	static final Template ENCODE_UNMAPPED_COMPOSITE_FIELD = Template.of("nulls(encoder.{property}());");

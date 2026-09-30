@@ -34,11 +34,10 @@ with a dispatching codec, the one Java-side feature. Then what makes the
 codec worth using: a binding on any component, told what the schema says
 about it, so a record holds its own types over any wire the schema declares,
 and a realistic FIX-like order-entry schema as the proof that the whole
-thing holds. Then reading and writing in place: typed flyweights for every
-message of the schema, a reader and a writer over sbe-tool's, which take
-the message in wire order by construction, complete by construction, and
-allocate nothing; where a record maps the message they carry its types
-through its bindings, and the codec is built over them.
+thing holds. Then reading in place: a typed reader for every message of
+the schema, over sbe-tool's flyweights, which takes the message in wire
+order by construction and allocates nothing; where a record maps the
+message it carries the record's types through its bindings.
 sbe-buddy stays agnostic of FIX: `sbe.xsd` and sbe-tool are the contract,
 and FIX's datatypes are a user's schema like any other. The target Java representation of all of it is
 `type-mappings.md`.
@@ -160,10 +159,10 @@ user's binding's to decide. No built-in bindings.
 
 * [x] 25. Mapping some messages: `@SbeSchema(partial = true)` lets a schema-first package map the messages it chooses, none included; each mapped message is still compared whole, the rest get flyweights and no codec, types need declarations only where a record reaches them, and the baseline check holds the resource
 
-**In place.** Every message gets typed flyweights, records or not; a
-record's types come through them, and the codec is built over them.
+**In place.** Every message gets a typed reader, records or not; a
+record's types come through it.
 
-* [ ] 26. Typed flyweights for every message of the schema: a reader and a writer over sbe-tool's flyweights, a stage per root block, group header, entry and var-data, each reachable only from the one before, so wire order holds by construction; the writer a typestate down to every required field, so an incomplete message does not compile; `skip()` on every stage; `bound()` on each stage where a record maps the message, the components' bindings applied, absence `null`; a reader per union, dispatching by template id and sharing what the interface declares; nothing allocated. The codec rewritten over the bound stages, so the corpus proves the flyweights. Sketched in `flyweights.md`
+* [x] 26. A typed reader for every message of the schema, over sbe-tool's flyweights: a stage per root block, group header, entry and var-data, each reachable only from the one before, so wire order holds by construction; `skip()` on every stage; `bound()` on each stage where a record maps the message, the components' bindings applied, absence `null`; nothing allocated. A writer, the codec over the bound stages and a reader per union were built or planned and cut: the write side's guarantees cost more than they gave, and sbe-tool's encoders and the codec stay the ways to write. `flyweights.md` has the design and what was cut
 
 **The API pass.**
 
